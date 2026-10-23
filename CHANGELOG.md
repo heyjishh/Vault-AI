@@ -53,12 +53,16 @@ live**, what is **built but unverified**, and what is **roadmap**.
   set; unproven either way).
   (e) **Tantivy BM25 engine** behind `LEGAL_RAG_BM25_ENGINE=tantivy`
   (native in-house engine stays the default), same build/search
-  contract. Bench (`bm25_engine_bench`, 24 Oct): at 324 chunks native
-  builds in 4.6 ms / queries 105 µs vs Tantivy 133 ms / 468 µs; at
-  50,000 chunks native 329 ms / 4.3 ms vs Tantivy 4.6 s / 72.7 ms —
-  native is faster at both scales on this box, and the engines' top-10
-  overlap is only ≈0.54 (ranking is NOT equivalent; treat Tantivy as
-  an alternative scorer, not a drop-in). Native stays default.
+  contract. Bench (`bm25_engine_bench`, 24 Oct, re-measured on an
+  idle box after an early contended run inverted the result —
+  correction): at 324 chunks native builds 6.1 ms / queries 0.123 ms
+  vs Tantivy 13.2 ms / 0.052 ms; at 50,000 chunks native 828 ms /
+  63.4 ms vs Tantivy 313 ms / 2.25 ms (Tantivy ≈28× faster per query;
+  the native linear scan collapses at scale). Top-10 overlap is
+  9.3–9.5/10 — rankings are near-equivalent (the residual gap is
+  Tantivy's fixed k1=1.2 vs native 1.5). Native stays the default at
+  today's corpus sizes (zero extra dependency, exact scoring
+  parity); Tantivy is the measured scale path when corpora grow.
   (f) **MCP server**: `POST /mcp` (streamable-HTTP style, JSON-RPC
   2.0, protocol 2024-11-05) with tools `search_vault`,
   `list_documents`, `ask`; auth is the caller's normal bearer token

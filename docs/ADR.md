@@ -759,6 +759,11 @@ server exposure — plus the still-pending S3 Vectors live verification
   contract, `LEGAL_RAG_BM25_ENGINE=tantivy`; native stays default
   (its tokenizer keeps bare section numbers exactly, and it has zero
   dependency weight) until corpus scale makes it the bottleneck.
+  Idle-box bench (24 Oct): Tantivy queries 0.052 ms vs native
+  0.123 ms at 324 chunks and 2.25 ms vs 63.4 ms at 50,000 chunks
+  (top-10 overlap 9.3–9.5/10) — the bottleneck point is real and
+  Tantivy is the measured way past it. (An earlier contended run
+  inverted these numbers; corrected in the CHANGELOG.)
 - *MCP:* single-endpoint JSON-RPC at `/mcp` (protocol 2024-11-05),
   tools `search_vault` / `list_documents` / `ask`, authenticated with
   the caller's normal bearer token so external clients inherit the
