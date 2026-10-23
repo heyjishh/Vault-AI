@@ -54,6 +54,12 @@ export default function VaultPage() {
     onError: (e) => toast('error', (e as Error).message),
   })
   const [metaDoc, setMetaDoc] = useState<DocumentInfo | null>(null)
+  const [indexDocId, setIndexDocId] = useState<string | null>(null)
+  const { data: indexChunks, isLoading: indexLoading } = useQuery({
+    queryKey: ['doc-chunks', indexDocId],
+    queryFn: () => vaultApi.chunks(indexDocId!),
+    enabled: !!indexDocId,
+  })
   const saveMeta = useMutation({
     mutationFn: (v: { id: string; meta: Parameters<typeof vaultApi.updateMeta>[1] }) =>
       vaultApi.updateMeta(v.id, v.meta),
@@ -184,7 +190,8 @@ export default function VaultPage() {
         <>
         <div className="rounded-lex-lg border border-stone-200 bg-white shadow-lex overflow-hidden">
           {pagedDocs.pageItems.map((d, i) => (
-            <div key={d.id} className={`flex items-center gap-4 px-5 py-3.5 ${i > 0 ? 'border-t border-stone-200' : ''}`}>
+            <div key={d.id} className={i > 0 ? 'border-t border-stone-200' : ''}>
+            <div className="flex items-center gap-4 px-5 py-3.5">
               <FileText size={18} className="text-stone-400 flex-shrink-0" />
               <div className="min-w-0 flex-1">
                 <p className="text-[15px] font-medium truncate">{d.title}</p>
@@ -207,6 +214,13 @@ export default function VaultPage() {
                 )}
               </div>
               <button
+                onClick={() => setIndexDocId(indexDocId === d.id ? null : d.id)}
+                title="Indexing — keywords, generated questions and statute hyperedges per chunk"
+                className={`p-2 rounded-lex transition-colors ${indexDocId === d.id ? 'text-ink bg-stone-100' : 'text-stone-400 hover:text-ink hover:bg-stone-100'}`}
+              >
+                <ScanText size={15} />
+              </button>
+              <button
                 onClick={() => setMetaDoc(d)}
                 title="Edit validity — jurisdiction, in-force dates, superseded by"
                 className="p-2 rounded-lex text-stone-400 hover:text-ink hover:bg-stone-100 transition-colors"
@@ -220,6 +234,49 @@ export default function VaultPage() {
               >
                 <Trash2 size={15} />
               </button>
+            </div>
+            {indexDocId === d.id && (
+              <div className="border-t border-stone-100 bg-[#fcfbf9] px-5 py-4">
+                <p className="text-[11.5px] font-medium uppercase tracking-wide text-stone-400">
+                  Indexing — generated at ingest (augmentation + statute hyperedges)
+                </p>
+                {indexLoading ? (
+                  <p className="text-[13px] text-stone-400 mt-2">Loading chunks…</p>
+                ) : (indexChunks ?? []).length === 0 ? (
+                  <p className="text-[13px] text-stone-400 mt-2">No chunks found for this document.</p>
+                ) : (
+                  <div className="mt-3 space-y-3">
+                    {(indexChunks ?? []).map((c) => (
+                      <div key={c.id} className="rounded-lex border border-stone-200 bg-white px-4 py-3">
+                        <p className="text-[13px] text-stone-600 leading-relaxed">{c.text_preview}…</p>
+                        {c.hyper_id && (
+                          <span className="mt-2 inline-block rounded-full bg-[#eef3fb] border border-[#c9d8f2] text-[#31558f] px-2 py-px text-[11px] font-medium">
+                            Hyperedge: {c.hyper_id.split('#').pop()}
+                          </span>
+                        )}
+                        {c.aug_keywords && (
+                          <p className="mt-2 text-[12px] text-stone-500">
+                            <span className="font-medium text-stone-600">Keywords:</span> {c.aug_keywords}
+                          </p>
+                        )}
+                        {c.aug_questions && (
+                          <div className="mt-1.5 flex flex-wrap gap-1.5">
+                            {c.aug_questions.split(' ;; ').map((q, qi) => (
+                              <span key={qi} className="inline-block rounded-full border border-stone-200 bg-[#fcfbf9] px-2.5 py-1 text-[12px] text-stone-600">
+                                {q}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        {!c.aug_keywords && !c.aug_questions && (
+                          <p className="mt-2 text-[12px] text-stone-400">No augmentation — indexed before augmentation shipped, or it was disabled at ingest.</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
             </div>
           ))}
         </div>

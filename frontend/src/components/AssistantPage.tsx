@@ -27,6 +27,7 @@ interface Turn {
   scopeNote: string | null
   verified: boolean
   audit: CitationAudit | null
+  expansions: string[]
   startedAt: number
   elapsedMs: number | null
 }
@@ -84,7 +85,7 @@ export default function AssistantPage({ matterId: fixedMatterId, go }: { matterI
     const id = ++turnId
     const turn: Turn = {
       id, question, mode, status: 'Connecting…', citations: [], answer: '',
-      streaming: true, done: false, error: null, scopeNote: null, verified: false, audit: null, startedAt: Date.now(), elapsedMs: null,
+      streaming: true, done: false, error: null, scopeNote: null, verified: false, audit: null, expansions: [], startedAt: Date.now(), elapsedMs: null,
     }
     setTurns((t) => [...t, turn])
     addHistory(question)
@@ -120,13 +121,13 @@ export default function AssistantPage({ matterId: fixedMatterId, go }: { matterI
           onSources: (citations, m, verified) =>
             setTurns((ts) => ts.map((t) => (t.id === id ? { ...t, citations, mode: m, verified } : t))),
           onDelta: queueDelta,
-          onDone: (answer, audit) => {
+          onDone: (answer, audit, expansions) => {
             if (flushTimer) { clearTimeout(flushTimer); flushTimer = null }
             const rest = buffer; buffer = ''
             setTurns((ts) =>
               ts.map((t) =>
                 t.id === id
-                  ? { ...t, answer: answer || t.answer + rest, audit: audit ?? t.audit, streaming: false, done: true, status: null, elapsedMs: Date.now() - t.startedAt }
+                  ? { ...t, answer: answer || t.answer + rest, audit: audit ?? t.audit, expansions: expansions ?? t.expansions, streaming: false, done: true, status: null, elapsedMs: Date.now() - t.startedAt }
                   : t,
               ),
             )
@@ -147,7 +148,7 @@ export default function AssistantPage({ matterId: fixedMatterId, go }: { matterI
           setTurns((ts) =>
             ts.map((t) =>
               t.id === id
-                ? { ...t, answer: data.answer, citations: data.citations, mode: data.mode, scopeNote: data.scope_note ?? null, verified: data.verified ?? false, audit: data.citation_audit ?? null, streaming: false, done: true, status: null, elapsedMs: Date.now() - t.startedAt }
+                ? { ...t, answer: data.answer, citations: data.citations, mode: data.mode, scopeNote: data.scope_note ?? null, verified: data.verified ?? false, audit: data.citation_audit ?? null, expansions: data.expansions ?? [], streaming: false, done: true, status: null, elapsedMs: Date.now() - t.startedAt }
                 : t,
             ),
           )
@@ -193,6 +194,7 @@ export default function AssistantPage({ matterId: fixedMatterId, go }: { matterI
         scopeNote: typeof p.scope_note === 'string' ? p.scope_note : null,
         verified: p.verified === true,
         audit: (p.citation_audit as CitationAudit) ?? null,
+        expansions: (p.expansions as string[]) ?? [],
         startedAt: Date.now(),
         elapsedMs: null,
       },
@@ -577,6 +579,21 @@ function TurnView({ turn, onCopy, onRegenerate, onFollowUp, onCite, onShowSource
               {turn.audit.stripped > 0 && (
                 <span className="text-[#9a6a12]">· {turn.audit.stripped} unsupported removed</span>
               )}
+            </div>
+          )}
+
+          {turn.done && turn.expansions.length > 0 && (
+            <div className="mt-4">
+              <p className="text-[11.5px] font-medium uppercase tracking-wide text-stone-400">
+                Question expanded for retrieval — also searched as
+              </p>
+              <div className="mt-1.5 flex flex-wrap gap-1.5">
+                {turn.expansions.map((x, i) => (
+                  <span key={i} className="inline-block max-w-full truncate rounded-full border border-stone-200 bg-white px-2.5 py-1 text-[12px] text-stone-600" title={x}>
+                    {x}
+                  </span>
+                ))}
+              </div>
             </div>
           )}
 

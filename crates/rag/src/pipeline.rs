@@ -518,10 +518,114 @@ impl RagAnything {
                         }
                     }
                 }
-                // Upsert parents + children together; graph extraction and
-                // the document registry below stay on parents only.
+                // Index-time augmentation (RAGFlow pattern, Tier-2):
+                // one batched LLM call per document generates keywords
+                // + questions per parent chunk; they are embedded as
+                // auxiliary match units (pc=aug) that retrieval maps
+                // back to the source chunk — attacking vocabulary
+                // mismatch (incl. Hindi phrasing of English text) at
+                // zero query-time cost. Kill switch LEGAL_RAG_AUGMENT=0.
+                let mut aux_records: Vec<ChunkRecord> = Vec::new();
+                if std::env::var("LEGAL_RAG_AUGMENT").map(|v| v != "0").unwrap_or(true) {
+                    match augment_chunks(self.llm.as_ref(), title.as_deref(), &records).await {
+                        Some(items) => {
+                            let mut aux_texts: Vec<String> = Vec::new();
+                            let mut aux_meta: Vec<(String, String, String)> = Vec::new();
+                            for (i, parent) in records.iter_mut().enumerate() {
+                                let Some(item) = items.get(i) else { continue };
+                                if !item.keywords.is_empty() {
+                                    parent.metadata.insert(
+                                        "aug_keywords".to_string(),
+                                        item.keywords.join(", "),
+                                    );
+                                }
+                                if !item.questions.is_empty() {
+                                    let joined = item.questions.join(" ;; ");
+                                    parent.metadata.insert(
+                                        "aug_questions".to_string(),
+                                        joined.chars().take(1000).collect(),
+                                    );
+                                }
+                                for (n, q) in item.questions.iter().enumerate() {
+                                    aux_texts.push(q.clone());
+                                    aux_meta.push((
+                                        format!("{}#q{n}", parent.id),
+                                        "question".to_string(),
+                                        parent.id.clone(),
+                                    ));
+                                }
+                                if !item.keywords.is_empty() {
+                                    aux_texts.push(item.keywords.join(" "));
+                                    aux_meta.push((
+                                        format!("{}#kw", parent.id),
+                                        "keywords".to_string(),
+                                        parent.id.clone(),
+                                    ));
+                                }
+                            }
+                            if !aux_texts.is_empty() {
+                                match self.embeddings.embed(&aux_texts).await {
+                                    Ok(vecs) if vecs.len() == aux_texts.len() => {
+                                        for ((id, kind, source), (text, embedding)) in
+                                            aux_meta.into_iter().zip(aux_texts.into_iter().zip(vecs))
+                                        {
+                                            let src = records.iter().find(|r| r.id == source);
+                                            let mut metadata = HashMap::new();
+                                            metadata.insert("pc".to_string(), "aug".to_string());
+                                            metadata.insert("aug_kind".to_string(), kind);
+                                            metadata.insert("source_id".to_string(), source);
+                                            aux_records.push(ChunkRecord {
+                                                id,
+                                                doc_id: src.map(|r| r.doc_id.clone()).unwrap_or_default(),
+                                                ordinal: src.map(|r| r.ordinal).unwrap_or(0),
+                                                text,
+                                                embedding,
+                                                metadata,
+                                            });
+                                        }
+                                        info!(doc_id = %doc_id, aux = aux_records.len(), "index-time augmentation indexed");
+                                    }
+                                    _ => warn!(doc_id = %doc_id, "augmentation embedding failed; skipping aux units"),
+                                }
+                            }
+                        }
+                        None => warn!(doc_id = %doc_id, "augmentation LLM call failed; indexing without aux units"),
+                    }
+                }
+                // Hyperedges (Hyper-RAG pattern, Tier-2): one retrievable
+                // unit per (Act, section) in the document, binding the
+                // member chunks — a query naming the Act + section hits
+                // the unit, which expands to its members. Kill switch
+                // LEGAL_RAG_HYPEREDGES=0.
+                if std::env::var("LEGAL_RAG_HYPEREDGES").map(|v| v != "0").unwrap_or(true) {
+                    let hyper = build_hyperedges(doc_id, title.as_deref(), &mut records);
+                    for (hid, text, members, act, section) in hyper {
+                        match self.embeddings.embed(&[text.clone()]).await {
+                            Ok(mut v) if v.len() == 1 => {
+                                let mut metadata = HashMap::new();
+                                metadata.insert("pc".to_string(), "hyper".to_string());
+                                metadata.insert("hyper_act".to_string(), act);
+                                metadata.insert("hyper_section".to_string(), section);
+                                metadata.insert("members".to_string(), members.join(","));
+                                aux_records.push(ChunkRecord {
+                                    id: hid,
+                                    doc_id: doc_id.to_string(),
+                                    ordinal: 0,
+                                    text,
+                                    embedding: v.remove(0),
+                                    metadata,
+                                });
+                            }
+                            _ => warn!(doc_id = %doc_id, "hyperedge embedding failed; skipping one unit"),
+                        }
+                    }
+                }
+                // Upsert parents + children + aux/hyper units together;
+                // graph extraction and the document registry below stay
+                // on parents only.
                 let mut all_records = records.clone();
                 all_records.extend(child_records);
+                all_records.extend(aux_records);
                 self.store.upsert(all_records).await?;
                 for record in &records {
                     let (entities, relations) =
@@ -783,6 +887,236 @@ pub(crate) fn split_sentences_flowing(text: &str) -> Vec<String> {
 /// danda `।`). A single sentence longer than 2× target is hard-split at
 /// char boundaries. Returns fewer than 2 pieces when the text is already
 /// child-sized — callers then leave the parent searchable as-is.
+/// One chunk's index-time augmentation (RAGFlow pattern).
+#[derive(Debug, serde::Deserialize)]
+pub struct AugmentItem {
+    #[serde(default)]
+    pub keywords: Vec<String>,
+    #[serde(default)]
+    pub questions: Vec<String>,
+}
+
+/// Generate keywords + questions for every chunk in ONE batched LLM
+/// call (per document). Returns None on any failure — augmentation is
+/// an enhancement, never a reason to fail an ingest.
+pub async fn augment_chunks(
+    llm: &dyn LlmClient,
+    title: Option<&str>,
+    records: &[ChunkRecord],
+) -> Option<Vec<AugmentItem>> {
+    if records.is_empty() {
+        return Some(Vec::new());
+    }
+    let mut user = format!(
+        "Document: {}\n\nChunks:\n",
+        title.unwrap_or("(untitled)")
+    );
+    for (i, r) in records.iter().enumerate() {
+        let excerpt: String = r.text.chars().take(600).collect();
+        user.push_str(&format!("[{i}] {excerpt}\n\n"));
+    }
+    let raw = llm
+        .complete(
+            "You generate search augmentation for a legal document index. \
+             For EACH numbered chunk return keywords (5-8 exact legal terms, section numbers, \
+             synonyms, and Hindi equivalents of the 2-3 most important terms) and questions \
+             (2-3 natural questions the chunk answers, phrased the way a lawyer or litigant \
+             would ask, at least one in Hinglish/Hindi if the chunk is Indian law). \
+             Reply with ONLY a JSON array, one object per chunk in order: \
+             [{\"keywords\": [\"...\"], \"questions\": [\"...\"]}]",
+            &user,
+        )
+        .await
+        .ok()?;
+    crate::graph::parse_llm_json::<Vec<AugmentItem>>(&raw)
+}
+
+/// Section/article references in lowercased text, normalized as
+/// "section 86" / "article 21".
+pub fn find_section_refs(text_lower: &str) -> Vec<String> {
+    find_section_refs_pos(text_lower)
+        .into_iter()
+        .map(|(key, _)| key)
+        .collect()
+}
+
+/// Section/article references WITH their byte positions — hyperedge
+/// construction pairs each reference with its nearest Act mention,
+/// so multi-statute chunks don't cross-pair every Act with every
+/// section.
+pub fn find_section_refs_pos(text_lower: &str) -> Vec<(String, usize)> {
+    let mut out: Vec<(String, usize)> = Vec::new();
+    for kind in ["section", "article"] {
+        let mut offset = 0usize;
+        let mut rest = text_lower;
+        while let Some(pos) = rest.find(kind) {
+            let after = &rest[pos + kind.len()..];
+            let trimmed = after.trim_start();
+            if trimmed.len() != after.len() || after.starts_with(|c: char| c.is_whitespace()) {
+                let num: String = trimmed.chars().take_while(|c| c.is_ascii_digit()).collect();
+                if !num.is_empty() {
+                    let key = format!("{kind} {num}");
+                    if !out.iter().any(|(k, _)| *k == key) {
+                        out.push((key, offset + pos));
+                    }
+                }
+            }
+            offset += pos + kind.len();
+            rest = &rest[pos + kind.len()..];
+        }
+    }
+    out
+}
+
+/// Byte positions of every mention (canonical name or alias) of each
+/// statute in the table, in lowercased text. Matching is by token
+/// sequence (the same semantics as `statute_mentions`), so short
+/// aliases like "ipc" never match inside other words.
+pub fn statute_mention_positions(text_lower: &str) -> Vec<(&'static str, usize)> {
+    // Tokenize with byte offsets.
+    let mut tokens: Vec<(&str, usize)> = Vec::new();
+    let mut start: Option<usize> = None;
+    for (i, c) in text_lower.char_indices() {
+        if c.is_alphanumeric() {
+            if start.is_none() {
+                start = Some(i);
+            }
+        } else if let Some(s) = start.take() {
+            tokens.push((&text_lower[s..i], s));
+        }
+    }
+    if let Some(s) = start {
+        tokens.push((&text_lower[s..], s));
+    }
+    let toks: Vec<&str> = tokens.iter().map(|(t, _)| *t).collect();
+    let mut out = Vec::new();
+    for (canonical, aliases) in crate::query::STATUTES {
+        let mut forms: Vec<Vec<&str>> = vec![canonical.split_whitespace().collect()];
+        for a in aliases.iter() {
+            forms.push(a.split_whitespace().collect());
+        }
+        for form in forms {
+            if form.is_empty() || form.len() > toks.len() {
+                continue;
+            }
+            for w in 0..=(toks.len() - form.len()) {
+                if toks[w..w + form.len()] == form[..] {
+                    out.push((*canonical, tokens[w].1));
+                }
+            }
+        }
+    }
+    out
+}
+
+/// Short slug for a hyperedge id: the Act's distinguishing word
+/// ("indian penal code" → "penal", "income-tax act" → "income-tax").
+fn act_slug(act: &str) -> String {
+    const STOP: &[&str] = &["indian", "act", "of", "the", "code"];
+    act.split_whitespace()
+        .find(|w| !STOP.contains(w))
+        .unwrap_or("act")
+        .to_string()
+}
+
+/// Build hyperedge units for a document: group parent chunks by the
+/// (Act, section) they belong to. Stamps `hyper_id` on member parents.
+/// Returns (unit_text, member_ids, act, section) tuples to embed.
+/// The Act comes from a statute mentioned in the chunk itself, or the
+/// document title as a fallback (a doc titled "Section 86 IT Act"
+/// scopes all its sections to that Act).
+pub fn build_hyperedges(
+    doc_id: &str,
+    title: Option<&str>,
+    records: &mut [ChunkRecord],
+) -> Vec<(String, String, Vec<String>, String, String)> {
+    let title_lower = title.unwrap_or_default().to_lowercase();
+    let title_acts = crate::query::statute_mentions(&title_lower);
+    let mut groups: Vec<(String, String, Vec<usize>)> = Vec::new();
+    for (i, rec) in records.iter().enumerate() {
+        let lower = rec.text.to_lowercase();
+        // Pair each section reference with its NEAREST Act mention in
+        // the chunk (by byte distance, preceding mentions preferred on
+        // ties) — never the cross product, which would manufacture
+        // wrong (Act, section) pairs in multi-statute chunks. The
+        // title's Acts are the fallback only when the chunk names none.
+        let act_positions = statute_mention_positions(&lower);
+        for (section, sec_pos) in find_section_refs_pos(&lower) {
+            let act: Option<String> = if act_positions.is_empty() {
+                title_acts.first().map(|a| a.to_string())
+            } else {
+                act_positions
+                    .iter()
+                    .min_by_key(|(_, apos)| {
+                        let d = (*apos as i64 - sec_pos as i64).abs();
+                        // Prefer a mention at or before the section.
+                        (d, if *apos <= sec_pos { 0 } else { 1 })
+                    })
+                    .map(|(a, _)| a.to_string())
+            };
+            let Some(act) = act else { continue };
+            match groups
+                .iter_mut()
+                .find(|(a, s, _)| a == &act && s == &section)
+            {
+                Some((_, _, members)) => {
+                    if !members.contains(&i) {
+                        members.push(i);
+                    }
+                }
+                None => groups.push((act, section, vec![i])),
+            }
+        }
+    }
+    let mut out = Vec::new();
+    for (act, section, members) in groups {
+        let member_ids: Vec<String> =
+            members.iter().map(|&i| records[i].id.clone()).collect();
+        let hid = format!(
+            "{doc_id}#he-{}-{}",
+            act_slug(&act),
+            section.replace(' ', "")
+        );
+        let mut text = format!("{} — {}: ", title_case_act(&act), title_case_word(&section));
+        for &i in members.iter().take(3) {
+            let lead: String = records[i].text.chars().take(380).collect();
+            text.push_str(&lead);
+            text.push_str(" … ");
+        }
+        for &i in &members {
+            // First edge wins the display stamp: a chunk spanning two
+            // statutes belongs to several edges, but the chip shows
+            // its primary one.
+            records[i]
+                .metadata
+                .entry("hyper_id".to_string())
+                .or_insert_with(|| hid.clone());
+        }
+        out.push((hid, text, member_ids, act, section));
+    }
+    out
+}
+
+fn title_case_act(act: &str) -> String {
+    act.split_whitespace()
+        .map(|w| {
+            let mut c = w.chars();
+            match c.next() {
+                Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
+                None => String::new(),
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn title_case_word(s: &str) -> String {
+    let mut parts = s.splitn(2, ' ');
+    let kind = parts.next().unwrap_or_default();
+    let num = parts.next().unwrap_or_default();
+    format!("{} {}", title_case_act(kind), num)
+}
+
 pub(crate) fn split_children(text: &str, target: usize) -> Vec<String> {
     let text = text.trim();
     if text.chars().count() <= target {
@@ -830,6 +1164,68 @@ mod tests {
     use crate::graph::InMemoryGraphStore;
     use crate::llm::MockLlm;
     use crate::vector_store::InMemoryVectorStore;
+
+    #[test]
+    fn section_refs_found_and_normalized() {
+        let refs = find_section_refs("under section 86 of the act, and article 21 read with section 86");
+        assert_eq!(refs, vec!["section 86".to_string(), "article 21".to_string()]);
+        assert!(find_section_refs("sectional title only").is_empty());
+    }
+
+    #[test]
+    fn hyperedges_group_by_act_and_section() {
+        let mk = |id: &str, text: &str| ChunkRecord {
+            id: id.to_string(),
+            doc_id: "d1".to_string(),
+            ordinal: 0,
+            text: text.to_string(),
+            embedding: vec![0.0; 4],
+            metadata: HashMap::new(),
+        };
+        let mut records = vec![
+            mk("d1#0", "Section 86 of the Information Technology Act provides a savings clause for other laws."),
+            mk("d1#1", "Section 378 of the Indian Penal Code defines theft as dishonestly moving property."),
+            mk("d1#2", "Nothing in section 86 shall affect any other law for the time being in force."),
+        ];
+        let edges = build_hyperedges("d1", Some("IT Act notes"), &mut records);
+        // Chunk 0 names the IT Act itself; chunk 2 mentions only
+        // "section 86" but inherits the Act from the document title
+        // ("IT Act" matches the alias table) — so both group together.
+        let it86 = edges.iter().find(|(_, _, _, a, s)| a == "information technology act" && s == "section 86");
+        assert!(it86.is_some(), "edges: {edges:?}");
+        let (_, _, members, _, _) = it86.unwrap();
+        assert_eq!(members, &vec!["d1#0".to_string(), "d1#2".to_string()]);
+        let ipc = edges.iter().find(|(_, _, _, a, _)| a == "indian penal code");
+        assert!(ipc.is_some());
+        assert!(records[0].metadata.contains_key("hyper_id"));
+    }
+
+    #[test]
+    fn hyperedges_never_cross_pair_acts_and_sections() {
+        // Regression (found live 2026-10-24): a chunk citing two
+        // statutes must pair each section with its NEAREST Act —
+        // (Contract Act, s.378) style phantom edges are exactly the
+        // collisions hyperedges exist to prevent.
+        let mut records = vec![ChunkRecord {
+            id: "d9#0".to_string(),
+            doc_id: "d9".to_string(),
+            ordinal: 0,
+            text: "Section 10 of the Indian Contract Act, 1872 provides that agreements made by free consent are contracts. Section 378 of the Indian Penal Code defines theft as dishonestly moving movable property. The punishment is in Section 379 of the Indian Penal Code.".to_string(),
+            embedding: vec![0.0; 4],
+            metadata: HashMap::new(),
+        }];
+        let edges = build_hyperedges("d9", None, &mut records);
+        let pairs: Vec<(&str, &str)> = edges
+            .iter()
+            .map(|(_, _, _, a, s)| (a.as_str(), s.as_str()))
+            .collect();
+        assert!(pairs.contains(&("indian contract act", "section 10")), "{pairs:?}");
+        assert!(pairs.contains(&("indian penal code", "section 378")), "{pairs:?}");
+        assert!(pairs.contains(&("indian penal code", "section 379")), "{pairs:?}");
+        assert!(!pairs.contains(&("indian contract act", "section 378")), "{pairs:?}");
+        assert!(!pairs.contains(&("indian penal code", "section 10")), "{pairs:?}");
+        assert_eq!(edges.len(), 3);
+    }
 
     fn rag() -> RagAnything {
         RagAnything::new(

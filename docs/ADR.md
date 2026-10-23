@@ -709,6 +709,83 @@ measurement — SereneDB is exact and durable at today's scale).
 
 ---
 
+## ADR-0021 — Tier-2 retrieval arc: augmentation, hyperedges, HyDE, late interaction, Tantivy, MCP
+
+**Status:** Accepted — LIVE-VERIFIED on the test instance 24 Oct
+2026: augmentation produced keywords + English/Hindi questions on a
+fresh ingest; hyperedges paired correctly after a cross-pairing bug
+found in that same verification was fixed (nearest-Act pairing,
+regression-tested); a 3-word HyDE query returned 4 expansions
+(passage + formal/plain/Hinglish variants) and a grounded answer;
+MCP initialize/tools/call round-trips passed; the hit-test
+late-interaction stage appeared and, on the Section 86 IT Act
+question, its blend corrected the top hit that vector/BM25/fusion/
+reranker stages had all ranked second. 112 workspace tests green.
+The one arc item NOT verified: S3 Vectors live round-trip (still
+gated on AWS credentials — see ADR-0020).
+
+**Context.** The 23 Oct landscape evaluation (Verba, Haystack,
+LlamaIndex, RAGFlow, Hyper-RAG, txtai, Spice) left a Tier-2/3 backlog
+after Tier-1 (ADR-0019) and the vector engines (ADR-0020) landed. The
+owner directed building the complete remaining list in one arc, with
+frontend integration: index-time augmentation (RAGFlow), hyperedges
+(Hyper-RAG), HyDE/multi-query (LlamaIndex), ColBERT late interaction
+(Spice/txtai), a Tantivy full-text option for the BM25 leg, and MCP
+server exposure — plus the still-pending S3 Vectors live verification
+(blocked on AWS credentials, unchanged).
+
+**Decision.**
+- *Augmentation:* one batched LLM call per document at ingest;
+  keywords + generated questions embedded as auxiliary match units
+  (`pc=aug`) that canonicalize to their source chunk in retrieval and
+  in the keyword index. Parents carry `aug_keywords`/`aug_questions`
+  metadata (Vault "Indexing" view). `LEGAL_RAG_AUGMENT=0` disables.
+- *Hyperedges:* per document, one unit per (Act, section) grouping
+  member chunks; hits canonicalize to the first member and append up
+  to 2 siblings to the context. `LEGAL_RAG_HYPEREDGES=0` disables.
+- *HyDE/multi-query:* trigger = ≤8-word questions or statute+section
+  citation style; one LLM call yields a hypothetical passage + ≤3
+  variants; per-variant pools merge by rank interleave. Expansions
+  bypass the retrieval cache (they are per-call) and are surfaced on
+  the answer (`expansions`) and in Ask as chips. `LEGAL_RAG_HYDE=0`.
+- *Late interaction:* ColBERT MaxSim as a post-rerank blend
+  (min-max normalized, weight `LEGAL_RAG_COLBERT_WEIGHT`, default
+  0.5), served by a Python sidecar (colbert-ir/colbertv2.0, MIT)
+  behind `LEGAL_RAG_COLBERT_URL`. Default OFF; sidecar failure
+  degrades to the reranker order. Chosen over in-process
+  implementation for the same reason as the cross-encoder: model
+  isolation, zero billable tokens, independently restartable.
+- *Tantivy:* second BM25 engine behind the same build/search
+  contract, `LEGAL_RAG_BM25_ENGINE=tantivy`; native stays default
+  (its tokenizer keeps bare section numbers exactly, and it has zero
+  dependency weight) until corpus scale makes it the bottleneck.
+- *MCP:* single-endpoint JSON-RPC at `/mcp` (protocol 2024-11-05),
+  tools `search_vault` / `list_documents` / `ask`, authenticated with
+  the caller's normal bearer token so external clients inherit the
+  user's access and quota. `LEGAL_RAG_MCP=0` disables.
+- Every stage is independently gated and failure-degrading: no new
+  stage can break a query that worked before it.
+
+**Consequences.** Ingest costs +1 LLM call per document (batched) and
+roughly +3 embedded units per chunk; retrieval gains vocabulary-
+mismatch coverage (the standing Hindi↔English gap) and a structural
+fix for same-section cross-Act collisions. The hit-test debugger,
+admin retrieval-status endpoint, and Vault indexing view make each
+stage observable. Open follow-ups: golden-set measurement of the arc
+as a whole (stage saturation may hide individual gains, as in
+Tier-1); reranker token caching (txtai) remains the only unbuilt
+Tier-2 item — deferred deliberately: it optimizes a stage that is
+already local and free.
+
+**Alternatives considered.** Building on LangChain/LlamaIndex
+sidecars (rejected in the landscape evaluation — platform adoption,
+not pattern adoption); in-process ColBERT in Rust (rejected: no
+mature Rust ColBERT runtime; the sidecar pattern is proven in this
+codebase); MCP over stdio (rejected: the deployment is a web service;
+streamable HTTP fits the existing auth).
+
+---
+
 ## Open decisions register (for the owner)
 
 | # | Decision | ADR | Needed from |

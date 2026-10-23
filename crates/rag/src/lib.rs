@@ -31,6 +31,7 @@ pub mod retrieval_cache;
 pub mod research;
 pub mod s3vectors;
 pub mod serenedb;
+pub mod tantivy_bm25;
 pub mod usage;
 pub mod vector_store;
 pub mod web;
@@ -53,10 +54,11 @@ pub use query::{
     query_service_for, Annotation, Citation, ExtraSource, HitStage, HitTestReport, HitView,
     QueryAnswer, QueryEvent, QueryMode, QueryService,
 };
-pub use rerank::{HttpReranker, LlmReranker, Reranker};
+pub use rerank::{HttpLateInteractor, HttpReranker, LateInteractor, LlmReranker, Reranker};
 pub use research::{Conflict, EvidenceNote, Hypothesis, ResearchReport};
 pub use hnsw::{HnswParams, HnswVectorStore};
 pub use s3vectors::{S3VectorsConfig, S3VectorsStore};
 pub use serenedb::SereneDbVectorStore;
+pub use tantivy_bm25::TantivyBm25Index;
 pub use vector_store::{ChunkRecord, InMemoryVectorStore, ScoredChunk, VectorStore};
 pub use web::{FetchedPage, NoopWebSearch, StealthWebSearch, WebResult, WebSearch};

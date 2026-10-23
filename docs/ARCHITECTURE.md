@@ -5,7 +5,7 @@
 | **Document** | System Architecture (engineering, infrastructure & AWS platform teams) |
 | **Product** | Juris Vault AI — legal document intelligence for Indian law practice |
 | **Owner** | **Jishan** — Juris Vault AI Team |
-| **Version** | 1.6 — 23 October 2026 |
+| **Version** | 1.7 — 24 October 2026 |
 | **System version** | 0.1.0 (Cargo workspace version) |
 | **Companion documents** | [ADR.md](ADR.md) (decision records ADR-0001…0018) · [README.md](../README.md) · [CHANGELOG.md](../CHANGELOG.md) · [DEPLOY.md](../DEPLOY.md) |
 | **Status labels** | **LIVE-VERIFIED** = proven end-to-end in production-like runs · **BUILT** = implemented, verification partial · **TARGET** = design for the AWS move, not yet deployed · **ROADMAP** = agreed direction, not built |
@@ -212,6 +212,24 @@ knobs are env-gated for corpus-scale tuning: `LEGAL_RAG_DEFAULT_TOP_K`
 in the final context, off). Golden-set measurement on the 16-document
 eval corpus found neither knob rescues ranking-level misses — the
 rerank pool (step 4–5) is the binding constraint there.
+
+Tier-2 stages (24 Oct 2026, ADR-0021) — each independently env-gated
+and failure-degrading: **index-time augmentation** (one batched LLM
+call per document at ingest; per-chunk keywords + generated questions
+embedded as auxiliary match units that canonicalize to the source
+chunk; `LEGAL_RAG_AUGMENT`); **statute hyperedges** (one retrievable
+unit per (Act, section) per document; hits expand to member chunks;
+`LEGAL_RAG_HYPEREDGES`); **HyDE / multi-query expansion** for short
+or citation-style questions (hypothetical passage + variants, pooled
+per-variant searches, expansions surfaced on the answer;
+`LEGAL_RAG_HYDE`); **ColBERT late interaction** (MaxSim sidecar blend
+after the cross-encoder, off unless `LEGAL_RAG_COLBERT_URL` is set);
+a **Tantivy** alternative for the keyword leg
+(`LEGAL_RAG_BM25_ENGINE=tantivy`, native default); and an **MCP
+server** (`POST /mcp`, tools `search_vault` / `list_documents` /
+`ask`, caller-token auth). The Command Center's Retrieval & Models
+page reports the live stack state (`GET /api/v1/admin/retrieval-status`)
+and hit-testing shows the late-interaction stage when it is active.
 
 ### 5.3 Research & workflows
 

@@ -315,6 +315,61 @@ pub async fn list_documents(
     }
 }
 
+/// One parent chunk with its index-time augmentation, for the
+/// Vault's "Indexing" view.
+#[derive(Serialize)]
+pub struct ChunkAugView {
+    pub id: String,
+    pub ordinal: usize,
+    pub text_preview: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub aug_keywords: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub aug_questions: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hyper_id: Option<String>,
+}
+
+/// GET /api/v1/vault/documents/{id}/chunks — the document's parent
+/// chunks with the augmentation metadata generated at ingest
+/// (keywords, generated questions, hyperedge membership).
+pub async fn document_chunks(
+    State(state): State<AppState>,
+    AuthUser(user): AuthUser,
+    Path(id): Path<String>,
+) -> Result<Json<Vec<ChunkAugView>>, ApiError> {
+    let doc = state
+        .rag
+        .list_documents()
+        .into_iter()
+        .find(|d| d.id == id)
+        .ok_or_else(|| legal_rag_common::Error::NotFound(format!("document {id}")))?;
+    crate::routes::matters::doc_visible(&state, &user, &doc.id)
+        .then_some(())
+        .ok_or_else(|| legal_rag_common::Error::NotFound(format!("document {id}")))?;
+    let all = state.store.all_chunks().await?;
+    let mut chunks: Vec<ChunkAugView> = all
+        .into_iter()
+        .filter(|c| c.doc_id == id)
+        .filter(|c| {
+            !matches!(
+                c.metadata.get("pc").map(|s| s.as_str()),
+                Some("child") | Some("aug") | Some("hyper")
+            )
+        })
+        .map(|c| ChunkAugView {
+            id: c.id.clone(),
+            ordinal: c.ordinal,
+            text_preview: c.text.chars().take(220).collect(),
+            aug_keywords: c.metadata.get("aug_keywords").cloned(),
+            aug_questions: c.metadata.get("aug_questions").cloned(),
+            hyper_id: c.metadata.get("hyper_id").cloned(),
+        })
+        .collect();
+    chunks.sort_by_key(|c| c.ordinal);
+    Ok(Json(chunks))
+}
+
 #[derive(Deserialize)]
 pub struct SearchDocsQuery {
     pub q: String,

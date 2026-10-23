@@ -15,7 +15,87 @@ const STAGE_LABELS: Record<string, string> = {
   vector: 'Vector (bge-m3)',
   bm25: 'BM25 keywords',
   fused: 'RRF fused pool',
-  reranked: 'Reranked (final)',
+  reranked: 'Reranked (cross-encoder)',
+  'late-interaction': 'Late interaction (ColBERT MaxSim)',
+}
+
+function OnOff({ on }: { on: boolean }) {
+  return (
+    <span className={`rounded-full px-2 py-px text-[11px] font-semibold ${on ? 'bg-[#e7f4e4] text-[#2f6b2f]' : 'bg-stone-100 text-stone-400'}`}>
+      {on ? 'ON' : 'OFF'}
+    </span>
+  )
+}
+
+function StackCard() {
+  const { data: s } = useQuery({ queryKey: ['retrieval-status'], queryFn: adminApi.retrievalStatus })
+  const { data: mcp } = useQuery({ queryKey: ['mcp-info'], queryFn: adminApi.mcpInfo })
+  const [copied, setCopied] = useState(false)
+  if (!s) return null
+  const features: [string, boolean, string][] = [
+    ['Index-time augmentation', s.augmentation, 'Keywords + generated questions per chunk, indexed as auxiliary match units'],
+    ['Statute hyperedges', s.hyperedges, '{Act, section} as one retrievable unit; hits expand to member chunks'],
+    ['HyDE / multi-query', s.hyde, 'Short citation-style questions expand into a hypothetical passage + variants'],
+    ['ColBERT late interaction', s.late_interaction, 'Token-level MaxSim rescoring blended after the cross-encoder (needs LEGAL_RAG_COLBERT_URL)'],
+    ['Parent-child chunking', s.parent_child, 'Small child spans are the match units; parents are the context'],
+    ['BM25 keyword leg', s.bm25_enabled, `Engine: ${s.bm25_engine}`],
+    ['Retrieval cache (SWR)', s.retrieval_cache, 'Fresh 120s + stale-while-revalidate, corpus-fingerprint keyed'],
+    ['Semantic answer cache', s.semantic_cache, 'Paraphrase-level hits at zero LLM cost'],
+  ]
+  const mcpConfig = JSON.stringify({
+    mcpServers: {
+      'juris-vault-ai': {
+        url: '<your-deployment>/mcp',
+        headers: { Authorization: 'Bearer <user-api-token>' },
+      },
+    },
+  }, null, 2)
+  return (
+    <>
+      <div className="grid md:grid-cols-3 gap-3">
+        <StatCard label="Vector store" value={s.vector_store} sub={`Fusion: ${s.fusion} · statute boost ×${s.statute_boost}`} />
+        <StatCard label="Keyword engine" value={s.bm25_engine} sub={s.bm25_enabled ? 'BM25 leg active in fusion' : 'BM25 leg disabled'} />
+        <StatCard label="Late interaction" value={s.late_interaction ? 'ColBERT on' : 'off'} sub="MaxSim blend after reranking" />
+      </div>
+      <div className="rounded-lex-lg border border-stone-200 bg-white shadow-lex divide-y divide-stone-200 mt-3">
+        {features.map(([k, on, v]) => (
+          <div key={k} className="flex items-center gap-4 px-5 py-3">
+            <span className="w-52 flex-shrink-0 text-[13px] font-medium">{k}</span>
+            <OnOff on={on} />
+            <span className="text-[13px] text-stone-600">{v}</span>
+          </div>
+        ))}
+      </div>
+
+      <h2 className="font-display text-xl tracking-tight mt-10 mb-3">MCP server</h2>
+      <div className="rounded-lex-lg border border-stone-200 bg-white shadow-lex p-5">
+        <div className="flex items-center gap-3 flex-wrap">
+          <p className="text-[14px] font-medium">Model Context Protocol — external clients connect as a user, with that user's access and quota.</p>
+          <OnOff on={mcp?.enabled ?? s.mcp_enabled} />
+        </div>
+        <p className="text-[13px] text-stone-500 mt-1.5">
+          Endpoint <code className="bg-stone-100 rounded px-1.5 py-0.5 text-[12.5px]">POST {mcp?.endpoint ?? '/mcp'}</code> ·
+          transport {mcp?.transport ?? 'streamable-http'} · protocol {mcp?.protocol_version ?? '2024-11-05'}
+        </p>
+        <div className="flex flex-wrap gap-1.5 mt-3">
+          {(mcp?.tools ?? []).map((t) => (
+            <span key={t.name} title={t.description} className="rounded-full border border-stone-200 bg-[#fcfbf9] px-2.5 py-1 text-[12px] font-medium text-stone-600">
+              {t.name}
+            </span>
+          ))}
+        </div>
+        <div className="relative mt-4">
+          <pre className="rounded-lex bg-ink text-ivory/90 text-[12px] leading-relaxed p-4 overflow-x-auto">{mcpConfig}</pre>
+          <button
+            onClick={() => { navigator.clipboard?.writeText(mcpConfig); setCopied(true); setTimeout(() => setCopied(false), 1500) }}
+            className="absolute top-2.5 right-2.5 rounded-lex bg-white/10 hover:bg-white/20 text-ivory px-2.5 py-1 text-[12px] font-medium"
+          >
+            {copied ? 'Copied ✓' : 'Copy config'}
+          </button>
+        </div>
+      </div>
+    </>
+  )
 }
 
 function HitTestCard() {
@@ -98,6 +178,9 @@ export default function SystemSettingsPage() {
         <StatCard label="Answer cache" value={cache?.answers ? `${cache.answers.entries} entries` : '—'}
           sub={cache?.answers ? `${cache.answers.hits} paraphrase hits · ${cache.answers.misses} misses · ${hitRate(cache.answers)}` : undefined} />
       </div>
+
+      <h2 className="font-display text-xl tracking-tight mt-10 mb-3">Retrieval stack — live status</h2>
+      <StackCard />
 
       <h2 className="font-display text-xl tracking-tight mt-10 mb-3">Retrieval debugger</h2>
       <HitTestCard />

@@ -15,6 +15,66 @@ live**, what is **built but unverified**, and what is **roadmap**.
 ## [Unreleased]
 
 ### Added
+- **Tier-2 retrieval arc — augmentation, hyperedges, HyDE, late
+  interaction, Tantivy, MCP** (24 Oct 2026; ADR-0021). Directed by the
+  owner as the complete remaining take-list from the RAG landscape
+  evaluation, with frontend integration.
+  (a) **Index-time chunk augmentation** (RAGFlow pattern): one batched
+  LLM call per document at ingest generates keywords (incl. Hindi
+  equivalents) + questions per chunk; embedded as auxiliary match
+  units (`pc=aug`) that retrieval canonicalizes back to the source
+  chunk — the keyword leg also indexes aux text under the source id.
+  Kill switch `LEGAL_RAG_AUGMENT=0`. Vault gains an "Indexing" view
+  per document showing the generated keywords/questions.
+  (b) **Statute hyperedges** (Hyper-RAG pattern): one retrievable unit
+  per (Act, section) per document binding its member chunks; a hit on
+  the unit canonicalizes to the first member and pulls siblings into
+  context. Kill switch `LEGAL_RAG_HYPEREDGES=0`.
+  (c) **HyDE / multi-query expansion**: short (≤8 words) or
+  citation-style questions trigger one LLM expansion call (hypothetical
+  answer passage + up to 3 variants); each variant gets its own search
+  pool, merged by rank interleave. Expansions ride the answer/stream
+  (`expansions` field; Ask shows "also searched as" chips). Kill
+  switch `LEGAL_RAG_HYDE=0`.
+  (d) **ColBERT late interaction** (Spice ships it; txtai pattern): a
+  MaxSim sidecar (`tools/colbert/colbert_sidecar.py`, colbertv2.0,
+  MIT) behind `LEGAL_RAG_COLBERT_URL`; scores blend (normalized,
+  `LEGAL_RAG_COLBERT_WEIGHT`, default 0.5) with the cross-encoder
+  after reranking, failures degrade to the reranker order. New
+  hit-test stage `late-interaction` when active. **Bench verdict
+  (24 Oct, `~/workspace/colbert-bench/REPORT.md`): DEFAULT OFF on
+  evidence.** On full-passage candidates every scorer saturates
+  (MRR 1.0); on production-realistic short chunks MaxSim is the
+  weakest standalone scorer (MRR 0.709 vs cosine 1.0, cross-encoder
+  0.913) — it saturates on shared legal vocabulary and misses both
+  section-collision queries it was meant to fix, and blending dilutes
+  the stronger scorers at 50/50. The stage ships as an experimental
+  opt-in (a low weight may still earn its place on a larger golden
+  set; unproven either way).
+  (e) **Tantivy BM25 engine** behind `LEGAL_RAG_BM25_ENGINE=tantivy`
+  (native in-house engine stays the default), same build/search
+  contract. Bench (`bm25_engine_bench`, 24 Oct): at 324 chunks native
+  builds in 4.6 ms / queries 105 µs vs Tantivy 133 ms / 468 µs; at
+  50,000 chunks native 329 ms / 4.3 ms vs Tantivy 4.6 s / 72.7 ms —
+  native is faster at both scales on this box, and the engines' top-10
+  overlap is only ≈0.54 (ranking is NOT equivalent; treat Tantivy as
+  an alternative scorer, not a drop-in). Native stays default.
+  (f) **MCP server**: `POST /mcp` (streamable-HTTP style, JSON-RPC
+  2.0, protocol 2024-11-05) with tools `search_vault`,
+  `list_documents`, `ask`; auth is the caller's normal bearer token
+  (quota enforced on `ask`). Admin Command Center shows live
+  retrieval-stack status (new `GET /api/v1/admin/retrieval-status`),
+  the MCP panel with a copyable client config, and the new hit-test
+  stage. Kill switch `LEGAL_RAG_MCP=0`.
+  Verification status: **live-verified on the test instance**
+  (24 Oct): 112 workspace tests + both frontend builds green;
+  augmentation, hyperedges (after a cross-pairing bug found in
+  verification was fixed via nearest-Act pairing), HyDE expansions,
+  MCP round-trips, retrieval-status and the late-interaction
+  hit-test stage all exercised end-to-end (receipts in ADR-0021).
+  Production (:3000) runs the build with default gates (ColBERT off,
+  per the bench verdict). S3 Vectors live round-trip remains gated
+  on AWS credentials (unchanged from ADR-0020).
 - **Spice.ai vector engines, taken natively** (23 Oct 2026; ADR-0020).
   Spice's "vector engine" is a lineup, not a library, so each engine
   was implemented behind the existing `VectorStore` trait and selected

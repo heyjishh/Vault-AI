@@ -37,6 +37,28 @@ export interface HitTestReport {
   stages: { name: string; hits: HitView[] }[]
 }
 export interface WorkflowDef { id: string; name: string; description: string; steps: { id: string; name: string }[] }
+export interface RetrievalStatus {
+  vector_store: string
+  fusion: string
+  statute_boost: string
+  bm25_engine: string
+  bm25_enabled: boolean
+  parent_child: boolean
+  augmentation: boolean
+  hyperedges: boolean
+  hyde: boolean
+  late_interaction: boolean
+  retrieval_cache: boolean
+  semantic_cache: boolean
+  mcp_enabled: boolean
+}
+export interface McpInfo {
+  enabled: boolean
+  endpoint: string
+  transport: string
+  protocol_version: string
+  tools: { name: string; description: string }[]
+}
 export interface BillingPayment {
   id: string; order_id: string; user_email: string; plan_id: string; amount_inr: number
   provider: string; status: string; utr: string | null; created_at: string; completed_at: string | null
@@ -216,6 +238,14 @@ export const adminApi = {
       const r = await api.post<HitTestReport>('/admin/hit-test', { question, top_k })
       return r.data
     } catch (e) { throw new Error(errMsg(e)) }
+  },
+  async retrievalStatus(): Promise<RetrievalStatus> {
+    const r = await api.get<RetrievalStatus>('/admin/retrieval-status')
+    return r.data
+  },
+  async mcpInfo(): Promise<McpInfo> {
+    const r = await api.get<McpInfo>('/admin/mcp')
+    return r.data
   },
   async annotations(): Promise<{ annotations: AnnotationRecord[]; current_corpus_fp: string }> {
     const r = await api.get('/admin/annotations')

@@ -188,4 +188,4 @@ annotations, hit-test). Full inventory: [docs/ARCHITECTURE.md](docs/ARCHITECTURE
 ## Ownership
 
 © 2026 **Jishan** and the **Juris Vault AI Team**. All rights reserved.
-Documentation set version 1.6 — 23 October 2026.
+Documentation set version 1.7 — 24 October 2026. Tier-2 retrieval arc (ADR-0021): index-time augmentation, statute hyperedges, HyDE/multi-query, ColBERT late interaction (opt-in), Tantivy BM25 option, MCP server.

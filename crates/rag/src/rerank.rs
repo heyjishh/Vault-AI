@@ -330,4 +330,115 @@ mod tests {
         assert!(parse_rerank_scores(r#"{"scores":[0.1]}"#, 2).is_none());
         assert!(parse_rerank_scores(r#"{"other":true}"#, 2).is_none());
     }
+
+    #[test]
+    fn late_scores_parse() {
+        let s = parse_late_scores(
+            r#"{"scores":[{"id":"a","score":1.5},{"id":"b","score":-0.5}]}"#,
+        )
+        .unwrap();
+        assert_eq!(s, vec![("a".to_string(), 1.5), ("b".to_string(), -0.5)]);
+        assert!(parse_late_scores("nope").is_none());
+    }
+}
+
+/// Late interaction (ColBERT-style MaxSim): score a query against
+/// documents at TOKEN level — each query token takes its best match
+/// among the document's tokens, summed. Where a cross-encoder judges
+/// the passage as a whole, MaxSim rewards exact term-level evidence
+/// (section numbers, defined terms), which complements it.
+#[async_trait::async_trait]
+pub trait LateInteractor: Send + Sync {
+    /// Returns (doc_id, maxsim_score) for the given documents.
+    async fn maxsim_scores(
+        &self,
+        query: &str,
+        docs: &[(String, String)],
+    ) -> Result<Vec<(String, f32)>>;
+}
+
+/// HTTP client for the late-interaction sidecar
+/// (`tools/colbert/colbert_sidecar.py`):
+///   POST {url}/late-interaction {"query": "...", "documents": [{"id", "text"}]}
+///   → {"scores": [{"id": "...", "score": 12.3}]}
+/// Failures return Err and the caller keeps the existing order —
+/// like reranking, this stage must never break a query.
+pub struct HttpLateInteractor {
+    client: reqwest::Client,
+    url: String,
+}
+
+impl HttpLateInteractor {
+    pub fn new(base_url: impl Into<String>) -> Self {
+        let timeout_ms = std::env::var("LEGAL_RAG_COLBERT_TIMEOUT_MS")
+            .ok()
+            .and_then(|v| v.parse::<u64>().ok())
+            .filter(|&v| v > 0)
+            .unwrap_or(15_000);
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_millis(timeout_ms))
+            .build()
+            .unwrap_or_default();
+        let base = base_url.into();
+        Self {
+            client,
+            url: format!("{}/late-interaction", base.trim_end_matches('/')),
+        }
+    }
+}
+
+#[derive(Serialize)]
+struct LateRequest<'a> {
+    query: &'a str,
+    documents: Vec<LateDoc<'a>>,
+}
+
+#[derive(Serialize)]
+struct LateDoc<'a> {
+    id: &'a str,
+    text: &'a str,
+}
+
+fn parse_late_scores(body: &str) -> Option<Vec<(String, f32)>> {
+    let v: serde_json::Value = serde_json::from_str(body).ok()?;
+    let arr = v.get("scores")?.as_array()?;
+    let mut out = Vec::with_capacity(arr.len());
+    for e in arr {
+        out.push((
+            e.get("id")?.as_str()?.to_string(),
+            e.get("score")?.as_f64()? as f32,
+        ));
+    }
+    Some(out)
+}
+
+#[async_trait::async_trait]
+impl LateInteractor for HttpLateInteractor {
+    async fn maxsim_scores(
+        &self,
+        query: &str,
+        docs: &[(String, String)],
+    ) -> Result<Vec<(String, f32)>> {
+        let body = LateRequest {
+            query,
+            documents: docs
+                .iter()
+                .map(|(id, text)| LateDoc { id: id.as_str(), text: text.as_str() })
+                .collect(),
+        };
+        let resp = self
+            .client
+            .post(&self.url)
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| legal_rag_common::Error::Upstream(format!("colbert sidecar: {e}")))?;
+        let text = resp
+            .text()
+            .await
+            .map_err(|e| legal_rag_common::Error::Upstream(format!("colbert sidecar: {e}")))?;
+        parse_late_scores(&text).ok_or_else(|| {
+            legal_rag_common::Error::Upstream("colbert sidecar: unparseable scores".to_string())
+        })
+    }
 }

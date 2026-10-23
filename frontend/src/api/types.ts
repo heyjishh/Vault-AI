@@ -63,6 +63,19 @@ export interface QueryAnswer {
   /** True when served from a human-verified annotation. */
   verified?: boolean
   citation_audit?: CitationAudit | null
+  /** HyDE / multi-query expansions used for retrieval, when the
+   *  question triggered expansion. */
+  expansions?: string[]
+}
+
+/** One parent chunk with its index-time augmentation (Vault view). */
+export interface ChunkAug {
+  id: string
+  ordinal: number
+  text_preview: string
+  aug_keywords?: string
+  aug_questions?: string
+  hyper_id?: string
 }
 
 /** One hit from the corpus document search. */

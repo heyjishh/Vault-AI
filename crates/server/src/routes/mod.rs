@@ -12,6 +12,7 @@ pub mod golden;
 pub mod insights;
 pub mod knowledge;
 pub mod matters;
+pub mod mcp;
 pub mod spaces;
 pub mod private_vault;
 pub mod settings;
@@ -36,11 +37,15 @@ pub fn router(state: AppState) -> Router {
         .route("/api/v1/vault/search", get(vault::search_documents))
         .route("/api/v1/vault/documents", post(vault::upload_document).get(vault::list_documents))
         .route("/api/v1/vault/documents/{id}", delete(vault::delete_document))
+        .route("/api/v1/vault/documents/{id}/chunks", get(vault::document_chunks))
         .route(
             "/api/v1/vault/documents/{id}/metadata",
             patch(vault::update_document_meta),
         )
         .route("/api/v1/vault/ingest", post(vault::ingest_s3))
+        // MCP: Model Context Protocol server for external clients.
+        .route("/mcp", post(mcp::handle).get(mcp::info))
+        .route("/api/v1/admin/mcp", get(mcp::admin_info))
         // Knowledge: RAG query.
         .route("/api/v1/knowledge/query", post(knowledge::query))
         .route("/api/v1/knowledge/source-document", post(knowledge::source_document))
@@ -48,6 +53,7 @@ pub fn router(state: AppState) -> Router {
         .route("/api/v1/knowledge/research", post(knowledge::research))
         .route("/api/v1/knowledge/cache-stats", get(knowledge::cache_stats))
         .route("/api/v1/admin/hit-test", post(knowledge::hit_test))
+        .route("/api/v1/admin/retrieval-status", get(knowledge::retrieval_status))
         .route("/api/v1/knowledge/workflows", get(knowledge::workflow_list))
         .route("/api/v1/knowledge/workflows/run", post(knowledge::workflow_run))
         .route("/api/v1/knowledge/agents/autonomous", post(knowledge::autonomous_run))

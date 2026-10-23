@@ -1,6 +1,6 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios'
 import type {
-  AuthResponse, CacheStats, Citation, CitationAudit, CorpusStats, DocMeta, DocSearchHit, DocumentInfo, GraphView, Space,
+  AuthResponse, CacheStats, ChunkAug, Citation, CitationAudit, CorpusStats, DocMeta, DocSearchHit, DocumentInfo, GraphView, Space,
   IngestReport, Matter, MatterDetail, MatterMemory, MatterSummary, PrivateDocMeta, PublicSettings,
   QueryAnswer, QueryMode, ResearchReport, SourceDocument, TimelineItem, TokenPair,
   WorkflowDef, WorkflowRun, AutonomousRun,
@@ -158,6 +158,9 @@ export const vaultApi = {
   async remove(id: string): Promise<void> {
     try { await api.delete(`/vault/documents/${id}`) }
     catch (e) { throw new Error(err(e)) }
+  },
+  async chunks(id: string): Promise<ChunkAug[]> {
+    const r = await api.get<ChunkAug[]>(`/vault/documents/${id}/chunks`); return r.data
   },
   async updateMeta(id: string, meta: DocMeta): Promise<DocumentInfo> {
     try {
@@ -399,7 +402,7 @@ export interface StreamHandlers {
   onStatus?: (message: string) => void
   onSources?: (citations: Citation[], mode: QueryMode, verified: boolean) => void
   onDelta?: (text: string) => void
-  onDone?: (answer: string, audit?: CitationAudit | null) => void
+  onDone?: (answer: string, audit?: CitationAudit | null, expansions?: string[]) => void
   onError?: (message: string) => void
 }
 
@@ -463,7 +466,11 @@ export async function queryStream(
           handlers.onDelta?.(String(parsed.text ?? ''))
         } else if (event === 'done') {
           sawDone = true
-          handlers.onDone?.(String(parsed.answer ?? ''), (parsed.audit as CitationAudit) ?? null)
+          handlers.onDone?.(
+            String(parsed.answer ?? ''),
+            (parsed.audit as CitationAudit) ?? null,
+            (parsed.expansions as string[]) ?? [],
+          )
         }
       }
     }

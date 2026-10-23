@@ -320,6 +320,19 @@ async fn main() -> anyhow::Result<()> {
     query.set_doc_meta_source(Arc::new(move |id: &str| rag_for_meta.document_meta(id)));
     // Let the retrieval cache spawn background revalidation tasks.
     query.bind_self(&query);
+    // ColBERT late interaction (optional, Tier-2): LEGAL_RAG_COLBERT_URL
+    // points at the MaxSim sidecar (tools/colbert). Unset = stage off;
+    // sidecar failures degrade to the reranker's order.
+    if !use_mocks() {
+        if let Ok(url) = env::var("LEGAL_RAG_COLBERT_URL") {
+            if !url.trim().is_empty() {
+                info!(%url, "ColBERT late-interaction rescoring enabled");
+                query.set_late_interactor(Arc::new(
+                    legal_rag_rag::HttpLateInteractor::new(url),
+                ));
+            }
+        }
+    }
     let workflows = Arc::new(legal_rag_rag::WorkflowEngine::new(query.clone()));
     let agent = Arc::new(legal_rag_rag::AutonomousAgent::new(query.clone()));
 

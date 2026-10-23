@@ -472,6 +472,40 @@ pub async fn hit_test(
     Ok(Json(report))
 }
 
+/// Admin: live retrieval-stack status for the Command Center —
+/// which engines and Tier-1/Tier-2 stages are active in this process.
+/// Env-gated features report their startup configuration; runtime
+/// state (late interaction bound, MCP) is read live.
+pub async fn retrieval_status(
+    State(state): State<AppState>,
+    AdminUser(_admin): AdminUser,
+) -> Json<serde_json::Value> {
+    let env_on = |k: &str| std::env::var(k).map(|v| v != "0").unwrap_or(true);
+    let vector_store = match std::env::var("LEGAL_RAG_VECTOR_STORE").as_deref() {
+        Ok("hnsw") => "hnsw (embedded)",
+        Ok("s3vectors") => "s3 vectors",
+        Ok("memory") => "in-memory",
+        Ok("serenedb") => "serenedb",
+        _ if std::env::var("SERENEDB_URL").is_ok() => "serenedb",
+        _ => "in-memory",
+    };
+    Json(serde_json::json!({
+        "vector_store": vector_store,
+        "fusion": std::env::var("LEGAL_RAG_FUSION").unwrap_or_else(|_| "rrf".to_string()),
+        "statute_boost": std::env::var("LEGAL_RAG_STATUTE_BOOST").unwrap_or_else(|_| "1.35".to_string()),
+        "bm25_engine": std::env::var("LEGAL_RAG_BM25_ENGINE").unwrap_or_else(|_| "native".to_string()),
+        "bm25_enabled": env_on("LEGAL_RAG_BM25"),
+        "parent_child": env_on("LEGAL_RAG_PARENT_CHILD"),
+        "augmentation": env_on("LEGAL_RAG_AUGMENT"),
+        "hyperedges": env_on("LEGAL_RAG_HYPEREDGES"),
+        "hyde": env_on("LEGAL_RAG_HYDE"),
+        "late_interaction": state.query.late_interaction_enabled(),
+        "retrieval_cache": std::env::var("LEGAL_RAG_RETRIEVAL_CACHE").map(|v| v != "0").unwrap_or(true),
+        "semantic_cache": env_on("LEGAL_RAG_SEMANTIC_CACHE"),
+        "mcp_enabled": crate::routes::mcp::mcp_enabled(),
+    }))
+}
+
 /// List available agentic workflows.
 pub async fn workflow_list(
     State(state): State<AppState>,

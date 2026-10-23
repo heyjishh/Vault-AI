@@ -196,6 +196,12 @@ pub struct QueryAnswer {
     /// unsupported. None when no audit ran (verified annotations).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub citation_audit: Option<crate::audit::CitationAudit>,
+    /// HyDE / multi-query expansions actually used for retrieval
+    /// (empty when the question didn't trigger expansion) — surfaced
+    /// so the user can see how a terse citation-style question was
+    /// interpreted.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub expansions: Vec<String>,
 }
 
 /// A human-verified answer (annotation): a curator corrected or authored
@@ -264,6 +270,10 @@ pub enum QueryEvent {
         /// Citation-integrity receipt for the completed answer.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         audit: Option<crate::audit::CitationAudit>,
+        /// HyDE / multi-query expansions used for this answer's
+        /// retrieval (skipped in serialization when empty).
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        expansions: Vec<String>,
     },
 }
 
@@ -285,6 +295,9 @@ pub struct QueryService {
     doc_meta: std::sync::RwLock<Arc<dyn Fn(&str) -> Option<crate::pipeline::DocMeta> + Send + Sync>>,
     web: Arc<dyn WebSearch>,
     reranker: Option<Arc<dyn Reranker>>,
+    /// Optional ColBERT-style late-interaction rescorer, bound by the
+    /// server when LEGAL_RAG_COLBERT_URL is set (None = stage off).
+    late_interactor: std::sync::RwLock<Option<Arc<dyn crate::rerank::LateInteractor>>>,
     rerank_candidates: usize,
     /// Admin-set system prompt override (None = built-in default).
     answer_system: std::sync::RwLock<Option<String>>,
@@ -299,7 +312,7 @@ pub struct QueryService {
     annotation_threshold: f32,
     /// BM25 keyword index, rebuilt lazily when the corpus fingerprint
     /// changes: (fingerprint, index).
-    bm25: std::sync::RwLock<Option<(String, Arc<Bm25Index>)>>,
+    bm25: std::sync::RwLock<Option<(String, Arc<Bm25Engine>)>>,
     /// Retrieval-tier results cache (Spice pattern): replays a
     /// `retrieve()` result under stale-while-revalidate semantics.
     retrieval_cache: Arc<crate::retrieval_cache::RetrievalCache>,
@@ -338,6 +351,7 @@ impl QueryService {
             doc_meta: std::sync::RwLock::new(Arc::new(|_| None)),
             web,
             reranker,
+            late_interactor: std::sync::RwLock::new(None),
             rerank_candidates,
             retrieval_cache: Arc::new(crate::retrieval_cache::RetrievalCache::from_env()),
             weak_self: std::sync::RwLock::new(None),
@@ -467,13 +481,73 @@ impl QueryService {
             hits: fused.iter().map(&view).collect(),
         });
         if self.reranker.is_some() {
-            let ranked = self.maybe_rerank(question, fused, top_k).await?;
+            let ranked = self.maybe_rerank(question, fused.clone(), top_k).await?;
             stages.push(HitStage {
                 name: "reranked".to_string(),
                 hits: ranked.iter().map(&view).collect(),
             });
+            let blended = self.apply_late_interaction(question, ranked).await;
+            let ranked_ids: Vec<&str> =
+                stages.last().unwrap().hits.iter().map(|h| h.chunk_id.as_str()).collect();
+            if blended.iter().map(|h| h.record.id.as_str()).collect::<Vec<_>>() != ranked_ids {
+                stages.push(HitStage {
+                    name: "late-interaction".to_string(),
+                    hits: blended.iter().map(&view).collect(),
+                });
+            }
         }
         Ok(HitTestReport { question: question.to_string(), stages })
+    }
+
+    /// Bind the late-interaction rescorer (server, when
+    /// LEGAL_RAG_COLBERT_URL is configured).
+    pub fn set_late_interactor(&self, li: Arc<dyn crate::rerank::LateInteractor>) {
+        *self.late_interactor.write().unwrap() = Some(li);
+    }
+
+    pub fn late_interaction_enabled(&self) -> bool {
+        self.late_interactor.read().unwrap().is_some()
+    }
+
+    /// ColBERT MaxSim blend: rescore the reranked hits at token level
+    /// and blend (min-max normalized) with the existing scores.
+    /// No-ops when the stage is unconfigured, has <2 hits, or the
+    /// sidecar fails — the reranker's order is never made worse by an
+    /// outage.
+    async fn apply_late_interaction(
+        &self,
+        question: &str,
+        hits: Vec<ScoredChunk>,
+    ) -> Vec<ScoredChunk> {
+        let li = self.late_interactor.read().unwrap().clone();
+        let Some(li) = li else { return hits };
+        if hits.len() < 2 {
+            return hits;
+        }
+        let docs: Vec<(String, String)> = hits
+            .iter()
+            .map(|h| {
+                (
+                    h.record.id.clone(),
+                    h.record.text.chars().take(4000).collect::<String>(),
+                )
+            })
+            .collect();
+        match li.maxsim_scores(question, &docs).await {
+            Ok(scores) if !scores.is_empty() => {
+                let weight = std::env::var("LEGAL_RAG_COLBERT_WEIGHT")
+                    .ok()
+                    .and_then(|v| v.parse::<f32>().ok())
+                    .unwrap_or(0.5)
+                    .clamp(0.0, 1.0);
+                blend_maxsim(hits, &scores, weight)
+            }
+            Ok(_) => hits,
+            Err(e) => {
+                warn!(error = %e, "late interaction failed; keeping reranker order");
+                hits
+            }
+        }
     }
 
     /// Replace the verified-annotation set (server pushes its store in
@@ -521,6 +595,7 @@ impl QueryService {
             scope_note: None,
             verified: true,
             citation_audit: None,
+            expansions: Vec::new(),
         })
     }
 
@@ -559,7 +634,7 @@ impl QueryService {
     }
 
     /// The current BM25 index, rebuilt when the corpus has changed.
-    async fn bm25_index(&self, corpus_fp: &str) -> Option<Arc<Bm25Index>> {
+    async fn bm25_index(&self, corpus_fp: &str) -> Option<Arc<Bm25Engine>> {
         {
             let guard = self.bm25.read().unwrap();
             if let Some((fp, idx)) = guard.as_ref() {
@@ -571,9 +646,20 @@ impl QueryService {
         let chunks = self.store.all_chunks().await.ok()?;
         // Keyword search runs over the same match units as vector search:
         // child chunks + un-split parents, never context-only parents.
-        let searchable: Vec<ChunkRecord> =
-            chunks.into_iter().filter(|c| is_searchable(c)).collect();
-        let idx = Arc::new(Bm25Index::build(&searchable));
+        // Auxiliary units (index-time augmentation, hyperedges) are
+        // indexed UNDER their canonical chunk id, so the keyword leg
+        // votes for the real chunk with the aux text's terms.
+        let searchable: Vec<ChunkRecord> = chunks
+            .into_iter()
+            .filter(|c| is_searchable(c))
+            .map(|mut c| {
+                if let Some(target) = canonical_target(&c) {
+                    c.id = target;
+                }
+                c
+            })
+            .collect();
+        let idx = Arc::new(Bm25Engine::build(&searchable));
         *self.bm25.write().unwrap() = Some((corpus_fp.to_string(), idx.clone()));
         Some(idx)
     }
@@ -1041,7 +1127,7 @@ impl QueryService {
         scope: Option<DocScope>,
         extra: &[ExtraSource],
         strict: bool,
-    ) -> Result<(String, String, Vec<Citation>, Option<String>)> {
+    ) -> Result<(String, String, Vec<Citation>, Option<String>, Vec<String>)> {
         let top_k = top_k.clamp(1, 50);
 
         if mode == QueryMode::Bypass {
@@ -1050,8 +1136,20 @@ impl QueryService {
                 format!("Question: {question}"),
                 Vec::new(),
                 None,
+                Vec::new(),
             ));
         }
+
+        // HyDE / multi-query expansion (Tier-2): terse citation-style
+        // questions embed poorly, so generate a hypothetical answer
+        // passage + paraphrase variants and pool their searches.
+        // Env gate LEGAL_RAG_HYDE=0 disables; failures degrade to the
+        // bare question.
+        let expansions: Vec<String> = if hyde_trigger(question) {
+            self.expand_query(question).await
+        } else {
+            Vec::new()
+        };
 
         // With a reranker, retrieve a wide candidate set and let the
         // precision pass select the best top_k. When scoped to a matter,
@@ -1063,8 +1161,9 @@ impl QueryService {
         } else {
             top_k
         };
-        let (mut hits, mut graph_context) =
-            self.retrieve(question, mode, fetch_k, scope.as_ref()).await?;
+        let (mut hits, mut graph_context) = self
+            .retrieve_expanded(question, mode, fetch_k, scope.as_ref(), &expansions)
+            .await?;
         let mut scope_note = None;
         if scope.is_some() && hits.is_empty() && graph_context.is_empty() {
             if strict {
@@ -1088,6 +1187,9 @@ impl QueryService {
         }
         let hits = self.apply_metadata_boost(question, hits);
         let hits = self.maybe_rerank(question, hits, top_k).await?;
+        // ColBERT late interaction (when configured): token-level
+        // MaxSim blend over the reranker's verdict.
+        let hits = self.apply_late_interaction(question, hits).await;
         let hits = apply_per_doc_cap(hits);
         // Parent-child: the reranker judged the precise child spans; the
         // LLM now gets each hit's parent — the whole section — as
@@ -1203,7 +1305,7 @@ impl QueryService {
         if !web_pages.is_empty() {
             system.push_str(WEB_FORMAT_ADDENDUM);
         }
-        Ok((system, user_prompt, citations, scope_note))
+        Ok((system, user_prompt, citations, scope_note, expansions))
     }
 
     async fn query_inner(
@@ -1246,7 +1348,7 @@ impl QueryService {
                 }
             }
         }
-        let (system, user_prompt, citations, scope_note) =
+        let (system, user_prompt, citations, scope_note, expansions) =
             self.prepare_context(question, mode, top_k, web_pages, scope, extra, strict).await?;
         // Only this final call ever sees confidential (extra) source
         // text, so only it honors the private-LLM override.
@@ -1270,6 +1372,7 @@ impl QueryService {
             scope_note,
             verified: false,
             citation_audit: Some(audit),
+            expansions,
         };
         if let Some((qvec, key)) = cache_slot {
             if !out.citations.is_empty() {
@@ -1351,7 +1454,7 @@ impl QueryService {
                             let _ = tx.send(QueryEvent::Delta { text: chunk.to_string() });
                         }
                     }
-                    let _ = tx.send(QueryEvent::Done { answer: hit.answer, audit: None });
+                    let _ = tx.send(QueryEvent::Done { answer: hit.answer, audit: None, expansions: Vec::new() });
                     return Ok(());
                 }
                 if self.answer_cache_enabled {
@@ -1373,6 +1476,7 @@ impl QueryService {
                         let _ = tx.send(QueryEvent::Done {
                             answer: hit.answer.clone(),
                             audit: hit.citation_audit,
+                            expansions: hit.expansions.clone(),
                         });
                         return Ok(());
                     }
@@ -1393,7 +1497,7 @@ impl QueryService {
             "Weighing the evidence…",
         ];
         let mut beat_no = 0usize;
-        let (system, user_prompt, citations, scope_note) = loop {
+        let (system, user_prompt, citations, scope_note, expansions) = loop {
             tokio::select! {
                 done = &mut prep => break done?,
                 _ = beat.tick() => {
@@ -1406,6 +1510,14 @@ impl QueryService {
         };
         if let Some(note) = &scope_note {
             let _ = tx.send(QueryEvent::Status { message: note.clone() });
+        }
+        if !expansions.is_empty() {
+            let _ = tx.send(QueryEvent::Status {
+                message: format!(
+                    "Expanded the question into {} retrieval variants (HyDE / multi-query)",
+                    expansions.len()
+                ),
+            });
         }
         let _ = tx.send(QueryEvent::Sources { citations: citations.clone(), mode, verified: false });
         let _ = tx.send(QueryEvent::Status { message: "Drafting your answer…".to_string() });
@@ -1438,11 +1550,12 @@ impl QueryService {
                         scope_note,
                         verified: false,
                         citation_audit: Some(audit),
+                        expansions: expansions.clone(),
                     },
                 );
             }
         }
-        let _ = tx.send(QueryEvent::Done { answer, audit: Some(audit) });
+        let _ = tx.send(QueryEvent::Done { answer, audit: Some(audit), expansions });
         Ok(())
     }
 
@@ -1465,7 +1578,7 @@ impl QueryService {
             .map(|v| v == "0")
             .unwrap_or(false)
         {
-            return self.retrieve_uncached(question, mode, top_k, scope).await;
+            return self.retrieve_uncached(question, mode, top_k, scope, &[]).await;
         }
         let fp = self.corpus_fingerprint().await;
         let scope_docs: Option<Vec<String>> =
@@ -1485,9 +1598,70 @@ impl QueryService {
             }
             _ => {}
         }
-        let value = self.retrieve_uncached(question, mode, top_k, scope).await?;
+        let value = self.retrieve_uncached(question, mode, top_k, scope, &[]).await?;
         self.retrieval_cache.store(key, value.clone());
         Ok(value)
+    }
+
+    /// Generate HyDE + multi-query expansions for a triggered
+    /// question: one hypothetical answer passage (embedded in place of
+    /// the terse question, it lands near real answer text) plus up to
+    /// three paraphrase variants. Empty on any failure.
+    async fn expand_query(&self, question: &str) -> Vec<String> {
+        #[derive(serde::Deserialize)]
+        struct Expansion {
+            #[serde(default)]
+            hyde: String,
+            #[serde(default)]
+            variants: Vec<String>,
+        }
+        let raw = match self
+            .llm
+            .complete(
+                "You expand terse legal questions for document retrieval. \
+                 Reply with ONLY JSON: {\"hyde\": \"<a 2-3 sentence passage that would directly \
+                 answer the question, written as formal legal text citing the relevant Act and \
+                 section>\", \"variants\": [\"<two or three paraphrases of the question: one \
+                 formal, one plain-language, one in Hinglish if the question is Indian law>\"]}",
+                question,
+            )
+            .await
+        {
+            Ok(r) => r,
+            Err(_) => return Vec::new(),
+        };
+        let Some(parsed) = crate::graph::parse_llm_json::<Expansion>(&raw) else {
+            return Vec::new();
+        };
+        let mut out: Vec<String> = Vec::new();
+        if !parsed.hyde.trim().is_empty() {
+            out.push(parsed.hyde.trim().to_string());
+        }
+        for v in parsed.variants {
+            let v = v.trim().to_string();
+            if !v.is_empty() && v != question && out.len() < 4 {
+                out.push(v);
+            }
+        }
+        out
+    }
+
+    /// Retrieval with HyDE / multi-query expansion queries pooled into
+    /// the vector leg. Bypasses the retrieval cache: expansions are
+    /// generated per call, so the pooled result is not the canonical
+    /// result for the bare question.
+    pub(crate) async fn retrieve_expanded(
+        &self,
+        question: &str,
+        mode: QueryMode,
+        top_k: usize,
+        scope: Option<&DocScope>,
+        extra_queries: &[String],
+    ) -> Result<(Vec<ScoredChunk>, String)> {
+        if extra_queries.is_empty() {
+            return self.retrieve(question, mode, top_k, scope).await;
+        }
+        self.retrieve_uncached(question, mode, top_k, scope, extra_queries).await
     }
 
     /// Background refresh for a stale cache entry. No-ops when the
@@ -1506,7 +1680,7 @@ impl QueryService {
             let Some(svc) = weak.upgrade() else { return };
             svc.retrieval_cache.note_revalidation();
             if let Ok(value) =
-                svc.retrieve_uncached(&question, mode, top_k, scope.as_ref()).await
+                svc.retrieve_uncached(&question, mode, top_k, scope.as_ref(), &[]).await
             {
                 svc.retrieval_cache.store(key, value);
             }
@@ -1519,6 +1693,7 @@ impl QueryService {
         mode: QueryMode,
         top_k: usize,
         scope: Option<&DocScope>,
+        extra_queries: &[String],
     ) -> Result<(Vec<ScoredChunk>, String)> {
         let mut graph_context = String::new();
 
@@ -1527,14 +1702,26 @@ impl QueryService {
         // vector search instead of queueing behind them.
         let vec_leg = async {
             if matches!(mode, QueryMode::Naive | QueryMode::Mix) {
-                let qvec = self.embeddings.embed(&[question.to_string()]).await?.remove(0);
+                // HyDE / multi-query: the bare question plus any
+                // expansion queries each get a search pool; pools merge
+                // by rank interleave (scores across query variants are
+                // commensurable here — same embedder, same store — but
+                // interleave keeps any single variant from dominating).
+                let mut queries: Vec<String> = vec![question.to_string()];
+                queries.extend(extra_queries.iter().cloned());
+                let qvecs = self.embeddings.embed(&queries).await?;
                 // Search wide, then keep searchable units only: context-
                 // only parents (pc=parent) keep embeddings for storage
                 // parity but are not match units — their children are.
                 let wide = (top_k * 4).clamp(top_k, 200);
-                let raw = self.store.search(&qvec, wide).await?;
-                let mut vec_hits: Vec<ScoredChunk> =
-                    raw.into_iter().filter(|h| is_searchable(&h.record)).collect();
+                let mut pools: Vec<Vec<ScoredChunk>> = Vec::new();
+                for qvec in &qvecs {
+                    let raw = self.store.search(qvec, wide).await?;
+                    pools.push(
+                        raw.into_iter().filter(|h| is_searchable(&h.record)).collect(),
+                    );
+                }
+                let mut vec_hits: Vec<ScoredChunk> = merge_legs(pools);
                 vec_hits.truncate(top_k);
                 self.fuse_keyword_leg(question, vec_hits, top_k).await
             } else {
@@ -1574,12 +1761,96 @@ impl QueryService {
         // the vector leg's best hits out of the rerank pool — measured
         // 2026-10-23: the Section 86 question's vector rank-1 answer
         // never reached the context in Mix mode and the model refused.
-        let mut hits = merge_legs(vec![vec_hits, local_hits, global_hits]);
+        let merged = merge_legs(vec![vec_hits, local_hits, global_hits]);
+        // Auxiliary match units (augmentation questions/keywords,
+        // hyperedges) resolve to their real chunks here; hyperedge
+        // hits also pull in their sibling members as extra context.
+        let (mut hits, siblings) = self.canonicalize_hits(merged).await;
         if let Some(scope) = scope {
             hits.retain(|h| scope.contains(&h.record.doc_id));
         }
         hits.truncate(top_k);
+        let mut present: std::collections::HashSet<String> =
+            hits.iter().map(|h| h.record.id.clone()).collect();
+        for sib in siblings {
+            if scope.map(|s| s.contains(&sib.record.doc_id)).unwrap_or(true)
+                && present.insert(sib.record.id.clone())
+            {
+                hits.push(sib);
+            }
+        }
         Ok((hits, graph_context))
+    }
+
+    /// Map auxiliary-unit hits (pc=aug → source chunk, pc=hyper →
+    /// first member) to their canonical chunks, deduplicating by
+    /// canonical id (first/best-ranked occurrence wins). Returns the
+    /// canonical hits plus hyperedge sibling chunks for context
+    /// expansion (max 2 per matched hyperedge).
+    async fn canonicalize_hits(
+        &self,
+        hits: Vec<ScoredChunk>,
+    ) -> (Vec<ScoredChunk>, Vec<ScoredChunk>) {
+        let mut fetch: Vec<String> = Vec::new();
+        for h in &hits {
+            if let Some(t) = canonical_target(&h.record) {
+                fetch.push(t);
+            }
+            if h.record.metadata.get("pc").map(|s| s.as_str()) == Some("hyper") {
+                if let Some(members) = h.record.metadata.get("members") {
+                    fetch.extend(members.split(',').map(|s| s.to_string()));
+                }
+            }
+        }
+        if fetch.is_empty() {
+            return (hits, Vec::new());
+        }
+        let fetched = self.store.get_by_ids(&fetch).await.unwrap_or_default();
+        let by_id: std::collections::HashMap<&str, &ChunkRecord> =
+            fetched.iter().map(|r| (r.id.as_str(), r)).collect();
+        let mut out: Vec<ScoredChunk> = Vec::with_capacity(hits.len());
+        let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+        let mut siblings: Vec<ScoredChunk> = Vec::new();
+        for h in hits {
+            let is_hyper = h.record.metadata.get("pc").map(|s| s.as_str()) == Some("hyper");
+            let members: Vec<String> = if is_hyper {
+                h.record
+                    .metadata
+                    .get("members")
+                    .map(|m| m.split(',').map(|s| s.to_string()).collect())
+                    .unwrap_or_default()
+            } else {
+                Vec::new()
+            };
+            let canonical = match canonical_target(&h.record) {
+                Some(t) => match by_id.get(t.as_str()) {
+                    Some(rec) => (*rec).clone(),
+                    None => continue,
+                },
+                None => h.record.clone(),
+            };
+            if seen.insert(canonical.id.clone()) {
+                out.push(ScoredChunk { record: canonical, score: h.score });
+            }
+            if is_hyper {
+                let mut added = 0;
+                for mid in members {
+                    if added >= 2 {
+                        break;
+                    }
+                    if let Some(rec) = by_id.get(mid.as_str()) {
+                        if !seen.contains(rec.id.as_str()) {
+                            siblings.push(ScoredChunk {
+                                record: (*rec).clone(),
+                                score: h.score * 0.99,
+                            });
+                            added += 1;
+                        }
+                    }
+                }
+            }
+        }
+        (out, siblings)
     }
 
     /// Replace child-chunk hits with their parent records (score kept),
@@ -1896,6 +2167,135 @@ fn litm_order(n: usize) -> Vec<usize> {
     out
 }
 
+/// HyDE / multi-query trigger: short questions (≤8 words) embed
+/// poorly, and citation-style questions (a statute + a section
+/// reference) are the tersest of all. Env gate LEGAL_RAG_HYDE=0
+/// disables expansion entirely.
+pub fn hyde_trigger(question: &str) -> bool {
+    if std::env::var("LEGAL_RAG_HYDE").map(|v| v == "0").unwrap_or(false) {
+        return false;
+    }
+    let words = question.split_whitespace().count();
+    if words <= 8 {
+        return true;
+    }
+    let lower = question.to_lowercase();
+    !statute_mentions(&lower).is_empty()
+        && !crate::pipeline::find_section_refs(&lower).is_empty()
+}
+
+/// Keyword engine selection: the in-house BM25 (default, zero deps,
+/// exact tokenization incl. bare numbers like "86") or Tantivy
+/// (LEGAL_RAG_BM25_ENGINE=tantivy) for corpora where the in-memory
+/// native index becomes the bottleneck. Both expose the same
+/// build/search contract; selection happens per index build.
+pub enum Bm25Engine {
+    Native(Bm25Index),
+    Tantivy(crate::tantivy_bm25::TantivyBm25Index),
+}
+
+impl Bm25Engine {
+    pub fn build(records: &[ChunkRecord]) -> Self {
+        match std::env::var("LEGAL_RAG_BM25_ENGINE").as_deref() {
+            Ok("tantivy") => {
+                Self::Tantivy(crate::tantivy_bm25::TantivyBm25Index::build(records))
+            }
+            _ => Self::Native(Bm25Index::build(records)),
+        }
+    }
+
+    pub fn name(&self) -> &'static str {
+        match self {
+            Self::Native(_) => "native",
+            Self::Tantivy(_) => crate::tantivy_bm25::engine_name(),
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        match self {
+            Self::Native(i) => i.is_empty(),
+            Self::Tantivy(i) => i.is_empty(),
+        }
+    }
+
+    pub fn search(&self, query: &str, top_k: usize) -> Vec<(String, f32)> {
+        match self {
+            Self::Native(i) => i.search(query, top_k),
+            Self::Tantivy(i) => i.search(query, top_k),
+        }
+    }
+}
+
+/// The canonical chunk an auxiliary match unit votes for:
+/// augmentation units (pc=aug) → their source chunk; hyperedge units
+/// (pc=hyper) → their first member chunk. Real chunks return None.
+pub fn canonical_target(rec: &ChunkRecord) -> Option<String> {
+    match rec.metadata.get("pc").map(|s| s.as_str()) {
+        Some("aug") => rec.metadata.get("source_id").cloned(),
+        Some("hyper") => rec
+            .metadata
+            .get("members")
+            .and_then(|m| m.split(',').next())
+            .map(|s| s.to_string()),
+        _ => None,
+    }
+}
+
+/// Blend ColBERT MaxSim scores into reranked hits: both score sets
+/// are min-max normalized to [0,1] per query, combined as
+/// (1-w)·rerank + w·maxsim, and re-sorted. Hits missing a MaxSim
+/// score keep their normalized rerank score only.
+pub fn blend_maxsim(
+    hits: Vec<ScoredChunk>,
+    maxsim: &[(String, f32)],
+    weight: f32,
+) -> Vec<ScoredChunk> {
+    if hits.is_empty() || maxsim.is_empty() {
+        return hits;
+    }
+    let norm = |vals: &[f32]| -> Vec<f32> {
+        let (mut lo, mut hi) = (f32::INFINITY, f32::NEG_INFINITY);
+        for v in vals {
+            lo = lo.min(*v);
+            hi = hi.max(*v);
+        }
+        if !(hi > lo) {
+            return vec![0.5; vals.len()];
+        }
+        vals.iter().map(|v| (v - lo) / (hi - lo)).collect()
+    };
+    let rer_norm = norm(&hits.iter().map(|h| h.score).collect::<Vec<_>>());
+    let ms_map: std::collections::HashMap<&str, f32> =
+        maxsim.iter().map(|(id, s)| (id.as_str(), *s)).collect();
+    let ms_vals: Vec<f32> = hits
+        .iter()
+        .map(|h| ms_map.get(h.record.id.as_str()).copied().unwrap_or(f32::NAN))
+        .collect();
+    let present: Vec<f32> = ms_vals.iter().copied().filter(|v| !v.is_nan()).collect();
+    let ms_norm_all = norm(&present);
+    let mut ms_iter = ms_norm_all.iter();
+    let ms_norm: Vec<f32> = ms_vals
+        .iter()
+        .map(|v| {
+            if v.is_nan() {
+                0.0
+            } else {
+                *ms_iter.next().unwrap_or(&0.0)
+            }
+        })
+        .collect();
+    let mut out: Vec<ScoredChunk> = hits
+        .into_iter()
+        .enumerate()
+        .map(|(i, mut h)| {
+            h.score = (1.0 - weight) * rer_norm[i] + weight * ms_norm[i];
+            h
+        })
+        .collect();
+    out.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+    out
+}
+
 /// Merge retrieval legs by rank interleave: round-robin across the
 /// legs (in the given priority order), each leg contributing its hits
 /// in its own ranked order, deduplicated by chunk id (first occurrence
@@ -2041,7 +2441,7 @@ pub fn query_has_identifier(question: &str) -> bool {
 /// Canonical Indian statutes with the aliases users actually type.
 /// The canonical string is matched against document titles; aliases are
 /// matched against the query (short aliases need a whole-token match).
-const STATUTES: &[(&str, &[&str])] = &[
+pub(crate) const STATUTES: &[(&str, &[&str])] = &[
     ("indian penal code", &["ipc", "indian penal code", "penal code"]),
     ("code of civil procedure", &["cpc", "civil procedure code"]),
     ("code of criminal procedure", &["crpc", "criminal procedure code"]),
@@ -2323,6 +2723,74 @@ mod tests {
     use crate::pipeline::RagAnything;
     use crate::vector_store::InMemoryVectorStore;
 
+    #[test]
+    fn hyde_trigger_short_and_citation_style() {
+        assert!(hyde_trigger("Section 86 IT Act"));
+        assert!(hyde_trigger("what is theft"));
+        assert!(hyde_trigger(
+            "Explain in detail the scope of Section 86 of the Information Technology Act and how it interacts with other laws currently in force in India today"
+        ));
+        assert!(!hyde_trigger(
+            "Explain in detail the historical development of preventive detention jurisprudence in India across the decades since independence and its many phases"
+        ));
+    }
+
+    #[test]
+    fn blend_maxsim_promotes_exact_term_hit() {
+        let mk = |id: &str, score: f32| ScoredChunk {
+            record: ChunkRecord {
+                id: id.to_string(),
+                doc_id: "d".to_string(),
+                ordinal: 0,
+                text: "t".to_string(),
+                embedding: vec![0.0; 2],
+                metadata: Default::default(),
+            },
+            score,
+        };
+        // Reranker prefers "a"; MaxSim strongly prefers "b" (exact
+        // section-number evidence) — at w=0.5, b must win.
+        let hits = vec![mk("a", 0.9), mk("b", 0.8), mk("c", 0.1)];
+        let ms = vec![
+            ("a".to_string(), 4.0),
+            ("b".to_string(), 14.0),
+            ("c".to_string(), 3.0),
+        ];
+        let out = blend_maxsim(hits, &ms, 0.5);
+        assert_eq!(out[0].record.id, "b");
+        assert_eq!(out.len(), 3);
+        // w=0 → pure reranker order.
+        let hits = vec![mk("a", 0.9), mk("b", 0.8)];
+        let out = blend_maxsim(hits, &ms, 0.0);
+        assert_eq!(out[0].record.id, "a");
+    }
+
+    #[test]
+    fn canonical_target_maps_aux_units() {
+        let mk = |pc: &str, extra: (&str, &str)| {
+            let mut metadata = std::collections::HashMap::new();
+            metadata.insert("pc".to_string(), pc.to_string());
+            metadata.insert(extra.0.to_string(), extra.1.to_string());
+            ChunkRecord {
+                id: "x".to_string(),
+                doc_id: "d".to_string(),
+                ordinal: 0,
+                text: "t".to_string(),
+                embedding: vec![0.0; 2],
+                metadata,
+            }
+        };
+        assert_eq!(
+            canonical_target(&mk("aug", ("source_id", "d#0"))),
+            Some("d#0".to_string())
+        );
+        assert_eq!(
+            canonical_target(&mk("hyper", ("members", "d#1,d#2"))),
+            Some("d#1".to_string())
+        );
+        assert_eq!(canonical_target(&mk("child", ("parent_id", "d#0"))), None);
+    }
+
     async fn seeded() -> (QueryService, Arc<RagAnything>) {
         let rag = Arc::new(RagAnything::new(
             RagAnythingConfig::default(),
@@ -2423,7 +2891,12 @@ mod tests {
         let a = svc.query("What did Acme agree to?", QueryMode::Naive, 3).await.unwrap();
         // Different wording, same embedding → semantic hit, no new LLM call.
         let b = svc.query("Tell me Acme's commitments", QueryMode::Naive, 3).await.unwrap();
-        assert_eq!(a.answer, "Acme agrees to confidentiality (call 1) [doc:0]");
+        // Call accounting: the 5-word question triggers HyDE expansion
+        // (call 1, whose non-JSON mock reply yields no expansions), so
+        // generation is call 2. The paraphrase is served from cache
+        // BEFORE any expansion, costing no calls — the behavior this
+        // test exists to pin.
+        assert_eq!(a.answer, "Acme agrees to confidentiality (call 2) [doc:0]");
         assert_eq!(b.answer, a.answer, "paraphrase must be served from the answer cache");
         assert_eq!(svc.answer_cache_stats().hits, 1);
         // A different brief scope is a different cache key → fresh call.
@@ -2432,7 +2905,7 @@ mod tests {
             .query_scoped("What did Acme agree to?", QueryMode::Naive, 3, vec![doc_id])
             .await
             .unwrap();
-        assert_eq!(c.answer, "Acme agrees to confidentiality (call 2) [doc:0]");
+        assert_eq!(c.answer, "Acme agrees to confidentiality (call 4) [doc:0]");
     }
 
     #[tokio::test]
@@ -2476,7 +2949,10 @@ mod tests {
         }]);
         let b = svc.query("What did Acme agree to?", QueryMode::Naive, 3).await.unwrap();
         assert!(!b.verified);
-        assert_eq!(b.answer, "Acme agrees to confidentiality (call 1) [doc:0]", "stale annotation must not serve");
+        // Generation is call 2: the short question first spends call 1
+        // on the HyDE expansion attempt (mock reply is not JSON, so no
+        // expansions result). The verified path above spent no calls.
+        assert_eq!(b.answer, "Acme agrees to confidentiality (call 2) [doc:0]", "stale annotation must not serve");
     }
 
     #[tokio::test]
