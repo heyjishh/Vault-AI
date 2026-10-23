@@ -40,7 +40,9 @@ pub fn parent_id(record: &ChunkRecord) -> Option<&str> {
     record.metadata.get("parent_id").map(|s| s.as_str())
 }
 
-/// Vector index backend. Implementations: in-memory (here), Qdrant/pgvector (future).
+/// Vector index backend. Implementations: in-memory (here), SereneDB
+/// (`serenedb.rs`), native HNSW (`hnsw.rs`), AWS S3 Vectors
+/// (`s3vectors.rs`) — selected by `LEGAL_RAG_VECTOR_STORE` (ADR-0020).
 #[async_trait]
 pub trait VectorStore: Send + Sync {
     async fn upsert(&self, records: Vec<ChunkRecord>) -> Result<()>;

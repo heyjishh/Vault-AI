@@ -15,6 +15,34 @@ live**, what is **built but unverified**, and what is **roadmap**.
 ## [Unreleased]
 
 ### Added
+- **Spice.ai vector engines, taken natively** (23 Oct 2026; ADR-0020).
+  Spice's "vector engine" is a lineup, not a library, so each engine
+  was implemented behind the existing `VectorStore` trait and selected
+  with `LEGAL_RAG_VECTOR_STORE` (`memory` | `serenedb` | `hnsw` |
+  `s3vectors`; unset keeps the legacy SERENEDB_URL behavior, so
+  production is unchanged). (a) **`hnsw`** — the DuckDB-VSS engine
+  design (in-process HNSW, Spice's own parameter defaults M=16 /
+  ef_construction=128 / ef_search=64) as a pure-Rust store with JSON
+  persistence and unlink-on-delete; exact brute-force on small
+  graphs. (b) **`s3vectors`** — Spice's external engine, AWS S3
+  Vectors: a hand-rolled SigV4 JSON client (no AWS SDK dependency),
+  `doc_id` as filterable metadata (the pushdown pattern), bucket +
+  index auto-created on connect, available in ap-south-1 (the
+  ADR-0016 target region). **Benched** (20,000 × 1024-dim clustered
+  vectors, 100 queries, `examples/vector_bench.rs`): brute force
+  131 ms mean / recall 1.000; SereneDB IVF 67 ms / 1.000; HNSW
+  ef_search=64 → 3.1 ms / 0.899, ef_search=128 → 6.4 ms / 0.981 —
+  HNSW is 10–40× faster per query at a recall price, with a slow
+  first build (186 s at 20k in this implementation). Production
+  default stays SereneDB (exact at current corpus scale); HNSW is
+  the embedded/Docker-tier engine, S3 Vectors the AWS-target engine.
+  **Verification**: HNSW live-tested (unit + bench + persistence
+  round-trip); S3 Vectors is docs-verified + unit-tested (SigV4
+  matches AWS's published signing vector) with the live round-trip
+  gated behind real AWS credentials (`S3VECTORS_LIVE_TEST=1`) — the
+  sandbox holds none, stated plainly rather than implied.
+
+### Added
 - **Retrieval fusion suite + leg-merge fix + retrieval cache** (23 Oct
   2026, **verified live**; Spice.ai-grade search patterns rewritten
   natively in Rust — no sidecar runtime). (a) *Fusion suite*: the

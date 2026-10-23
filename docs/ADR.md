@@ -5,7 +5,7 @@
 | **Document** | Full ADR set for the infrastructure and AWS platform teams |
 | **Product** | Juris Vault AI — legal document intelligence for Indian law practice |
 | **Owner** | **Jishan** — Juris Vault AI Team |
-| **Version** | 1.5 — 23 October 2026 |
+| **Version** | 1.6 — 23 October 2026 |
 | **Companion** | [ARCHITECTURE.md](ARCHITECTURE.md) · [README.md](../README.md) · [CHANGELOG.md](../CHANGELOG.md) |
 
 ## How to read this document
@@ -664,6 +664,48 @@ only, with zero source-attribution misses.
 separate runtime, Alpha vector engines, ADR-0018); post-fusion
 metadata boosting as the statute mechanism (rejected by measurement —
 it cannot rescue a document the fusion cut already dropped).
+
+---
+
+## ADR-0020 — Vector engines: Spice's lineup behind the VectorStore trait
+
+**Status:** Accepted (23 Oct 2026; HNSW benched same day, S3 Vectors
+live test pending AWS credentials)
+
+**Context.** The owner directed taking Spice.ai's vector engine as
+well. Research showed the "engine" is a configuration lineup, not an
+embeddable library: `s3_vectors` (AWS S3 Vectors, external), `duckdb`
+(in-process HNSW via the DuckDB VSS extension, M=16 /
+ef_construction=128 / ef_search=64 defaults), and `elasticsearch`
+(Enterprise-only — excluded on its face). SereneDB (ADR-0006) is the
+production store and is exact at the current corpus scale; the gap
+the engines fill is the scale-up path and the single-binary Docker
+tier, which today falls back to brute force.
+
+**Decision.** Implement each Spice engine natively behind the
+existing `VectorStore` trait, selected by `LEGAL_RAG_VECTOR_STORE`
+(unset = legacy SERENEDB_URL behavior; production unchanged):
+(1) **`HnswVectorStore`** — pure-Rust HNSW with Spice's DuckDB-engine
+parameters, JSON-file persistence, unlink-on-delete, exact
+brute-force below 64 nodes. (2) **`S3VectorsStore`** — a hand-rolled
+SigV4 client for the S3 Vectors JSON API (no AWS SDK dependency),
+`doc_id` as filterable metadata for predicate pushdown, bucket/index
+auto-provisioned on connect; region default ap-south-1, where S3
+Vectors is available (verified against AWS's regions table).
+(3) SereneDB remains the production default.
+
+**Measured consequences.** 20,000 × 1024-dim bench
+(`crates/rag/examples/vector_bench.rs`): brute force 131 ms mean,
+recall@10 1.000 · SereneDB IVF 67 ms, 1.000 · HNSW ef_search=64
+3.1 ms, 0.899 · ef_search=128 6.4 ms, 0.981. HNSW build at 20k is
+186 s in this implementation (per-insert beam search) — a known cost
+to optimize before HNSW is recommended at large corpus scale.
+
+**Alternatives considered.** Adopting the DuckDB crate + VSS
+extension (rejected: heavy C++ dependency, extension download at
+runtime, and Spice's own integration still lacks chunking/partition
+support); replacing SereneDB with HNSW as the default (rejected by
+measurement — SereneDB is exact and durable at today's scale).
 
 ---
 

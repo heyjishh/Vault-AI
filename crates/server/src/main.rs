@@ -11,8 +11,9 @@ use legal_rag_common::Config;
 use legal_rag_ingest::IngestService;
 use legal_rag_rag::{
     query_service_for, CachedEmbeddings, CachedLlm, Embeddings, GraphStore, InMemoryGraphStore,
-    InMemoryVectorStore, LlmClient, MockEmbeddings, MockLlm, NoopWebSearch, OpenAiEmbeddings,
-    OpenAiLlm, RagAnything, RagAnythingConfig, SemanticCache, SereneDbVectorStore,
+    HnswParams, HnswVectorStore, InMemoryVectorStore, LlmClient, MockEmbeddings, MockLlm,
+    NoopWebSearch, OpenAiEmbeddings, OpenAiLlm, RagAnything, RagAnythingConfig, S3VectorsConfig,
+    S3VectorsStore, SemanticCache, SereneDbVectorStore,
     StealthWebSearch, VectorStore, WebSearch,
 };
 use legal_rag_server::{routes, AppState};
@@ -172,12 +173,65 @@ async fn main() -> anyhow::Result<()> {
             Arc::new(NoopWebSearch)
         }
     };
-    // Vector store: SereneDB when SERENEDB_URL is set, else in-memory.
-    // Keep the concrete in-memory handle when used — SereneDB persists
-    // itself, the in-memory index needs disk snapshots.
+    // Vector store selection (ADR-0020): LEGAL_RAG_VECTOR_STORE picks
+    // the engine — `hnsw` (native HNSW, Spice's DuckDB-engine design),
+    // `s3vectors` (Spice's external engine: AWS S3 Vectors), `serenedb`,
+    // or `memory`. Unset keeps the legacy behavior: SereneDB when
+    // SERENEDB_URL is set, else in-memory. Non-memory engines persist
+    // themselves; the in-memory index needs disk snapshots, so keep its
+    // concrete handle when used.
+    let choice = env::var("LEGAL_RAG_VECTOR_STORE")
+        .ok()
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_lowercase())
+        .unwrap_or_else(|| {
+            if env::var("SERENEDB_URL").ok().filter(|u| !u.is_empty()).is_some() {
+                "serenedb".to_string()
+            } else {
+                "memory".to_string()
+            }
+        });
     let mem_store: Option<Arc<InMemoryVectorStore>>;
-    let store: Arc<dyn VectorStore> = match env::var("SERENEDB_URL").ok().filter(|u| !u.is_empty()) {
-        Some(url) => {
+    let store: Arc<dyn VectorStore> = match choice.as_str() {
+        "hnsw" => {
+            let path = legal_rag_rag::persist::data_dir().join("hnsw-vectors.json");
+            match HnswVectorStore::open(Some(path), HnswParams::from_env()) {
+                Ok(s) => {
+                    info!("using native HNSW vector store");
+                    mem_store = None;
+                    Arc::new(s)
+                }
+                Err(e) => {
+                    tracing::warn!(error = %e, "HNSW store failed to open; falling back to in-memory index");
+                    let m = Arc::new(InMemoryVectorStore::new());
+                    mem_store = Some(m.clone());
+                    m
+                }
+            }
+        }
+        "s3vectors" => {
+            let connected = match S3VectorsConfig::from_env() {
+                Some(Ok(cfg)) => S3VectorsStore::connect(cfg, config.embedding.dims).await.map(|s| Arc::new(s) as Arc<dyn VectorStore>),
+                Some(Err(e)) => Err(e),
+                None => Err(legal_rag_common::Error::Other(anyhow::anyhow!(
+                    "LEGAL_RAG_S3V_BUCKET not set"
+                ))),
+            };
+            match connected {
+                Ok(s) => {
+                    mem_store = None;
+                    s
+                }
+                Err(e) => {
+                    tracing::warn!(error = %e, "S3 Vectors unavailable; falling back to in-memory index");
+                    let m = Arc::new(InMemoryVectorStore::new());
+                    mem_store = Some(m.clone());
+                    m
+                }
+            }
+        }
+        "serenedb" => {
+            let url = env::var("SERENEDB_URL").unwrap_or_default();
             let table = env::var("SERENEDB_TABLE").unwrap_or_else(|_| "legal_chunks".to_string());
             match SereneDbVectorStore::connect(&url, &table, config.embedding.dims).await {
                 Ok(s) => {
@@ -193,8 +247,8 @@ async fn main() -> anyhow::Result<()> {
                 }
             }
         }
-        None => {
-            info!("SERENEDB_URL not set; using in-memory vector index");
+        _ => {
+            info!("using in-memory vector index");
             let m = Arc::new(InMemoryVectorStore::new());
             mem_store = Some(m.clone());
             m

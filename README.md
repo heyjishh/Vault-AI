@@ -159,7 +159,7 @@ annotations, hit-test). Full inventory: [docs/ARCHITECTURE.md](docs/ARCHITECTURE
 
 ## Testing & verification status
 
-- Rust workspace test suite: **91 tests green** at last full run (23 Oct 2026).
+- Rust workspace test suite: **99 tests green** at last full run (23 Oct 2026).
 - Retrieval benchmarks (offline, reproducible): hybrid BM25+vector fused
   MRR **0.833** vs 0.815 vector-only; reranker decision layer MRR **0.944**;
   Hindi↔English embedding cosine **0.89–0.92**.
@@ -188,4 +188,4 @@ annotations, hit-test). Full inventory: [docs/ARCHITECTURE.md](docs/ARCHITECTURE
 ## Ownership
 
 © 2026 **Jishan** and the **Juris Vault AI Team**. All rights reserved.
-Documentation set version 1.5 — 23 October 2026.
+Documentation set version 1.6 — 23 October 2026.

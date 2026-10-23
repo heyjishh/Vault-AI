@@ -5,7 +5,7 @@
 | **Document** | System Architecture (engineering, infrastructure & AWS platform teams) |
 | **Product** | Juris Vault AI — legal document intelligence for Indian law practice |
 | **Owner** | **Jishan** — Juris Vault AI Team |
-| **Version** | 1.5 — 23 October 2026 |
+| **Version** | 1.6 — 23 October 2026 |
 | **System version** | 0.1.0 (Cargo workspace version) |
 | **Companion documents** | [ADR.md](ADR.md) (decision records ADR-0001…0018) · [README.md](../README.md) · [CHANGELOG.md](../CHANGELOG.md) · [DEPLOY.md](../DEPLOY.md) |
 | **Status labels** | **LIVE-VERIFIED** = proven end-to-end in production-like runs · **BUILT** = implemented, verification partial · **TARGET** = design for the AWS move, not yet deployed · **ROADMAP** = agreed direction, not built |
@@ -292,6 +292,17 @@ and on SIGTERM/SIGINT; state restores on boot.
   Postgres wire protocol v3 on :7890, no auth by default (bind privately).
   The snapshotter restores into and saves from whichever store is active,
   so an externally-backed deployment boots with its corpus.
+- Engine selection (`LEGAL_RAG_VECTOR_STORE`, ADR-0020 — Spice.ai's
+  vector-engine lineup implemented natively behind the `VectorStore`
+  trait): `hnsw` — pure-Rust in-process HNSW with the DuckDB-VSS
+  engine's parameters (M=16, ef_construction=128, ef_search=64),
+  JSON-file persistence, exact on small graphs; the embedded /
+  Docker-tier engine (benched 20k×1024: 3.1 ms mean at recall@10
+  0.899, 6.4 ms at 0.981, vs SereneDB IVF 67 ms at 1.000).
+  `s3vectors` — AWS S3 Vectors (Spice's external engine) via a
+  hand-rolled SigV4 client, `doc_id` as filterable metadata for
+  predicate pushdown; the AWS-target engine (ap-south-1 available);
+  live verification gated on AWS credentials.
 
 ## 8. Security architecture
 
