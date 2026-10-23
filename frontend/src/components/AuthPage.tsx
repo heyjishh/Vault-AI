@@ -27,7 +27,7 @@ export default function AuthPage() {
           <div className="w-9 h-9 rounded-lg bg-ink flex items-center justify-center">
             <span className="font-display text-ivory text-xl leading-none pt-0.5">L</span>
           </div>
-          <span className="font-display text-2xl tracking-tight">LexAgent</span>
+          <span className="font-display text-2xl tracking-tight">Juris Vault AI</span>
         </div>
         <div>
           <h1 className="font-display text-5xl leading-[1.15] tracking-tight max-w-lg">
@@ -50,7 +50,7 @@ export default function AuthPage() {
           </div>
         </div>
         <p className="text-meta text-stone-400 flex items-center gap-1.5">
-          <Scale size={12} /> LexAgent — agentic legal research &amp; RAG
+          <Scale size={12} /> Juris Vault AI — agentic legal research &amp; RAG
         </p>
       </div>
 
@@ -61,7 +61,7 @@ export default function AuthPage() {
             <div className="w-9 h-9 rounded-lg bg-ink flex items-center justify-center">
               <span className="font-display text-ivory text-xl leading-none pt-0.5">L</span>
             </div>
-            <span className="font-display text-2xl tracking-tight">LexAgent</span>
+            <span className="font-display text-2xl tracking-tight">Juris Vault AI</span>
           </div>
           <h2 className="font-display text-3xl tracking-tight">
             {mode === 'login' ? 'Welcome back' : 'Create your workspace'}
@@ -111,7 +111,7 @@ export default function AuthPage() {
 
           <p className="mt-6 text-center text-meta2 text-stone-500">
             {mode === 'login' ? (
-              <>New to LexAgent?{' '}<button onClick={() => setMode('register')} className="text-ink font-medium underline underline-offset-2">Create an account</button></>
+              <>New to Juris Vault AI?{' '}<button onClick={() => setMode('register')} className="text-ink font-medium underline underline-offset-2">Create an account</button></>
             ) : (
               <>Already have an account?{' '}<button onClick={() => setMode('login')} className="text-ink font-medium underline underline-offset-2">Sign in</button></>
             )}

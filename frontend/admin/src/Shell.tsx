@@ -39,7 +39,7 @@ export default function Shell({ user, onLogout }: { user: Me; onLogout: () => vo
             <span className="font-display text-ink text-lg leading-none pt-0.5">L</span>
           </div>
           <div>
-            <p className="font-display text-lg leading-none tracking-tight">LexAgent</p>
+            <p className="font-display text-lg leading-none tracking-tight">Juris Vault AI</p>
             <p className="text-[10px] uppercase tracking-[0.18em] text-ivory/50 mt-1">Command Center</p>
           </div>
         </div>

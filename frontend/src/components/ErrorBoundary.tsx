@@ -19,7 +19,7 @@ export default class ErrorBoundary extends Component<{ children: ReactNode }, St
             onClick={() => window.location.reload()}
             className="mt-6 rounded-lex bg-ink text-ivory px-4 py-2 text-[14px] font-medium"
           >
-            Reload LexAgent
+            Reload Juris Vault AI
           </button>
         </div>
       )

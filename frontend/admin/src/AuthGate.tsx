@@ -28,7 +28,7 @@ export default function AuthGate({ onAuthed }: { onAuthed: (u: Me) => void }) {
           <div className="w-9 h-9 rounded-lg bg-ivory flex items-center justify-center">
             <span className="font-display text-ink text-xl leading-none pt-0.5">L</span>
           </div>
-          <span className="font-display text-2xl tracking-tight text-ivory">LexAgent</span>
+          <span className="font-display text-2xl tracking-tight text-ivory">Juris Vault AI</span>
         </div>
         <p className="text-ivory/50 text-meta mb-8 uppercase tracking-widest">Command Center · Admin sign-in</p>
         <form onSubmit={submit} className="space-y-4">
@@ -59,7 +59,7 @@ export default function AuthGate({ onAuthed }: { onAuthed: (u: Me) => void }) {
           </button>
         </form>
         <p className="mt-6 text-center text-meta text-ivory/40">
-          Not an admin? <a href="/" className="text-ivory/70 underline underline-offset-2">Open the LexAgent app</a>
+          Not an admin? <a href="/" className="text-ivory/70 underline underline-offset-2">Open the Juris Vault AI app</a>
         </p>
       </div>
     </div>
