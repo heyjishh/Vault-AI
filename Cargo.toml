@@ -1,0 +1,35 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/common",
+    "crates/auth",
+    "crates/ingest",
+    "crates/rag",
+    "crates/server",
+]
+
+[workspace.package]
+edition = "2021"
+license = "MIT"
+version = "0.1.0"
+
+[workspace.dependencies]
+tokio = { version = "1", features = ["full"] }
+axum = "0.8"
+base64 = "0.22"
+dotenvy = "0.15"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+uuid = { version = "1", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+thiserror = "2"
+anyhow = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+reqwest = { version = "0.12", features = ["json", "stream", "rustls-tls-native-roots"] }
+futures = "0.3"
+
+legal-rag-common = { path = "crates/common" }
+legal-rag-auth = { path = "crates/auth" }
+legal-rag-ingest = { path = "crates/ingest" }
+legal-rag-rag = { path = "crates/rag" }

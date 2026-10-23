@@ -1,0 +1,48 @@
+# LexAgent — one-command deployment:  ./deploy.sh   (or: docker compose up -d --build)
+#
+# App:        http://localhost:3000/
+# Admin:      http://localhost:3000/admin
+# First run:  copy .env.example to .env and fill in your model provider keys
+#             (deploy.sh does this for you and generates a JWT secret).
+
+name: lexagent
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: lexagent:local
+    restart: unless-stopped
+    ports:
+      - "${LEGAL_RAG_PORT:-3000}:3000"
+    env_file:
+      - .env
+    environment:
+      # Container layout — these override the same keys in .env.
+      LEGAL_RAG_ADDR: "0.0.0.0:3000"
+      LEGAL_RAG_DATA_DIR: "/data"
+      LEGAL_RAG_FRONTEND_DIR: "/app/frontend/dist"
+      LEGAL_RAG_ADMIN_DIR: "/app/frontend/admin/dist"
+      LEGAL_RAG_WEB_SIDECAR: "/app/tools/web"
+    volumes:
+      - legal-rag-data:/data
+
+  # Optional: SereneDB vector store (Postgres wire protocol on 7890).
+  # Enable:  docker compose --profile serenedb up -d
+  # and set in .env:  SERENEDB_URL=postgres://postgres@serenedb:7890/postgres
+  # (When unset, the app uses its in-memory vector index + JSON snapshots.)
+  # Note: verify SereneDB's data directory against its current Docker docs
+  # before relying on the volume below for production persistence.
+  serenedb:
+    image: serenedb/serenedb:latest
+    profiles: ["serenedb"]
+    restart: unless-stopped
+    ports:
+      - "7890:7890"
+    volumes:
+      - serenedb-data:/var/lib/serenedb
+
+volumes:
+  legal-rag-data:
+  serenedb-data:

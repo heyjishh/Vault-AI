@@ -1,0 +1,32 @@
+[package]
+name = "legal-rag-server"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "legal-rag-server"
+path = "src/main.rs"
+
+[dependencies]
+legal-rag-common = { workspace = true }
+legal-rag-auth = { workspace = true }
+legal-rag-ingest = { workspace = true }
+legal-rag-rag = { workspace = true }
+tokio = { workspace = true }
+axum = { workspace = true }
+reqwest = { workspace = true }
+sha2 = "0.10"
+aes-gcm = "0.10"
+argon2 = "0.5"
+futures = { workspace = true }
+base64 = { workspace = true }
+dotenvy = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }

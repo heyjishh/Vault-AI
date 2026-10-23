@@ -1,0 +1,22 @@
+[package]
+name = "legal-rag-auth"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+legal-rag-common = { workspace = true }
+tokio = { workspace = true }
+axum = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+argon2 = "0.5"
+rand_core = { version = "0.6", features = ["getrandom"] }
+jsonwebtoken = "9"
+openidconnect = { version = "4", features = ["reqwest"] }
+reqwest = { workspace = true }

@@ -1,0 +1,19 @@
+[package]
+name = "legal-rag-ingest"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+legal-rag-common = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+aws-config = "1"
+aws-sdk-s3 = "1"
+pdf-extract = "0.7"

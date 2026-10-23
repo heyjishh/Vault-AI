@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LexRAG — Legal Intelligence</title>
+<style>
+:root{
+  --bg:#0f1115; --bg2:#161a21; --bg3:#1d232d; --line:#2a3140;
+  --txt:#e8eaf0; --mut:#9aa3b5; --acc:#d4a94e; --acc2:#f0c869;
+  --ok:#4caf7d; --err:#e0655f; --info:#5f9de0; --warn:#d4a94e;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--txt);font:15px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif}
+h1,h2,h3{font-family:Georgia,"Times New Roman",serif;letter-spacing:.3px}
+a{color:var(--acc)}
+button{cursor:pointer}
+input,textarea,select{background:var(--bg3);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:10px 12px;font:inherit;width:100%}
+input:focus,textarea:focus{outline:none;border-color:var(--acc)}
+button.primary{background:var(--acc);border:none;color:#1a1405;font-weight:700;border-radius:8px;padding:10px 18px}
+button.primary:hover{background:var(--acc2)}
+button.ghost{background:transparent;border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:8px 14px}
+button.ghost:hover{border-color:var(--acc)}
+button.danger{background:transparent;border:1px solid var(--err);color:var(--err);border-radius:8px;padding:6px 12px;font-size:13px}
+.card{background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:20px;margin-bottom:16px}
+.mut{color:var(--mut)} .err{color:var(--err)} .ok{color:var(--ok)}
+/* auth */
+#auth-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+#auth-card{width:400px;max-width:94vw}
+#auth-card h1{text-align:center;margin:0 0 4px}
+#auth-card .sub{text-align:center;color:var(--mut);margin-bottom:20px}
+.tabs{display:flex;gap:8px;margin-bottom:16px}
+.tabs button{flex:1;background:var(--bg3);border:1px solid var(--line);color:var(--mut);border-radius:8px;padding:10px}
+.tabs button.on{color:var(--acc);border-color:var(--acc)}
+.field{margin-bottom:12px}
+/* app shell */
+#app{display:none;height:100vh;grid-template-columns:230px 1fr}
+aside{background:var(--bg2);border-right:1px solid var(--line);display:flex;flex-direction:column;padding:18px 14px}
+aside .brand{font-family:Georgia,serif;font-size:22px;margin:0 0 2px;padding:0 6px}
+aside .brand span{color:var(--acc)}
+.nav{display:flex;flex-direction:column;gap:6px;margin:18px 0}
+.nav button{background:transparent;border:none;color:var(--mut);text-align:left;padding:11px 12px;border-radius:8px;font-size:15px}
+.nav button.on{background:var(--bg3);color:var(--acc)}
+.side-foot{margin-top:auto;font-size:12.5px;color:var(--mut);padding:0 6px}
+.side-foot .row{display:flex;justify-content:space-between;margin:3px 0}
+main{overflow-y:auto;padding:26px 30px;max-width:1060px}
+.view{display:none}.view.on{display:block}
+.pills{display:flex;gap:8px;margin:10px 0;flex-wrap:wrap}
+.pills button{background:var(--bg3);border:1px solid var(--line);color:var(--mut);border-radius:20px;padding:7px 16px}
+.pills button.on{border-color:var(--acc);color:var(--acc)}
+.cite{border-left:3px solid var(--acc);background:var(--bg3);border-radius:0 8px 8px 0;padding:10px 14px;margin:10px 0}
+.cite .meta{font-size:12.5px;color:var(--mut);margin-bottom:4px}
+.answer{white-space:pre-wrap}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{text-align:left;padding:10px 8px;border-bottom:1px solid var(--line)}
+th{color:var(--mut);font-weight:600;font-size:12.5px;text-transform:uppercase;letter-spacing:.5px}
+.badge{display:inline-block;background:var(--bg3);border:1px solid var(--line);border-radius:12px;padding:2px 10px;font-size:12px;color:var(--acc)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:800px){.grid2{grid-template-columns:1fr}#app{grid-template-columns:1fr}aside{flex-direction:row;align-items:center;overflow-x:auto}.nav{flex-direction:row;margin:0 0 0 12px}.side-foot{display:none}}
+.toast{position:fixed;bottom:22px;right:22px;background:var(--bg3);border:1px solid var(--line);border-left:3px solid var(--err);padding:12px 18px;border-radius:8px;max-width:360px;display:none}
+.hist-item{background:var(--bg3);border:1px solid var(--line);border-radius:8px;padding:8px 12px;margin:6px 0;cursor:pointer;font-size:14px}
+.hist-item:hover{border-color:var(--acc)}
+label.lbl{display:block;font-size:13px;color:var(--mut);margin:10px 0 5px}
+input[type=range]{padding:0}
+</style>
+</head>
+<body>
+
+<!-- ============ AUTH ============ -->
+<div id="auth-wrap">
+  <div id="auth-card" class="card">
+    <h1>Lex<span style="color:var(--acc)">RAG</span></h1>
+    <div class="sub">Legal intelligence, end to end</div>
+    <div class="tabs">
+      <button id="tab-login" class="on" onclick="showTab('login')">Sign in</button>
+      <button id="tab-register" onclick="showTab('register')">Register</button>
+    </div>
+    <div class="field"><input id="auth-email" type="email" placeholder="Email" autocomplete="username"></div>
+    <div class="field"><input id="auth-pass" type="password" placeholder="Password" autocomplete="current-password"></div>
+    <div id="auth-err" class="err" style="margin-bottom:10px;min-height:20px"></div>
+    <button class="primary" style="width:100%" onclick="doAuth()">Continue</button>
+    <div style="text-align:center;margin:14px 0;color:var(--mut);font-size:13px">or</div>
+    <button class="ghost" style="width:100%" onclick="doSso()">Sign in with SSO</button>
+  </div>
+</div>
+
+<!-- ============ APP ============ -->
+<div id="app">
+  <aside>
+    <div>
+      <p class="brand">Lex<span>RAG</span></p>
+      <div class="mut" id="user-email" style="font-size:13px;padding:0 6px"></div>
+    </div>
+    <nav class="nav">
+      <button data-view="query" class="on" onclick="go('query')">🔍 Query</button>
+      <button data-view="research" onclick="go('research')">🧪 Research</button>
+      <button data-view="agents" onclick="go('agents')">🤖 Agents</button>
+      <button data-view="vault" onclick="go('vault')">📁 Vault</button>
+      <button data-view="graph" onclick="go('graph')">🕸 Knowledge graph</button>
+    </nav>
+    <div class="side-foot">
+      <div class="row"><span>Documents</span><b id="st-docs">–</b></div>
+      <div class="row"><span>Chunks</span><b id="st-chunks">–</b></div>
+      <div class="row"><span>Entities</span><b id="st-ents">–</b></div>
+      <div class="row"><span>Relations</span><b id="st-rels">–</b></div>
+      <div style="margin-top:10px"><button class="ghost" style="width:100%" onclick="logout()">Sign out</button></div>
+    </div>
+  </aside>
+  <main>
+    <!-- QUERY -->
+    <section id="view-query" class="view on">
+      <h2>Ask the corpus</h2>
+      <div class="card">
+        <textarea id="q-text" rows="3" placeholder="e.g. How can the agreement be terminated?"></textarea>
+        <div class="pills" id="mode-pills">
+          <button data-mode="mix" class="on" onclick="setMode('mix')" title="Vector + graph (RAG-Anything default)">Mix</button>
+          <button data-mode="naive" onclick="setMode('naive')" title="Vector search only">Vector</button>
+          <button data-mode="local" onclick="setMode('local')" title="Entity neighborhood in the knowledge graph">Local</button>
+          <button data-mode="global" onclick="setMode('global')" title="Relation-level graph knowledge">Global</button>
+          <button data-mode="hybrid" onclick="setMode('hybrid')" title="Local + global graph">Hybrid</button>
+          <button data-mode="bypass" onclick="setMode('bypass')" title="No retrieval, LLM only">Bypass</button>
+        </div>
+        <label class="lbl">Results: <span id="k-val">5</span></label>
+        <input type="range" id="q-k" min="1" max="15" value="5" oninput="document.getElementById('k-val').textContent=this.value">
+        <label class="lbl" style="margin-top:10px"><input type="checkbox" id="q-web" style="width:auto"> 🌐 Augment with live web sources (stealth browser)</label>
+        <div style="margin-top:12px"><button class="primary" onclick="ask()">Ask</button></div>
+      </div>
+      <div id="answer-wrap"></div>
+      <h3>History</h3>
+      <div id="history"></div>
+    </section>
+    <!-- RESEARCH -->
+    <section id="view-research" class="view">
+      <h2>Deep research</h2>
+      <p class="mut" style="font-size:13.5px">Epistemic loop: frame hypotheses → gather evidence → adjudicate → report. Conflicts between sources are surfaced, not hidden.</p>
+      <div class="card">
+        <textarea id="r-text" rows="3" placeholder="e.g. Is interest on government securities exempt from income tax?"></textarea>
+        <label class="lbl" style="margin-top:10px"><input type="checkbox" id="r-web" style="width:auto"> 🌐 Include live web evidence</label>
+        <div style="margin-top:12px"><button class="primary" onclick="doResearch()">Research</button></div>
+      </div>
+      <div id="research-wrap"></div>
+    </section>
+    <!-- AGENTS -->
+    <section id="view-agents" class="view">
+      <h2>Agentic workflows</h2>
+      <p class="mut" style="font-size:13.5px">Multi-step legal agents: each step runs grounded retrieval, findings feed forward, and a final cited report is synthesized.</p>
+      <div class="card">
+        <label class="lbl">Workflow</label><select id="wf-pick"></select>
+        <p class="mut" id="wf-desc" style="font-size:13px"></p>
+        <label class="lbl" id="wf-input-lbl">Input</label><textarea id="wf-input" rows="2" placeholder=""></textarea>
+        <div style="margin-top:12px"><button class="primary" onclick="runWorkflow()">Run workflow</button></div>
+      </div>
+      <div id="wf-wrap"></div>
+    </section>
+    <!-- VAULT -->
+    <section id="view-vault" class="view">
+      <h2>Document vault</h2>
+      <div class="grid2">
+        <div class="card">
+          <h3>Upload document</h3>
+          <label class="lbl">Title</label><input id="up-title" placeholder="Master Services Agreement">
+          <label class="lbl">File name</label><input id="up-file" placeholder="msa.pdf" value="doc.txt">
+          <label class="lbl">File (PDF, scanned OK)</label><input type="file" id="up-picker" accept=".pdf,.txt,.md,.png,.jpg,.jpeg" onchange="syncFileName()">
+          <label class="lbl">…or paste text</label><textarea id="up-text" rows="7" placeholder="Paste the document text…"></textarea>
+          <div style="margin-top:12px"><button class="primary" onclick="uploadDoc()">Upload &amp; index</button></div>
+          <div id="up-report" style="margin-top:10px"></div>
+        </div>
+        <div class="card">
+          <h3>Ingest from S3</h3>
+          <p class="mut" style="font-size:13.5px">Pulls every object under a bucket prefix into the index.</p>
+          <label class="lbl">Prefix (optional)</label><input id="s3-prefix" placeholder="contracts/2024/">
+          <div style="margin-top:12px"><button class="primary" onclick="ingestS3()">Start S3 ingest</button></div>
+          <div id="s3-report" style="margin-top:10px"></div>
+        </div>
+      </div>
+      <div class="card">
+        <h3>Indexed documents</h3>
+        <div id="docs-table"><span class="mut">Loading…</span></div>
+      </div>
+    </section>
+    <!-- GRAPH -->
+    <section id="view-graph" class="view">
+      <h2>Knowledge graph</h2>
+      <div class="grid2">
+        <div class="card"><h3>Entities <span class="badge" id="ent-count"></span></h3><div id="ent-list"><span class="mut">Loading…</span></div></div>
+        <div class="card"><h3>Relations <span class="badge" id="rel-count"></span></h3><div id="rel-list"><span class="mut">Loading…</span></div></div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+const S = {
+  token: localStorage.getItem('lexrag_token'),
+  refreshToken: localStorage.getItem('lexrag_refresh'),
+  user: JSON.parse(localStorage.getItem('lexrag_user') || 'null'),
+  mode: 'mix',
+  history: JSON.parse(localStorage.getItem('lexrag_history') || '[]'),
+};
+let authTab = 'login';
+
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function toast(msg){ const t=document.getElementById('toast'); t.textContent=msg; t.style.display='block'; clearTimeout(t._h); t._h=setTimeout(()=>t.style.display='none',4200); }
+
+/* ---------- API ---------- */
+async function api(path, opts={}) {
+  const headers = {'Content-Type':'application/json', ...(opts.headers||{})};
+  if (S.token) headers['Authorization'] = 'Bearer ' + S.token;
+  let res = await fetch(path, {...opts, headers});
+  if (res.status === 401 && S.refreshToken && !opts._retried) {
+    const r = await fetch('/api/v1/auth/refresh', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({refresh_token: S.refreshToken})});
+    if (r.ok) { saveTokens(await r.json()); return api(path, {...opts, _retried:true}); }
+    logout(); throw new Error('Session expired — please sign in again.');
+  }
+  if (!res.ok) {
+    const b = await res.json().catch(()=>({error:res.statusText}));
+    throw new Error(b.error || ('Request failed: '+res.status));
+  }
+  return res.json();
+}
+function saveTokens(t){ S.token=t.access_token; S.refreshToken=t.refresh_token;
+  localStorage.setItem('lexrag_token', S.token); localStorage.setItem('lexrag_refresh', S.refreshToken); }
+
+/* ---------- Auth ---------- */
+function showTab(t){ authTab=t;
+  document.getElementById('tab-login').classList.toggle('on', t==='login');
+  document.getElementById('tab-register').classList.toggle('on', t==='register');
+  document.getElementById('auth-err').textContent='';
+}
+async function doAuth(){
+  const email=document.getElementById('auth-email').value.trim();
+  const password=document.getElementById('auth-pass').value;
+  const errEl=document.getElementById('auth-err'); errEl.textContent='';
+  if(!email||!password){ errEl.textContent='Email and password are required.'; return; }
+  try{
+    const r=await api('/api/v1/auth/'+authTab,{method:'POST',body:JSON.stringify({email,password})});
+    saveTokens(r.tokens); S.user=r.user; localStorage.setItem('lexrag_user',JSON.stringify(r.user));
+    enterApp();
+  }catch(e){ errEl.textContent=e.message; }
+}
+async function doSso(){
+  try{ const r=await fetch('/api/v1/auth/oidc/login');
+    if(!r.ok){ const b=await r.json().catch(()=>({})); throw new Error(b.error||'SSO is not configured on this server.'); }
+    window.location.href=r.url;
+  }catch(e){ document.getElementById('auth-err').textContent=e.message; }
+}
+function logout(){
+  S.token=S.refreshToken=null; S.user=null;
+  localStorage.removeItem('lexrag_token'); localStorage.removeItem('lexrag_refresh'); localStorage.removeItem('lexrag_user');
+  document.getElementById('app').style.display='none';
+  document.getElementById('auth-wrap').style.display='flex';
+}
+function enterApp(){
+  document.getElementById('auth-wrap').style.display='none';
+  document.getElementById('app').style.display='grid';
+  document.getElementById('user-email').textContent=S.user?S.user.email:'';
+  renderHistory(); refreshAll();
+}
+
+/* ---------- Navigation ---------- */
+function go(view){
+  document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('on',b.dataset.view===view));
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('on'));
+  document.getElementById('view-'+view).classList.add('on');
+  if(view==='vault') loadDocs();
+  if(view==='graph') loadGraph();
+  if(view==='agents' && !WF.length) loadWorkflows();
+  refreshStats();
+}
+function setMode(m){ S.mode=m;
+  document.querySelectorAll('#mode-pills button').forEach(b=>b.classList.toggle('on',b.dataset.mode===m)); }
+
+/* ---------- Query ---------- */
+async function ask(){
+  const q=document.getElementById('q-text').value.trim();
+  if(!q){ toast('Type a question first.'); return; }
+  const k=parseInt(document.getElementById('q-k').value,10);
+  const web=document.getElementById('q-web').checked;
+  const w=document.getElementById('answer-wrap');
+  w.innerHTML='<div class="card"><span class="mut">Thinking…'+(web?' (searching the web too — this takes a minute)':'')+'</span></div>';
+  try{
+    const r=await api('/api/v1/knowledge/query',{method:'POST',body:JSON.stringify({query:q,mode:S.mode,top_k:k,web:web})});
+    const cites=r.citations.map((c,i)=>{
+      const tag=c.doc_id.startsWith('web:')?'🌐':'📄';
+      return `<div class="cite"><div class="meta">${tag} ${esc(c.doc_title||c.doc_id)} · chunk ${c.ordinal} · score ${c.score.toFixed(3)}</div><div>${esc(c.snippet)}…</div></div>`;}).join('');
+    w.innerHTML=`<div class="card"><h3>Answer <span class="badge">${esc(r.mode)}</span>${web?' <span class="badge">web</span>':''}</h3>
+      <div class="answer">${esc(r.answer)}</div>
+      <h3 style="margin-top:16px">Sources (${r.citations.length})</h3>${cites||'<span class="mut">No sources retrieved.</span>'}</div>`;
+    S.history.unshift({q,mode:r.mode+(web?'+web':''),at:new Date().toISOString()});
+    S.history=S.history.slice(0,20); localStorage.setItem('lexrag_history',JSON.stringify(S.history));
+    renderHistory();
+  }catch(e){ w.innerHTML=`<div class="card"><span class="err">${esc(e.message)}</span></div>`; }
+}
+
+/* ---------- Research ---------- */
+const STATUS_COLOR={supported:'ok',refuted:'err',inconclusive:'mut'};
+async function doResearch(){
+  const q=document.getElementById('r-text').value.trim();
+  if(!q){ toast('Type a research question first.'); return; }
+  const web=document.getElementById('r-web').checked;
+  const w=document.getElementById('research-wrap');
+  w.innerHTML='<div class="card"><span class="mut">Researching… framing hypotheses, gathering evidence, adjudicating. This takes a few minutes.</span></div>';
+  try{
+    const r=await api('/api/v1/knowledge/research',{method:'POST',body:JSON.stringify({query:q,web:web})});
+    const hyps=r.hypotheses.map((h,i)=>{
+      const ev=h.evidence.map(e=>`<div class="cite"><div class="meta">${esc(e.source)}</div><div>${esc(e.claim)}…</div></div>`).join('');
+      return `<div class="card" style="margin-top:10px"><h3>H${i+1}: ${esc(h.question)} <span class="${STATUS_COLOR[h.status]||'mut'}">${esc(h.status)}</span></h3>
+        <p class="mut">Prediction: ${esc(h.prediction||'—')}</p>${ev||'<span class="mut">No evidence.</span>'}</div>`;}).join('');
+    const confs=r.conflicts.map(c=>`<div class="card" style="margin-top:10px;border-left:3px solid var(--warn)"><b>⚠ ${esc(c.topic)}</b>
+      <p><b>A:</b> ${esc(c.position_a)}</p><p><b>B:</b> ${esc(c.position_b)}</p></div>`).join('');
+    const open=r.open_points.map(o=>`<li>${esc(o)}</li>`).join('');
+    w.innerHTML=`<div class="card"><h3>Conclusion</h3><div class="answer">${esc(r.conclusion)}</div></div>
+      <h3 style="margin-top:14px">Hypotheses</h3>${hyps||'<span class="mut">None.</span>'}
+      ${r.conflicts.length?`<h3 style="margin-top:14px">Conflicts (${r.conflicts.length})</h3>${confs}`:''}
+      ${r.open_points.length?`<h3 style="margin-top:14px">Open points</h3><ul>${open}</ul>`:''}
+      <p class="mut">${r.citations.length} citations collected.</p>`;
+  }catch(e){ w.innerHTML=`<div class="card"><span class="err">${esc(e.message)}</span></div>`; }
+}
+function renderHistory(){
+  const h=document.getElementById('history');
+  h.innerHTML=S.history.length?S.history.map((x,i)=>
+    `<div class="hist-item" onclick="rehydrate(${i})">${esc(x.q)} <span class="mut">· ${esc(x.mode)}</span></div>`).join('')
+    :'<span class="mut">No questions yet.</span>';
+}
+function rehydrate(i){ document.getElementById('q-text').value=S.history[i].q; setMode(S.history[i].mode); }
+
+/* ---------- Agents ---------- */
+let WF=[];
+async function loadWorkflows(){
+  try{ WF=await api('/api/v1/knowledge/workflows'); }catch(e){ return; }
+  const p=document.getElementById('wf-pick');
+  p.innerHTML=WF.map(w=>`<option value="${esc(w.id)}">${esc(w.name)}</option>`).join('');
+  p.onchange=()=>{ const w=WF.find(x=>x.id===p.value);
+    document.getElementById('wf-desc').textContent=w?w.description:'';
+    document.getElementById('wf-input-lbl').textContent=w?w.input_label:'Input';
+    document.getElementById('wf-input').placeholder=w?('e.g. '+(w.id==='contract_review'?'the uploaded Master Services Agreement':w.id==='due_diligence'?'the target acquisition':'whether interest on government securities is tax-exempt')):'';
+  };
+  p.onchange();
+}
+async function runWorkflow(){
+  const id=document.getElementById('wf-pick').value;
+  const input=document.getElementById('wf-input').value.trim();
+  if(!input){ toast('Describe the subject first.'); return; }
+  const w=document.getElementById('wf-wrap');
+  w.innerHTML='<div class="card"><span class="mut">Running workflow… each step retrieves and reasons. This takes a few minutes.</span></div>';
+  try{
+    const r=await api('/api/v1/knowledge/workflows/run',{method:'POST',body:JSON.stringify({workflow_id:id,input:input})});
+    const steps=r.steps.map((s,i)=>{
+      const cites=s.citations.map(c=>{
+        const tag=c.doc_id.startsWith('web:')?'🌐':'📄';
+        return `<div class="cite"><div class="meta">${tag} ${esc(c.doc_title||c.doc_id)}</div><div>${esc(c.snippet)}…</div></div>`;}).join('');
+      return `<div class="card" style="margin-top:10px"><h3>Step ${i+1}: ${esc(s.name)}</h3>
+        <div class="answer">${esc(s.findings)}</div>
+        ${cites?`<h4>Step sources (${s.citations.length})</h4>${cites}`:''}</div>`;}).join('');
+    w.innerHTML=`<div class="card"><h3>${esc(r.workflow_name)} — final report</h3>
+      <div class="answer">${esc(r.final_report)}</div>
+      <p class="mut">${r.citations.length} unique citations across ${r.steps.length} steps.</p></div>
+      <h3 style="margin-top:14px">Step findings</h3>${steps}`;
+  }catch(e){ w.innerHTML=`<div class="card"><span class="err">${esc(e.message)}</span></div>`; }
+}
+
+/* ---------- Vault ---------- */
+function syncFileName(){
+  const f=document.getElementById('up-picker').files[0];
+  if(f){ document.getElementById('up-file').value=f.name;
+    if(!document.getElementById('up-title').value.trim()) document.getElementById('up-title').value=f.name; }
+}
+function readFileBase64(file){
+  return new Promise((res,rej)=>{ const r=new FileReader();
+    r.onload=()=>res(String(r.result).split(',')[1]); r.onerror=rej; r.readAsDataURL(file); });
+}
+async function uploadDoc(){
+  const title=document.getElementById('up-title').value.trim()||'Untitled';
+  const file_name=document.getElementById('up-file').value.trim()||'doc.txt';
+  const text=document.getElementById('up-text').value;
+  const file=document.getElementById('up-picker').files[0];
+  const rep=document.getElementById('up-report');
+  const payload={title,file_name};
+  if(file){ payload.content_base64=await readFileBase64(file); }
+  else if(text.trim()){ payload.text=text; }
+  else { toast('Choose a file or paste some document text first.'); return; }
+  rep.innerHTML='<span class="mut">Indexing…</span>';
+  try{
+    const r=await api('/api/v1/vault/documents',{method:'POST',body:JSON.stringify(payload)});
+    rep.innerHTML=`<span class="ok">Indexed: ${r.chunks} chunks, ${r.entities} entities, ${r.relations} relations, ${r.modal_processed} multimodal.</span>`;
+    document.getElementById('up-text').value=''; document.getElementById('up-picker').value='';
+    loadDocs(); refreshStats();
+  }catch(e){ rep.innerHTML=`<span class="err">${esc(e.message)}</span>`; }
+}
+async function ingestS3(){
+  const prefix=document.getElementById('s3-prefix').value.trim();
+  const rep=document.getElementById('s3-report');
+  rep.innerHTML='<span class="mut">Ingesting from S3…</span>';
+  try{
+    const r=await api('/api/v1/vault/ingest'+(prefix?('?prefix='+encodeURIComponent(prefix)):''),{method:'POST'});
+    rep.innerHTML=`<span class="ok">${r.documents} documents, ${r.chunks} chunks, ${r.entities} entities, ${r.relations} relations.</span>`;
+    loadDocs(); refreshStats();
+  }catch(e){ rep.innerHTML=`<span class="err">${esc(e.message)}</span>`; }
+}
+async function loadDocs(){
+  const el=document.getElementById('docs-table');
+  try{
+    const docs=await api('/api/v1/vault/documents');
+    if(!docs.length){ el.innerHTML='<span class="mut">No documents indexed yet.</span>'; return; }
+    el.innerHTML=`<table><tr><th>Title</th><th>Source</th><th>Chars</th><th>Chunks</th><th>Ingested</th><th></th></tr>`+
+      docs.map(d=>`<tr><td>${esc(d.title)}</td><td class="mut">${esc((d.source_uri||'').slice(0,42))}</td>
+        <td>${d.chars}</td><td>${d.chunks}</td><td class="mut">${esc((d.ingested_at||'').slice(0,10))}</td>
+        <td><button class="danger" onclick="delDoc('${d.id}')">Delete</button></td></tr>`).join('')+`</table>`;
+  }catch(e){ el.innerHTML=`<span class="err">${esc(e.message)}</span>`; }
+}
+async function delDoc(id){
+  if(!confirm('Delete this document and its index entries?')) return;
+  try{ await api('/api/v1/vault/documents/'+id,{method:'DELETE'}); loadDocs(); refreshStats(); }
+  catch(e){ toast(e.message); }
+}
+
+/* ---------- Graph ---------- */
+async function loadGraph(){
+  const el=document.getElementById('ent-list'), rl=document.getElementById('rel-list');
+  try{
+    const g=await api('/api/v1/knowledge/graph');
+    document.getElementById('ent-count').textContent=g.entities.length;
+    document.getElementById('rel-count').textContent=g.relations.length;
+    el.innerHTML=g.entities.length?g.entities.map(e=>
+      `<div class="cite"><div class="meta"><span class="badge">${esc(e.kind)}</span> ${e.chunk_ids.length} chunk(s)</div>
+       <b>${esc(e.name)}</b><div class="mut" style="font-size:13.5px">${esc(e.description)}</div></div>`).join('')
+      :'<span class="mut">No entities extracted yet. Index documents with a real LLM to populate the graph.</span>';
+    rl.innerHTML=g.relations.length?g.relations.map(r=>
+      `<div class="cite"><div class="meta">${r.chunk_ids.length} chunk(s)</div>
+       <b>${esc(r.from)}</b> <span class="mut">→</span> <b>${esc(r.to)}</b>
+       <div class="mut" style="font-size:13.5px">${esc(r.description)}</div></div>`).join('')
+      :'<span class="mut">No relations yet.</span>';
+  }catch(e){ el.innerHTML=`<span class="err">${esc(e.message)}</span>`; }
+}
+
+/* ---------- Stats ---------- */
+async function refreshStats(){
+  try{
+    const s=await api('/api/v1/knowledge/stats');
+    document.getElementById('st-docs').textContent=s.documents;
+    document.getElementById('st-chunks').textContent=s.chunks;
+    document.getElementById('st-ents').textContent=s.entities;
+    document.getElementById('st-rels').textContent=s.relations;
+  }catch(e){/* not authenticated yet */}
+}
+function refreshAll(){ refreshStats(); loadDocs(); }
+
+/* ---------- Boot ---------- */
+if(S.token && S.user){ enterApp(); }
+</script>
+</body>
+</html>

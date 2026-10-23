@@ -1,0 +1,23 @@
+# Secrets and local state — never bake into the image
+.env
+.git
+data
+data-test
+data-sdb
+*.log
+
+# Rust build artifacts (rebuilt in the image)
+target
+
+# Node artifacts (rebuilt in the image)
+frontend/node_modules
+frontend/admin/node_modules
+frontend/dist
+frontend/admin/dist
+
+# Python sidecar venv (rebuilt in the image via uv sync)
+tools/web/.venv
+tools/web/__pycache__
+
+# Dev-only helpers (sandbox tunnel relay etc.)
+tools/tunnel

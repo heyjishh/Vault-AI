@@ -1,0 +1,23 @@
+[package]
+name = "legal-rag-rag"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+legal-rag-common = { workspace = true }
+legal-rag-ingest = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+reqwest = { workspace = true }
+futures = { workspace = true }
+async-trait = "0.1"
+pdf-extract = "0.7"
+sha2 = "0.10"
+tokio-postgres = "0.7"
