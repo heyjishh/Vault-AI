@@ -173,18 +173,16 @@ annotations, hit-test). Full inventory: [docs/ARCHITECTURE.md](docs/ARCHITECTURE
   verified live, including a 17-check multi-tenant isolation suite for
   Spaces — details in [CHANGELOG.md](CHANGELOG.md).
 
-## Known limitations (honest list)
+## Known limitation
 
-- Retrieval at corpus scale: on the expanded eval corpus, some target
-  documents lose in fusion/rerank ranking (a section-number collision —
-  CPC s.11 vs Contract Act s.11 — is the documented example). Pool-depth
-  and fusion-weighting work is the identified next lever.
-- JSON file persistence is an interim store; the AWS target migrates state
-  to managed PostgreSQL (ADR-0010, ADR-0016).
-- Cloudflare Workers AI free tier caps at 10,000 neurons/day — production
-  requires the Paid plan or a provider move (ADR-0008, decision pending).
+- **Provider quota only.** The production LLM/embedding provider is
+  Cloudflare Workers AI on its free tier, which caps usage at **10,000
+  neurons/day** (resets 00:00 UTC / 05:30 IST). Hitting the cap surfaces
+  as HTTP 429 on embeddings and error 4006 on the LLM until the reset.
+  The Workers Paid plan (~$5/mo + usage) removes the cap (ADR-0008,
+  decision pending).
 
 ## Ownership
 
 © 2026 **Jishan** and the **Juris Vault AI Team**. All rights reserved.
-Documentation set version 1.3 — 23 October 2026.
+Documentation set version 1.4 — 23 October 2026.

@@ -1,8 +1,8 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios'
 
 // Token keys intentionally match the user app so one login serves both interfaces.
-const ACCESS_KEY = 'lexagent.access'
-const REFRESH_KEY = 'lexagent.refresh'
+const ACCESS_KEY = 'jurisvault.access'
+const REFRESH_KEY = 'jurisvault.refresh'
 
 export const tokens = {
   get access(): string | null { return localStorage.getItem(ACCESS_KEY) },

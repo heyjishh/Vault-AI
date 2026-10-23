@@ -14,6 +14,21 @@ live**, what is **built but unverified**, and what is **roadmap**.
 
 ## [Unreleased]
 
+### Changed
+- **Rename completed + limitations corrected** (23 Oct 2026, **verified
+  live**) — every remaining legacy pre-rename product string removed
+  repo-wide:
+  login/admin wordmarks, error-boundary button, the server's frontend
+  fallback page, browser storage keys (`jurisvault.access` /
+  `jurisvault.refresh` / `jurisvault.history` — existing sessions sign in
+  once more), npm package names, Dockerfile/compose/deploy.sh/DEPLOY.md
+  wording, and the stale scaffold `frontend/README.md` rewritten. Docs
+  v1.4: README's limitations list and ARCHITECTURE §15 now state the
+  single standing limitation — the Cloudflare Workers AI free-tier cap of
+  10,000 neurons/day — and §15 no longer lists shipped features
+  (sentence-level citations, jurisdiction scoping, Spaces, autonomous
+  agents) as limitations.
+
 ### Added
 - **Sentence-level citations** (23 Oct 2026, **verified live**) — citations now
   carry a pinpoint sentence: the exact sentence in the cited passage that

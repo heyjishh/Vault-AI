@@ -1,4 +1,4 @@
-# LexAgent Frontend — REA Design Spec (from harvey.ai)
+# Juris Vault AI Frontend — REA Design Spec (from harvey.ai)
 
 Reverse-engineered from **www.harvey.ai** via the REA repo (`rea analyze-web-bundle` + CSS token extraction, 2026-10-20).
 Harvey's internal app sits behind Auth0, so this spec captures their **public design system**, which the app shares (semantic `--background-*` / `--text-*` / `--border-*` tokens).

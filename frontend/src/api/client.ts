@@ -6,8 +6,8 @@ import type {
   WorkflowDef, WorkflowRun, AutonomousRun,
 } from './types'
 
-const ACCESS_KEY = 'lexagent.access'
-const REFRESH_KEY = 'lexagent.refresh'
+const ACCESS_KEY = 'jurisvault.access'
+const REFRESH_KEY = 'jurisvault.refresh'
 
 export const tokens = {
   get access(): string | null { return localStorage.getItem(ACCESS_KEY) },

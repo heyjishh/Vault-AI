@@ -1,4 +1,4 @@
-# Deploying LexAgent
+# Deploying Juris Vault AI
 
 One image, one command. The image contains everything: the Rust API, the
 user app, the admin Command Center, the OCR sidecar (Surya; pages

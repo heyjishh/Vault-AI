@@ -1,18 +1,18 @@
-# LexAgent — one-command deployment:  ./deploy.sh   (or: docker compose up -d --build)
+# Juris Vault AI — one-command deployment:  ./deploy.sh   (or: docker compose up -d --build)
 #
 # App:        http://localhost:3000/
 # Admin:      http://localhost:3000/admin
 # First run:  copy .env.example to .env and fill in your model provider keys
 #             (deploy.sh does this for you and generates a JWT secret).
 
-name: lexagent
+name: juris-vault-ai
 
 services:
   app:
     build:
       context: .
       dockerfile: Dockerfile
-    image: lexagent:local
+    image: juris-vault-ai:local
     restart: unless-stopped
     ports:
       - "${LEGAL_RAG_PORT:-3000}:3000"

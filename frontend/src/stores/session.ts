@@ -24,7 +24,7 @@ interface SessionState {
   dismissToast: (id: number) => void
 }
 
-const HISTORY_KEY = 'lexagent.history'
+const HISTORY_KEY = 'jurisvault.history'
 
 function loadHistory(): string[] {
   try {

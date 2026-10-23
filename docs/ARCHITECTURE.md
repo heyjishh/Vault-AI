@@ -5,7 +5,7 @@
 | **Document** | System Architecture (engineering, infrastructure & AWS platform teams) |
 | **Product** | Juris Vault AI — legal document intelligence for Indian law practice |
 | **Owner** | **Jishan** — Juris Vault AI Team |
-| **Version** | 1.3 — 23 October 2026 |
+| **Version** | 1.4 — 23 October 2026 |
 | **System version** | 0.1.0 (Cargo workspace version) |
 | **Companion documents** | [ADR.md](ADR.md) (decision records ADR-0001…0018) · [README.md](../README.md) · [CHANGELOG.md](../CHANGELOG.md) · [DEPLOY.md](../DEPLOY.md) |
 | **Status labels** | **LIVE-VERIFIED** = proven end-to-end in production-like runs · **BUILT** = implemented, verification partial · **TARGET** = design for the AWS move, not yet deployed · **ROADMAP** = agreed direction, not built |
@@ -487,8 +487,8 @@ Design notes and the verification questions this raises for the AWS team:
   backup cost for the API/SereneDB EBS volumes beyond the S3 pg_dump line,
   and no LLM/provider spend (ADR-0008 — correctly outside AWS, but it
   belongs in the same budget conversation).
-- Line descriptions still carry the legacy "LexAgent" name (the estimate
-  predates the Juris Vault AI rename) — cosmetic only.
+- Line descriptions still carry the legacy pre-rename product name (the
+  estimate predates the Juris Vault AI rename) — cosmetic only.
 
 **Status**: recorded as an alternative under verification (owner direction,
 21 Oct 2026). Adoption is a separate decision, taken with ADR-0016.
@@ -519,11 +519,16 @@ Design notes and the verification questions this raises for the AWS team:
 
 ## 15. Limitations & roadmap (summary)
 
-Chunk-level (not sentence-level) citations · no jurisdiction/temporal
-awareness · single-tenant Briefs (multi-tenant Spaces roadmap) · fixed
-workflows (autonomous sub-agents roadmap) · JSON persistence (RDS migration
-in §12.5) · provider quota (Paid/Bedrock decision open) · Docker first build
-pending. Each item has an ADR (Accepted or Proposed) in [ADR.md](ADR.md).
+**Limitation — provider quota only:** the production provider is
+Cloudflare Workers AI's free tier, capped at 10,000 neurons/day (reset
+00:00 UTC); the Paid plan (~$5/mo) or a provider move removes it
+(ADR-0008, decision open). **Roadmap:** JSON persistence → managed
+PostgreSQL on the AWS target (§12.5, ADR-0010/0016); first Docker image
+build; retrieval pool-depth/fusion-weighting tuning (eval findings in
+`~/workspace/eval-expansion`, measured 23 Oct 2026). Everything else
+formerly listed here — sentence-level citations, jurisdiction/temporal
+awareness, multi-tenant Spaces, autonomous agents — has shipped and is
+described in §5/§8.
 
 ---
 

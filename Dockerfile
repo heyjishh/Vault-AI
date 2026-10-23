@@ -1,10 +1,10 @@
 # syntax=docker/dockerfile:1
 # ─────────────────────────────────────────────────────────────────────────────
-# LexAgent — all-in-one image: Rust API + user app + admin Command Center +
+# Juris Vault AI — all-in-one image: Rust API + user app + admin Command Center +
 # OCR sidecar (Surya) + stealth web-search sidecar.
 #
-#   docker build -t lexagent .
-#   docker run -d -p 3000:3000 --env-file .env -v legal-rag-data:/data lexagent
+#   docker build -t juris-vault-ai .
+#   docker run -d -p 3000:3000 --env-file .env -v legal-rag-data:/data juris-vault-ai
 #
 # Or simply: ./deploy.sh   (docker compose, one command)
 # ─────────────────────────────────────────────────────────────────────────────

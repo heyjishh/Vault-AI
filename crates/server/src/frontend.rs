@@ -81,7 +81,7 @@ pub async fn fallback(uri: axum::http::Uri) -> Response {
 
 fn fallback_page() -> Response {
     let html = r#"<!doctype html><html><body style="font-family:system-ui;padding:4rem">
-<h1>LexAgent frontend not built</h1>
+<h1>Juris Vault AI frontend not built</h1>
 <p>Run <code>npm run build</code> in <code>frontend/</code>, then restart the server.</p>
 </body></html>"#;
     Response::builder()

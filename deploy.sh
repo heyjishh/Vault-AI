@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# LexAgent — one-command deployment.
+# Juris Vault AI — one-command deployment.
 #
 #   ./deploy.sh            build + start + wait until healthy
 #   ./deploy.sh down       stop
@@ -53,7 +53,7 @@ docker compose up -d --build
 PORT="$(sed -n 's/^LEGAL_RAG_PORT=//p' .env | tail -1)"
 PORT="${PORT:-3000}"
 
-echo "→ Waiting for LexAgent to become healthy on port $PORT …"
+echo "→ Waiting for Juris Vault AI to become healthy on port $PORT …"
 healthy=""
 for _ in $(seq 1 60); do
   if curl -fs "http://127.0.0.1:${PORT}/health" >/dev/null 2>&1; then
@@ -64,7 +64,7 @@ done
 
 if [ -n "$healthy" ]; then
   echo ""
-  echo "✓ LexAgent is up:"
+  echo "✓ Juris Vault AI is up:"
   echo "    App    http://localhost:${PORT}/"
   echo "    Admin  http://localhost:${PORT}/admin"
   echo ""
