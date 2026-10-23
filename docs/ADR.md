@@ -5,7 +5,7 @@
 | **Document** | Full ADR set for the infrastructure and AWS platform teams |
 | **Product** | Juris Vault AI — legal document intelligence for Indian law practice |
 | **Owner** | **Jishan** — Juris Vault AI Team |
-| **Version** | 1.3 — 23 October 2026 |
+| **Version** | 1.5 — 23 October 2026 |
 | **Companion** | [ARCHITECTURE.md](ARCHITECTURE.md) · [README.md](../README.md) · [CHANGELOG.md](../CHANGELOG.md) |
 
 ## How to read this document
@@ -624,6 +624,46 @@ receipts).
 
 **Alternatives considered.** White-labelling or forking Dify (license-
 blocked); pixel-cloning competitor UX (identity risk, rejected by rule).
+
+---
+
+## ADR-0019 — Fusion suite, rank-interleave leg merging, retrieval cache
+
+**Status:** Accepted (23 Oct 2026; measured same day)
+
+**Context.** A landscape evaluation of Spice.ai, Haystack, LlamaIndex,
+txtai, RAGFlow, Hyper-RAG and Verba converged on rank-fusion maturity as
+the transferable pattern (four of seven ship weighted/normalized fusion
+over plain RRF). Per ADR-0018 the patterns were rewritten natively in
+Rust — no sidecar runtime. The A/B programme then produced a more
+valuable finding than the tuning itself: per-stage retrieval on the
+20-rule golden corpus is saturated (recall 1.000 at k=5 and k=10 in
+every configuration), while end-to-end failures traced to **Mix mode
+merging its vector/local/global legs by raw score across
+incommensurable scales** (cosines ~0.4–0.6 vs the graph legs' flat
+0.85), which flooded the rerank pool with graph-neighborhood chunks and
+truncated the vector leg's best hits before generation.
+
+**Decision.** (1) Legs merge by **rank interleave** (round-robin in
+each leg's own order, dedup by chunk id). (2) The vector↔BM25 fusion is
+a suite — RRF / weighted RRF / DBSF — with an **in-fusion statute
+term** (a query naming an Act lifts that Act's chunks ×1.35 by default,
+aliases matching abbreviated titles) and an optional recency-decay
+term. (3) A **retrieval-tier cache** with stale-while-revalidate,
+keyed by question + mode + scope + corpus fingerprint. (4) Production
+defaults stay conservative: RRF + statute term; weighted RRF and the
+post-fusion metadata boost are opt-in (measured stage-neutral to
+harmful — the identifier boost feeds the Act-blind BM25 leg).
+
+**Measured consequences.** Golden set, test instance, 23 Oct 2026:
+12/20 (pre-suite best) → 11/20 (suite, pre-merge-fix control) →
+**15/20** (merge fix in); all remaining failures are answer-wording
+only, with zero source-attribution misses.
+
+**Alternatives considered.** Adopting Spice.ai as a sidecar (rejected —
+separate runtime, Alpha vector engines, ADR-0018); post-fusion
+metadata boosting as the statute mechanism (rejected by measurement —
+it cannot rescue a document the fusion cut already dropped).
 
 ---
 

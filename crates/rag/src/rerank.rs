@@ -50,7 +50,26 @@ struct ScoreOutput {
 /// Ranks candidate indices best-first for a query.
 #[async_trait]
 pub trait Reranker: Send + Sync {
-    async fn rerank(&self, query: &str, docs: &[String], top_n: usize) -> Result<Vec<usize>>;
+    async fn rerank(&self, query: &str, docs: &[String], top_n: usize) -> Result<Vec<usize>> {
+        Ok(self
+            .rerank_scored(query, docs, top_n)
+            .await?
+            .into_iter()
+            .map(|(i, _)| i)
+            .collect())
+    }
+
+    /// The same ranking with the underlying relevance scores, when the
+    /// implementation has them (cross-encoder logits, LLM 0–10 scores).
+    /// Scores feed the score-gap cutoff (Autocut): a ranking whose scores
+    /// fall off a cliff should not be padded out to a fixed top-k.
+    /// Implementations without scores return NaN per index.
+    async fn rerank_scored(
+        &self,
+        query: &str,
+        docs: &[String],
+        top_n: usize,
+    ) -> Result<Vec<(usize, f32)>>;
 }
 
 /// Order indices by descending score, keeping at most `top_n`.
@@ -78,7 +97,12 @@ impl LlmReranker {
 
 #[async_trait]
 impl Reranker for LlmReranker {
-    async fn rerank(&self, query: &str, docs: &[String], top_n: usize) -> Result<Vec<usize>> {
+    async fn rerank_scored(
+        &self,
+        query: &str,
+        docs: &[String],
+        top_n: usize,
+    ) -> Result<Vec<(usize, f32)>> {
         if docs.is_empty() || top_n == 0 {
             return Ok(Vec::new());
         }
@@ -105,7 +129,10 @@ impl Reranker for LlmReranker {
                 dense[s.index] = s.score;
             }
         }
-        Ok(order_by_scores(&dense, top_n))
+        Ok(order_by_scores(&dense, top_n)
+            .into_iter()
+            .map(|i| (i, dense[i]))
+            .collect())
     }
 }
 
@@ -190,7 +217,12 @@ fn parse_rerank_scores(body: &str, n: usize) -> Option<Vec<f32>> {
 
 #[async_trait]
 impl Reranker for HttpReranker {
-    async fn rerank(&self, query: &str, docs: &[String], top_n: usize) -> Result<Vec<usize>> {
+    async fn rerank_scored(
+        &self,
+        query: &str,
+        docs: &[String],
+        top_n: usize,
+    ) -> Result<Vec<(usize, f32)>> {
         if docs.is_empty() || top_n == 0 {
             return Ok(Vec::new());
         }
@@ -216,7 +248,10 @@ impl Reranker for HttpReranker {
             }
         };
         match parse_rerank_scores(&body, docs.len()) {
-            Some(scores) => Ok(order_by_scores(&scores, top_n)),
+            Some(scores) => Ok(order_by_scores(&scores, top_n)
+                .into_iter()
+                .map(|i| (i, scores[i]))
+                .collect()),
             None => {
                 warn!("rerank response unparseable; keeping retrieval order");
                 Ok(Vec::new())
@@ -238,6 +273,10 @@ mod tests {
         let r = LlmReranker::new(llm);
         let docs = vec!["a".to_string(), "b".to_string(), "c".to_string()];
         assert_eq!(r.rerank("q", &docs, 3).await.unwrap(), vec![1, 2, 0]);
+        // The scored variant carries the underlying scores (Autocut input).
+        let scored = r.rerank_scored("q", &docs, 3).await.unwrap();
+        assert_eq!(scored[0], (1, 9.0));
+        assert_eq!(scored[1], (2, 5.0));
     }
 
     #[tokio::test]

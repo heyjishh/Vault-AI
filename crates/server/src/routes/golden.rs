@@ -11,7 +11,10 @@ use legal_rag_rag::QueryMode;
 use serde::{Deserialize, Serialize};
 
 use crate::error::ApiError;
-use crate::golden::{evaluate, GoldenRule, RuleResult, RunSummary};
+use crate::golden::{
+    aggregate_stages, evaluate, stage_scores, GoldenRule, RuleResult, RunSummary, StageAggregate,
+    StageScore,
+};
 use crate::state::AppState;
 
 #[derive(Serialize)]
@@ -159,4 +162,61 @@ pub async fn run_rules(
     let summary = RunSummary { ran_at: Utc::now(), total: rules.len(), passed };
     state.golden.set_run_summary(summary.clone());
     Ok(Json(RunResponse { ran_at: summary.ran_at, total: summary.total, passed, results }))
+}
+
+#[derive(Serialize)]
+pub struct RuleStagesView {
+    pub rule_id: String,
+    pub question: String,
+    pub stages: Vec<StageScore>,
+}
+
+#[derive(Serialize)]
+pub struct StagesResponse {
+    pub ran_at: chrono::DateTime<Utc>,
+    pub rules: usize,
+    pub aggregate: Vec<StageAggregate>,
+    pub results: Vec<RuleStagesView>,
+}
+
+#[derive(Deserialize)]
+pub struct StagesRequest {
+    pub top_k: Option<usize>,
+}
+
+/// Per-stage retrieval evaluation: every rule's question through the
+/// retrieval stages only (vector → BM25 → fused → reranked), scored for
+/// expected-source recall / MRR at each stage. No answer generation —
+/// one embedding per rule plus the local reranker — so fusion and
+/// ranking configurations can be A/B-compared at zero LLM cost.
+pub async fn run_stages(
+    State(state): State<AppState>,
+    AdminUser(_admin): AdminUser,
+    body: Option<Json<StagesRequest>>,
+) -> Result<Json<StagesResponse>, ApiError> {
+    let top_k = body
+        .and_then(|b| b.top_k)
+        .unwrap_or(10)
+        .clamp(1, 20);
+    let rules = state.golden.list();
+    let mut results = Vec::new();
+    let mut all: Vec<Vec<StageScore>> = Vec::new();
+    for rule in &rules {
+        let scores = match state.query.hit_test(&rule.question, 10).await {
+            Ok(report) => stage_scores(&report, &rule.expected_sources, top_k),
+            Err(_) => Vec::new(),
+        };
+        all.push(scores.clone());
+        results.push(RuleStagesView {
+            rule_id: rule.id.clone(),
+            question: rule.question.clone(),
+            stages: scores,
+        });
+    }
+    Ok(Json(StagesResponse {
+        ran_at: Utc::now(),
+        rules: rules.len(),
+        aggregate: aggregate_stages(&all),
+        results,
+    }))
 }

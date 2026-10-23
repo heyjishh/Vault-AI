@@ -5,7 +5,7 @@
 | **Document** | System Architecture (engineering, infrastructure & AWS platform teams) |
 | **Product** | Juris Vault AI — legal document intelligence for Indian law practice |
 | **Owner** | **Jishan** — Juris Vault AI Team |
-| **Version** | 1.4 — 23 October 2026 |
+| **Version** | 1.5 — 23 October 2026 |
 | **System version** | 0.1.0 (Cargo workspace version) |
 | **Companion documents** | [ADR.md](ADR.md) (decision records ADR-0001…0018) · [README.md](../README.md) · [CHANGELOG.md](../CHANGELOG.md) · [DEPLOY.md](../DEPLOY.md) |
 | **Status labels** | **LIVE-VERIFIED** = proven end-to-end in production-like runs · **BUILT** = implemented, verification partial · **TARGET** = design for the AWS move, not yet deployed · **ROADMAP** = agreed direction, not built |
@@ -173,8 +173,19 @@ Question
   3. Retrieval pool (three legs in parallel, tokio::join!):
        vector leg (wide: top_k×4 over children) + BM25 leg + graph/mode leg
        (LightRAG modes: naive/local/global/hybrid/mix/bypass; admin-set
-       default = mix; brief scope hard-filters chunks + graph context)
-  4. RRF fusion (k=60) → pool capped at 12
+       default = mix; brief scope hard-filters chunks + graph context).
+       Legs merge by RANK INTERLEAVE — their score scales are
+       incommensurable (cosines vs the graph legs' flat 0.85); a
+       raw-score merge let graph chunks flood the pool and truncate the
+       vector leg's best hits (measured root cause of several golden
+       misses; fix verified 12/20 → 15/20, 23 Oct 2026). A retrieval-tier
+       cache (fresh + stale-while-revalidate, corpus-fingerprint keyed)
+       serves repeat retrievals.
+  4. Fusion suite (vector↔BM25): RRF (k=60, default) | weighted RRF
+     (per-leg weights, identifier boost) | DBSF — plus an in-fusion
+     STATUTE TERM (a query naming an Act lifts that Act's chunks before
+     the cut; production default ×1.35) and an optional recency-decay
+     term → pool capped at 12 → optional Autocut score-gap cutoff
   5. Reranker (C4 cross-encoder, 500-char excerpts, 12s timeout,
      decisive-margin skip gates; vector order is the fallback)
   6. Parent expansion — matched children replaced by parent sections,
@@ -524,11 +535,10 @@ Cloudflare Workers AI's free tier, capped at 10,000 neurons/day (reset
 00:00 UTC); the Paid plan (~$5/mo) or a provider move removes it
 (ADR-0008, decision open). **Roadmap:** JSON persistence → managed
 PostgreSQL on the AWS target (§12.5, ADR-0010/0016); first Docker image
-build; retrieval pool-depth/fusion-weighting tuning (eval findings in
-`~/workspace/eval-expansion`, measured 23 Oct 2026). Everything else
-formerly listed here — sentence-level citations, jurisdiction/temporal
-awareness, multi-tenant Spaces, autonomous agents — has shipped and is
-described in §5/§8.
+build. Everything else formerly listed here — sentence-level citations,
+jurisdiction/temporal awareness, multi-tenant Spaces, autonomous agents,
+and the fusion suite / leg-merge fix (golden 12/20 → 15/20, measured
+23 Oct 2026) — has shipped and is described in §5/§8.
 
 ---
 

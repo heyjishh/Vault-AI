@@ -26,6 +26,7 @@ pub mod pipeline;
 pub mod processors;
 pub mod query;
 pub mod rerank;
+pub mod retrieval_cache;
 pub mod research;
 pub mod serenedb;
 pub mod usage;

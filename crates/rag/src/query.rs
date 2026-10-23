@@ -300,6 +300,12 @@ pub struct QueryService {
     /// BM25 keyword index, rebuilt lazily when the corpus fingerprint
     /// changes: (fingerprint, index).
     bm25: std::sync::RwLock<Option<(String, Arc<Bm25Index>)>>,
+    /// Retrieval-tier results cache (Spice pattern): replays a
+    /// `retrieve()` result under stale-while-revalidate semantics.
+    retrieval_cache: Arc<crate::retrieval_cache::RetrievalCache>,
+    /// Self-reference for background revalidation tasks, bound by the
+    /// owner right after the service is wrapped in an Arc.
+    weak_self: std::sync::RwLock<Option<std::sync::Weak<QueryService>>>,
     /// Full-text cache for the in-app source viewer, keyed by URL.
     source_cache: std::sync::Mutex<std::collections::HashMap<String, FetchedPage>>,
 }
@@ -333,6 +339,8 @@ impl QueryService {
             web,
             reranker,
             rerank_candidates,
+            retrieval_cache: Arc::new(crate::retrieval_cache::RetrievalCache::from_env()),
+            weak_self: std::sync::RwLock::new(None),
             answer_system: std::sync::RwLock::new(None),
             research_systems: std::sync::RwLock::new((None, None)),
             answer_cache: Arc::new(SemanticAnswerCache::new(256, threshold)),
@@ -370,6 +378,18 @@ impl QueryService {
     /// Stats for the semantic answer cache (admin/cache visibility).
     pub fn answer_cache_stats(&self) -> crate::cache::CacheStats {
         self.answer_cache.stats()
+    }
+
+    /// Bind the owning Arc so background cache revalidation can run
+    /// retrieval without an owner reference cycle. Called once by the
+    /// server right after construction.
+    pub fn bind_self(&self, arc: &Arc<QueryService>) {
+        *self.weak_self.write().expect("lock poisoned") = Some(Arc::downgrade(arc));
+    }
+
+    /// Stats for the retrieval-tier results cache.
+    pub fn retrieval_cache_stats(&self) -> crate::retrieval_cache::RetrievalCacheStats {
+        self.retrieval_cache.stats()
     }
 
     /// Retrieval hit-testing (admin): run one question through every
@@ -434,7 +454,14 @@ impl QueryService {
             .filter(|r| !vec_ids.contains(r.id.as_str()))
             .cloned()
             .collect();
-        let fused = fuse_rrf(vec_hits, &kw, extra, top_k);
+        let cfg = FusionConfig::from_env();
+        let doc_dates = self.doc_dates_for(&vec_hits, &extra);
+        let statute_docs = self.statute_docs_for(question, &vec_hits, &extra);
+        let fused =
+            fuse_rankings(question, vec_hits, &kw, extra, top_k, &cfg, &doc_dates, &statute_docs);
+        // Production applies the metadata boost to the fused pool before
+        // the reranker sees it; mirror that here so stages stay honest.
+        let fused = self.apply_metadata_boost(question, fused);
         stages.push(HitStage {
             name: "fused".to_string(),
             hits: fused.iter().map(&view).collect(),
@@ -613,6 +640,127 @@ impl QueryService {
     pub(crate) fn stale_of(&self, doc_id: &str) -> Option<String> {
         let f = self.doc_meta.read().expect("lock poisoned").clone();
         f(doc_id).and_then(|m| m.stale_note())
+    }
+
+    /// Legal-validity metadata for one document, when a source is wired.
+    fn meta_of(&self, doc_id: &str) -> Option<crate::pipeline::DocMeta> {
+        let f = self.doc_meta.read().expect("lock poisoned").clone();
+        f(doc_id)
+    }
+
+    /// Documents in a candidate set whose titles match a statute the
+    /// query names (the fusion statute term's target set).
+    fn statute_docs_for(
+        &self,
+        question: &str,
+        hits: &[ScoredChunk],
+        extra: &[ChunkRecord],
+    ) -> std::collections::HashSet<String> {
+        let mentioned = statute_mentions(&question.to_lowercase());
+        if mentioned.is_empty() {
+            return std::collections::HashSet::new();
+        }
+        let mut out = std::collections::HashSet::new();
+        for doc_id in hits
+            .iter()
+            .map(|h| &h.record.doc_id)
+            .chain(extra.iter().map(|r| &r.doc_id))
+        {
+            if out.contains(doc_id) {
+                continue;
+            }
+            if let Some(title) = (self.doc_titles)(doc_id) {
+                let t = title.to_lowercase();
+                if mentioned.iter().any(|m| title_matches_statute(&t, m)) {
+                    out.insert(doc_id.clone());
+                }
+            }
+        }
+        out
+    }
+
+    /// doc_id → effective_from, for the documents in a candidate set
+    /// (the recency term of the fusion suite reads dates per document).
+    fn doc_dates_for(
+        &self,
+        hits: &[ScoredChunk],
+        extra: &[ChunkRecord],
+    ) -> std::collections::HashMap<String, Option<String>> {
+        let mut out: std::collections::HashMap<String, Option<String>> =
+            std::collections::HashMap::new();
+        for doc_id in hits
+            .iter()
+            .map(|h| &h.record.doc_id)
+            .chain(extra.iter().map(|r| &r.doc_id))
+        {
+            if !out.contains_key(doc_id) {
+                out.insert(
+                    doc_id.clone(),
+                    self.meta_of(doc_id).and_then(|m| m.effective_from),
+                );
+            }
+        }
+        out
+    }
+
+    /// Metadata-match boost (Haystack's MetaFieldRanker pattern, native):
+    /// when the query names a statute or jurisdiction, chunks from the
+    /// matching documents get a score multiplier, so the correct Act's
+    /// section beats a same-numbered section of the wrong Act into the
+    /// rerank pool. Gated by `LEGAL_RAG_META_BOOST` (set to `1` to
+    /// enable; factors via `LEGAL_RAG_META_BOOST_STATUTE` /
+    /// `LEGAL_RAG_META_BOOST_JURISDICTION`).
+    fn apply_metadata_boost(&self, question: &str, mut hits: Vec<ScoredChunk>) -> Vec<ScoredChunk> {
+        if std::env::var("LEGAL_RAG_META_BOOST").map(|v| v != "1").unwrap_or(true) {
+            return hits;
+        }
+        let q = question.to_lowercase();
+        let mentioned = statute_mentions(&q);
+        let statute_factor = std::env::var("LEGAL_RAG_META_BOOST_STATUTE")
+            .ok()
+            .and_then(|v| v.parse::<f32>().ok())
+            .filter(|v| v.is_finite())
+            .unwrap_or(1.35)
+            .clamp(1.0, 3.0);
+        let jurisdiction_factor = std::env::var("LEGAL_RAG_META_BOOST_JURISDICTION")
+            .ok()
+            .and_then(|v| v.parse::<f32>().ok())
+            .filter(|v| v.is_finite())
+            .unwrap_or(1.15)
+            .clamp(1.0, 3.0);
+        if mentioned.is_empty() && jurisdiction_factor <= 1.0 {
+            return hits;
+        }
+        let mut boosted = 0usize;
+        for h in hits.iter_mut() {
+            let mut factor: f32 = 1.0;
+            if !mentioned.is_empty() {
+                if let Some(title) = (self.doc_titles)(&h.record.doc_id) {
+                    let t = title.to_lowercase();
+                    if mentioned.iter().any(|m| title_matches_statute(&t, m)) {
+                        factor *= statute_factor;
+                    }
+                }
+            }
+            if let Some(meta) = self.meta_of(&h.record.doc_id) {
+                if let Some(j) = &meta.jurisdiction {
+                    if jurisdiction_mentioned(&q, j) {
+                        factor *= jurisdiction_factor;
+                    }
+                }
+            }
+            if factor > 1.0 {
+                h.score *= factor.min(1.6);
+                boosted += 1;
+            }
+        }
+        if boosted > 0 {
+            hits.sort_by(|a, b| {
+                b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal)
+            });
+            info!(boosted, "metadata boost applied");
+        }
+        hits
     }
 
     /// Run one query end to end — like `aquery`.
@@ -847,19 +995,28 @@ impl QueryService {
             .iter()
             .map(|h| h.record.text.chars().take(500).collect())
             .collect();
-        let order = match reranker.rerank(question, &docs, top_k).await {
+        let scored = match reranker.rerank_scored(question, &docs, top_k).await {
             Ok(o) if !o.is_empty() => o,
             _ => {
                 warn!("rerank failed; keeping retrieval order");
                 return Ok(hits.into_iter().take(top_k).collect());
             }
         };
+        let order: Vec<usize> = scored.iter().map(|(i, _)| *i).collect();
         let mut ranked: Vec<ScoredChunk> = Vec::with_capacity(top_k);
-        for &i in &order {
+        let mut ranked_scores: Vec<f32> = Vec::with_capacity(top_k);
+        for &(i, s) in &scored {
             if let Some(h) = hits.get(i) {
                 ranked.push(h.clone());
+                ranked_scores.push(s);
             }
         }
+        // Score-gap cutoff (Verba's Autocut pattern): when the reranker's
+        // own scores fall off a cliff inside the kept set, padding the
+        // context out to a fixed top_k only adds noise. Gated by
+        // LEGAL_RAG_AUTOCUT=1; gap threshold LEGAL_RAG_AUTOCUT_GAP.
+        let ranked = apply_score_gap_cutoff(ranked, &ranked_scores);
+        let mut ranked = ranked;
         for (i, h) in hits.iter().enumerate() {
             if ranked.len() >= top_k {
                 break;
@@ -929,6 +1086,7 @@ impl QueryService {
                     Some("No documents in this brief matched — answered from the full vault.".to_string());
             }
         }
+        let hits = self.apply_metadata_boost(question, hits);
         let hits = self.maybe_rerank(question, hits, top_k).await?;
         let hits = apply_per_doc_cap(hits);
         // Parent-child: the reranker judged the precise child spans; the
@@ -940,10 +1098,10 @@ impl QueryService {
         if !graph_context.is_empty() {
             context_parts.push(format!("Knowledge graph context:\n{graph_context}"));
         }
-        let chunks_text = hits
-            .iter()
-            .enumerate()
-            .map(|(i, h)| {
+        let chunks_text = litm_order(hits.len())
+            .into_iter()
+            .map(|i| {
+                let h = &hits[i];
                 format!(
                     "[doc:{}] (chunk {}):\n{}",
                     i,
@@ -1290,6 +1448,11 @@ impl QueryService {
 
     /// Retrieve chunks + graph context for a mode. When `scope` is set,
     /// chunk hits and graph context are limited to the scoped documents.
+    /// Retrieval with the retrieval-tier results cache in front
+    /// (Spice's check-before-planning pattern): fresh entries replay
+    /// directly; stale entries replay while one background task
+    /// revalidates; misses run the full pipeline and populate the
+    /// cache. Disabled with `LEGAL_RAG_RETRIEVAL_CACHE=0`.
     pub(crate) async fn retrieve(
         &self,
         question: &str,
@@ -1297,7 +1460,66 @@ impl QueryService {
         top_k: usize,
         scope: Option<&DocScope>,
     ) -> Result<(Vec<ScoredChunk>, String)> {
-        let mut hits: Vec<ScoredChunk> = Vec::new();
+        use crate::retrieval_cache::Lookup;
+        if std::env::var("LEGAL_RAG_RETRIEVAL_CACHE")
+            .map(|v| v == "0")
+            .unwrap_or(false)
+        {
+            return self.retrieve_uncached(question, mode, top_k, scope).await;
+        }
+        let fp = self.corpus_fingerprint().await;
+        let scope_docs: Option<Vec<String>> =
+            scope.map(|s| s.iter().cloned().collect());
+        let key = crate::retrieval_cache::retrieval_key(
+            question,
+            &format!("{mode:?}"),
+            top_k,
+            scope_docs.as_deref(),
+            &fp,
+        );
+        match self.retrieval_cache.lookup(&key) {
+            (Lookup::Fresh, Some(value)) => return Ok(value),
+            (Lookup::Stale, Some(value)) => {
+                self.spawn_revalidation(key, question.to_string(), mode, top_k, scope.cloned());
+                return Ok(value);
+            }
+            _ => {}
+        }
+        let value = self.retrieve_uncached(question, mode, top_k, scope).await?;
+        self.retrieval_cache.store(key, value.clone());
+        Ok(value)
+    }
+
+    /// Background refresh for a stale cache entry. No-ops when the
+    /// service was never bound to its owning Arc (tests, tools).
+    fn spawn_revalidation(
+        &self,
+        key: String,
+        question: String,
+        mode: QueryMode,
+        top_k: usize,
+        scope: Option<DocScope>,
+    ) {
+        let weak = self.weak_self.read().expect("lock poisoned").clone();
+        let Some(weak) = weak else { return };
+        tokio::spawn(async move {
+            let Some(svc) = weak.upgrade() else { return };
+            svc.retrieval_cache.note_revalidation();
+            if let Ok(value) =
+                svc.retrieve_uncached(&question, mode, top_k, scope.as_ref()).await
+            {
+                svc.retrieval_cache.store(key, value);
+            }
+        });
+    }
+
+    async fn retrieve_uncached(
+        &self,
+        question: &str,
+        mode: QueryMode,
+        top_k: usize,
+        scope: Option<&DocScope>,
+    ) -> Result<(Vec<ScoredChunk>, String)> {
         let mut graph_context = String::new();
 
         // The three legs are independent — run them concurrently so the
@@ -1334,24 +1556,28 @@ impl QueryService {
             }
         };
         let (vec_res, local_res, global_res) = tokio::join!(vec_leg, local_leg, global_leg);
-        hits.extend(vec_res?);
+        let vec_hits = vec_res?;
         let (local_hits, local_ctx) = local_res?;
-        hits.extend(local_hits);
         if !local_ctx.is_empty() {
             graph_context.push_str(&local_ctx);
         }
         let (global_hits, global_ctx) = global_res?;
-        hits.extend(global_hits);
         if !graph_context.is_empty() && !global_ctx.is_empty() {
             graph_context.push_str("\n\n");
         }
         graph_context.push_str(&global_ctx);
 
-        dedup_hits(&mut hits);
+        // Merge the legs by RANK INTERLEAVE, never by raw score: the
+        // legs' scores are incommensurable (vector cosines ~0.4–0.6,
+        // graph legs carry a flat 0.85), so the old score sort let
+        // graph-neighborhood chunks flood the merged list and truncate
+        // the vector leg's best hits out of the rerank pool — measured
+        // 2026-10-23: the Section 86 question's vector rank-1 answer
+        // never reached the context in Mix mode and the model refused.
+        let mut hits = merge_legs(vec![vec_hits, local_hits, global_hits]);
         if let Some(scope) = scope {
             hits.retain(|h| scope.contains(&h.record.doc_id));
         }
-        hits.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
         hits.truncate(top_k);
         Ok((hits, graph_context))
     }
@@ -1419,7 +1645,10 @@ impl QueryService {
         } else {
             self.store.get_by_ids(&missing).await.unwrap_or_default()
         };
-        Ok(fuse_rrf(vec_hits, &kw, extra, top_k))
+        let cfg = FusionConfig::from_env();
+        let doc_dates = self.doc_dates_for(&vec_hits, &extra);
+        let statute_docs = self.statute_docs_for(question, &vec_hits, &extra);
+        Ok(fuse_rankings(question, vec_hits, &kw, extra, top_k, &cfg, &doc_dates, &statute_docs))
     }
 
     /// Local mode: entities in the query → their graph neighborhoods.
@@ -1570,11 +1799,6 @@ pub fn query_service_for(
     QueryService::new(embeddings, store, graph, llm, doc_titles, web, reranker)
 }
 
-fn dedup_hits(hits: &mut Vec<ScoredChunk>) {
-    let mut seen = HashSet::new();
-    hits.retain(|h| seen.insert(h.record.id.clone()));
-}
-
 /// Per-document cap on the final answer context (env
 /// `LEGAL_RAG_PER_DOC_CAP`, 0/unset = off): no single document
 /// contributes more than N chunks. Fights hub-document saturation in
@@ -1602,31 +1826,448 @@ fn apply_per_doc_cap(hits: Vec<ScoredChunk>) -> Vec<ScoredChunk> {
     kept
 }
 
-/// Reciprocal-rank fusion (k=60) of a vector ranking with a BM25 ranking.
-/// The fused ORDER decides the candidate pool; vector hits keep their
-/// cosine scores, and keyword-only hits (records supplied via `extra`)
-/// inherit the cosine of the vector hit at their fused rank (× 0.98), so
+/// Score-gap cutoff ("Autocut", Verba's pattern): given hits in rerank
+/// order with their reranker scores, truncate at the largest relative
+/// score cliff when it is steep enough. Scores are min-max normalized
+/// over the kept set; a normalized gap of `LEGAL_RAG_AUTOCUT_GAP`
+/// (default 0.45) or more, with at least 4 candidates, cuts the tail.
+/// Disabled unless `LEGAL_RAG_AUTOCUT=1`. Backfill items (unscored) are
+/// appended by the caller after this runs, so a cut is never undone.
+fn apply_score_gap_cutoff(hits: Vec<ScoredChunk>, scores: &[f32]) -> Vec<ScoredChunk> {
+    if std::env::var("LEGAL_RAG_AUTOCUT").map(|v| v != "1").unwrap_or(true) {
+        return hits;
+    }
+    let n = hits.len().min(scores.len());
+    if n < 4 || scores.iter().take(n).any(|s| !s.is_finite()) {
+        return hits;
+    }
+    let gap_min = std::env::var("LEGAL_RAG_AUTOCUT_GAP")
+        .ok()
+        .and_then(|v| v.parse::<f32>().ok())
+        .filter(|v| v.is_finite())
+        .unwrap_or(0.45)
+        .clamp(0.05, 0.95);
+    let hi = scores[..n].iter().copied().fold(f32::NEG_INFINITY, f32::max);
+    let lo = scores[..n].iter().copied().fold(f32::INFINITY, f32::min);
+    if hi - lo < 1e-6 {
+        return hits;
+    }
+    let norm = |s: f32| (s - lo) / (hi - lo);
+    let mut best: Option<(usize, f32)> = None;
+    for i in 1..n {
+        let gap = norm(scores[i - 1]) - norm(scores[i]);
+        if gap >= gap_min && best.is_none_or(|(_, g)| gap > g) {
+            best = Some((i, gap));
+        }
+    }
+    match best {
+        Some((cut, gap)) if cut >= 1 && cut < hits.len() => {
+            info!(cut, gap, "score-gap cutoff applied");
+            hits.into_iter().take(cut).collect()
+        }
+        _ => hits,
+    }
+}
+
+/// Presentation order for the answer context ("lost in the middle",
+/// Haystack's pattern): LLMs attend best to the start and end of the
+/// context, so emit ranked hits as best, 3rd, 5th, …, 6th, 4th, 2nd —
+/// the strongest sources sit at both edges. Returns indices into the
+/// ranked list; citation numbering keeps rank order, only the prompt
+/// emission order changes. Disabled with `LEGAL_RAG_LITM=0`.
+fn litm_order(n: usize) -> Vec<usize> {
+    if n < 4 || std::env::var("LEGAL_RAG_LITM").map(|v| v == "0").unwrap_or(false) {
+        return (0..n).collect();
+    }
+    let mut out: Vec<usize> = Vec::with_capacity(n);
+    let mut i = 0;
+    while i < n {
+        out.push(i);
+        i += 2;
+    }
+    let mut j = if n % 2 == 0 { n - 1 } else { n - 2 };
+    loop {
+        out.push(j);
+        if j < 2 {
+            break;
+        }
+        j -= 2;
+    }
+    out
+}
+
+/// Merge retrieval legs by rank interleave: round-robin across the
+/// legs (in the given priority order), each leg contributing its hits
+/// in its own ranked order, deduplicated by chunk id (first occurrence
+/// wins). Legs score on incommensurable scales (cosines vs the graph
+/// legs' flat 0.85), so a raw-score merge is a category error — this is
+/// the cross-leg analogue of rank fusion.
+fn merge_legs(legs: Vec<Vec<ScoredChunk>>) -> Vec<ScoredChunk> {
+    let total: usize = legs.iter().map(|l| l.len()).sum();
+    let mut out: Vec<ScoredChunk> = Vec::with_capacity(total);
+    let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let mut idx: Vec<usize> = vec![0; legs.len()];
+    loop {
+        let mut progressed = false;
+        for (leg_i, leg) in legs.iter().enumerate() {
+            while idx[leg_i] < leg.len() {
+                let h = &leg[idx[leg_i]];
+                idx[leg_i] += 1;
+                progressed = true;
+                if seen.insert(h.record.id.clone()) {
+                    out.push(h.clone());
+                    break;
+                }
+            }
+        }
+        if !progressed {
+            break;
+        }
+    }
+    out
+}
+
+/// Fusion strategy for merging the vector and BM25 rankings.
+///
+/// `Rrf` is the original behaviour (equal weights, k=60). `WeightedRrf`
+/// and `Dbsf` are the Spice.ai / Haystack patterns rewritten natively
+/// (Spice ships a tunable RRF UDTF with per-leg rank weights; Haystack's
+/// DocumentJoiner ships distribution-based fusion): rank-only fusion
+/// discards score magnitude, which is one way a strong exact-match BM25
+/// hit from the correct Act gets diluted by mid-pack vector hits from a
+/// wrong one (measured 2026-10-23: CPC s.11 vs Contract Act s.11).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FusionMode {
+    Rrf,
+    WeightedRrf,
+    Dbsf,
+}
+
+/// Fusion knobs, read from the environment per call (the codebase's
+/// existing pattern for retrieval tuning), so the test instance can A/B
+/// configurations across restarts without a rebuild.
+#[derive(Debug, Clone, Copy)]
+pub struct FusionConfig {
+    pub mode: FusionMode,
+    /// RRF smoothing constant (Spice exposes the same knob: k≈20 makes
+    /// rank differences bite harder than the classic 60).
+    pub k: f32,
+    pub w_vector: f32,
+    pub w_bm25: f32,
+    /// Extra BM25 weight multiplier when the query carries a legal
+    /// identifier (section/article number, statute name) — exact-term
+    /// evidence should dominate paraphrase evidence there.
+    pub identifier_bm25_boost: f32,
+    /// Recency term weight (Spice's RRF recency boosting): adds
+    /// `w * decay` per document, decay from the document's effective
+    /// date with the configured half-life. 0 disables.
+    pub recency_weight: f32,
+    pub recency_half_life_days: f32,
+    /// Statute-match factor applied INSIDE fusion to chunks whose
+    /// document title matches a statute the query names. Placement is
+    /// the lesson of the 2026-10-23 A/B: the one discriminating rule
+    /// (Section 86, IT Act) died at the fusion cut, below the reach of
+    /// any post-fusion boost — the signal has to act before the cut.
+    pub statute_boost: f32,
+}
+
+impl FusionConfig {
+    pub fn from_env() -> Self {
+        let envf = |key: &str, default: f32| {
+            std::env::var(key)
+                .ok()
+                .and_then(|v| v.parse::<f32>().ok())
+                .filter(|v| v.is_finite())
+                .unwrap_or(default)
+        };
+        let mode = match std::env::var("LEGAL_RAG_FUSION")
+            .unwrap_or_default()
+            .to_lowercase()
+            .as_str()
+        {
+            "wrrf" | "weighted" | "weighted_rrf" => FusionMode::WeightedRrf,
+            "dbsf" => FusionMode::Dbsf,
+            _ => FusionMode::Rrf,
+        };
+        Self {
+            mode,
+            k: envf("LEGAL_RAG_FUSION_K", 60.0).clamp(1.0, 1000.0),
+            w_vector: envf("LEGAL_RAG_FUSION_W_VECTOR", 1.0).max(0.0),
+            w_bm25: envf("LEGAL_RAG_FUSION_W_BM25", 1.0).max(0.0),
+            identifier_bm25_boost: envf("LEGAL_RAG_FUSION_IDENTIFIER_BOOST", 1.5).max(0.0),
+            recency_weight: envf("LEGAL_RAG_FUSION_RECENCY_WEIGHT", 0.0).max(0.0),
+            recency_half_life_days: envf("LEGAL_RAG_FUSION_RECENCY_HALF_LIFE_DAYS", 3650.0)
+                .max(1.0),
+            statute_boost: envf("LEGAL_RAG_FUSION_STATUTE_BOOST", 1.35).clamp(1.0, 3.0),
+        }
+    }
+
+    /// Effective BM25 weight for this query (identifier-aware).
+    fn bm25_weight(&self, question: &str) -> f32 {
+        match self.mode {
+            FusionMode::Rrf => 1.0,
+            _ if query_has_identifier(question) => self.w_bm25 * self.identifier_bm25_boost,
+            _ => self.w_bm25,
+        }
+    }
+
+    fn vector_weight(&self) -> f32 {
+        match self.mode {
+            FusionMode::Rrf => 1.0,
+            _ => self.w_vector,
+        }
+    }
+}
+
+/// Does the query carry a legal identifier — a section/article/rule
+/// reference or a statute name — where exact-term matching should be
+/// trusted over semantic similarity?
+pub fn query_has_identifier(question: &str) -> bool {
+    let q = question.to_lowercase();
+    let tokens: Vec<&str> = q
+        .split(|c: char| !c.is_alphanumeric())
+        .filter(|t| !t.is_empty())
+        .collect();
+    const MARKERS: &[&str] = &[
+        "section", "sec", "article", "rule", "schedule", "clause", "ipc", "cpc", "crpc",
+        "bns", "bnss", "bsa",
+    ];
+    if tokens.iter().any(|t| MARKERS.contains(t)) {
+        return true;
+    }
+    !statute_mentions(&q).is_empty()
+}
+
+/// Canonical Indian statutes with the aliases users actually type.
+/// The canonical string is matched against document titles; aliases are
+/// matched against the query (short aliases need a whole-token match).
+const STATUTES: &[(&str, &[&str])] = &[
+    ("indian penal code", &["ipc", "indian penal code", "penal code"]),
+    ("code of civil procedure", &["cpc", "civil procedure code"]),
+    ("code of criminal procedure", &["crpc", "criminal procedure code"]),
+    ("indian contract act", &["contract act"]),
+    ("indian evidence act", &["evidence act"]),
+    ("constitution of india", &["constitution", "constitution of india"]),
+    ("central excise act", &["excise act", "central excise"]),
+    ("information technology act", &["it act", "information technology act"]),
+    ("companies act", &["companies act"]),
+    ("income tax act", &["income tax act", "income-tax act"]),
+    ("negotiable instruments act", &["negotiable instruments", "ni act"]),
+    ("specific relief act", &["specific relief"]),
+    ("limitation act", &["limitation act"]),
+    ("arbitration and conciliation act", &["arbitration act", "arbitration and conciliation"]),
+    ("consumer protection act", &["consumer protection"]),
+    ("transfer of property act", &["transfer of property"]),
+    ("motor vehicles act", &["motor vehicles"]),
+    ("hindu marriage act", &["hindu marriage"]),
+    ("registration act", &["registration act"]),
+    ("indian stamp act", &["stamp act"]),
+];
+
+/// Canonical statute names mentioned in a (lowercased) text.
+pub fn statute_mentions(text_lower: &str) -> Vec<&'static str> {
+    let tokens: std::collections::HashSet<&str> = text_lower
+        .split(|c: char| !c.is_alphanumeric())
+        .filter(|t| !t.is_empty())
+        .collect();
+    let mut out = Vec::new();
+    for (canonical, aliases) in STATUTES {
+        let hit = aliases.iter().any(|a| {
+            if a.len() <= 4 {
+                tokens.contains(a)
+            } else {
+                text_lower.contains(a)
+            }
+        });
+        if hit {
+            out.push(*canonical);
+        }
+    }
+    out
+}
+
+/// Does a document title name this statute? Titles use both full names
+/// ("Indian Contract Act — Sections 73–74") and abbreviations
+/// ("Section 86 IT Act") — matching only the canonical name missed the
+/// abbreviated titles entirely (measured 2026-10-23 on the Section 86
+/// rule), so aliases count too.
+pub fn title_matches_statute(title_lower: &str, canonical: &str) -> bool {
+    if title_lower.contains(canonical) {
+        return true;
+    }
+    let Some((_, aliases)) = STATUTES.iter().find(|(c, _)| *c == canonical) else {
+        return false;
+    };
+    let tokens: std::collections::HashSet<&str> = title_lower
+        .split(|c: char| !c.is_alphanumeric())
+        .filter(|t| !t.is_empty())
+        .collect();
+    aliases.iter().any(|a| {
+        if a.len() <= 4 {
+            tokens.contains(a)
+        } else {
+            title_lower.contains(a)
+        }
+    })
+}
+
+/// Does the (lowercased) query mention this jurisdiction? Codes map to
+/// the names users type ("IN" → india/indian); other codes match their
+/// own lowercase form as a token.
+fn jurisdiction_mentioned(query_lower: &str, code: &str) -> bool {
+    let names: &[&str] = match code.to_uppercase().as_str() {
+        "IN" => &["india", "indian"],
+        "IN-DL" => &["delhi"],
+        "IN-MH" => &["maharashtra", "mumbai", "bombay"],
+        "IN-KA" => &["karnataka", "bangalore", "bengaluru"],
+        "IN-UP" => &["uttar pradesh"],
+        "IN-WB" => &["west bengal", "kolkata", "calcutta"],
+        "US" => &["united states", "america", "american"],
+        "UK" | "GB" => &["united kingdom", "britain", "england"],
+        "EU" => &["european union", "europe"],
+        _ => &[],
+    };
+    if names.iter().any(|n| query_lower.contains(n)) {
+        return true;
+    }
+    let c = code.to_lowercase();
+    query_lower
+        .split(|ch: char| !ch.is_alphanumeric() && ch != '-')
+        .any(|t| t == c)
+}
+
+/// Recency decay for a document effective date (`YYYY-MM-DD`), Spice's
+/// exponential-decay pattern: 1.0 today, 0.5 one half-life ago.
+fn recency_decay(effective_from: Option<&str>, half_life_days: f32) -> f32 {
+    let Some(day) = effective_from else { return 0.0 };
+    let Ok(date) = chrono::NaiveDate::parse_from_str(day, "%Y-%m-%d") else {
+        return 0.0;
+    };
+    let age = (chrono::Utc::now().date_naive() - date).num_days().max(0) as f32;
+    0.5f32.powf(age / half_life_days)
+}
+
+/// Fuse a vector ranking with a BM25 ranking under `cfg`. The fused
+/// ORDER decides the candidate pool; vector hits keep their cosine
+/// scores, and keyword-only hits (records supplied via `extra`) inherit
+/// the cosine of the vector hit at their fused rank (× 0.98), so
 /// downstream margin gates and citation scores stay on the cosine scale.
-fn fuse_rrf(
+fn fuse_rankings(
+    question: &str,
     vec_hits: Vec<ScoredChunk>,
     kw_ranked: &[(String, f32)],
     extra: Vec<ChunkRecord>,
     top_k: usize,
+    cfg: &FusionConfig,
+    doc_dates: &std::collections::HashMap<String, Option<String>>,
+    statute_docs: &std::collections::HashSet<String>,
 ) -> Vec<ScoredChunk> {
-    const K: f32 = 60.0;
+    let k = if cfg.mode == FusionMode::Rrf { 60.0 } else { cfg.k };
+    let w_vec = cfg.vector_weight();
+    let w_kw = cfg.bm25_weight(question);
+    let mut fused_score: std::collections::HashMap<String, f32> =
+        std::collections::HashMap::new();
+    match cfg.mode {
+        FusionMode::Rrf | FusionMode::WeightedRrf => {
+            for (rank, h) in vec_hits.iter().enumerate() {
+                *fused_score.entry(h.record.id.clone()).or_default() +=
+                    w_vec / (k + rank as f32 + 1.0);
+            }
+            for (rank, (id, _)) in kw_ranked.iter().enumerate() {
+                *fused_score.entry(id.clone()).or_default() +=
+                    w_kw / (k + rank as f32 + 1.0);
+            }
+        }
+        FusionMode::Dbsf => {
+            // Distribution-based fusion (Haystack): normalize each leg's
+            // scores by that leg's own distribution, then weighted-sum.
+            // A chunk missing from a leg scores at that leg's floor.
+            let norm = |scores: &[f32]| -> (f32, f32) {
+                if scores.is_empty() {
+                    return (0.0, 1.0);
+                }
+                let mean = scores.iter().sum::<f32>() / scores.len() as f32;
+                let var = scores.iter().map(|s| (s - mean) * (s - mean)).sum::<f32>()
+                    / scores.len() as f32;
+                (mean, var.sqrt().max(1e-6))
+            };
+            let dbsf = |score: f32, mean: f32, std: f32| (score - mean) / (3.0 * std);
+            let vec_scores: Vec<f32> = vec_hits.iter().map(|h| h.score).collect();
+            let (v_mean, v_std) = norm(&vec_scores);
+            let v_floor = vec_scores.iter().copied().fold(f32::INFINITY, f32::min);
+            let kw_scores: Vec<f32> = kw_ranked.iter().map(|(_, s)| *s).collect();
+            let (k_mean, k_std) = norm(&kw_scores);
+            let k_floor = kw_scores.iter().copied().fold(f32::INFINITY, f32::min);
+            let kw_by_id: std::collections::HashMap<&str, f32> =
+                kw_ranked.iter().map(|(id, s)| (id.as_str(), *s)).collect();
+            let mut ids: std::collections::HashSet<String> =
+                vec_hits.iter().map(|h| h.record.id.clone()).collect();
+            ids.extend(kw_ranked.iter().map(|(id, _)| id.clone()));
+            for id in ids {
+                let v = vec_hits
+                    .iter()
+                    .find(|h| h.record.id == id)
+                    .map(|h| dbsf(h.score, v_mean, v_std))
+                    .unwrap_or_else(|| dbsf(v_floor, v_mean, v_std));
+                let kw = kw_by_id
+                    .get(id.as_str())
+                    .map(|s| dbsf(*s, k_mean, k_std))
+                    .unwrap_or_else(|| dbsf(k_floor, k_mean, k_std));
+                fused_score.insert(id, w_vec * v + w_kw * kw);
+            }
+        }
+    }
+    // Chunk id → document id, for the per-document terms below.
+    let doc_of: std::collections::HashMap<&str, &str> = vec_hits
+        .iter()
+        .map(|h| (h.record.id.as_str(), h.record.doc_id.as_str()))
+        .chain(extra.iter().map(|r| (r.id.as_str(), r.doc_id.as_str())))
+        .collect();
+    // Statute-match term: chunks of a document whose title matches a
+    // statute named in the query get their fused score lifted BEFORE
+    // the top_k cut — the measured failure mode is the correct Act's
+    // chunks dying at exactly that cut.
+    if cfg.statute_boost > 1.0 && !statute_docs.is_empty() {
+        for (id, score) in fused_score.iter_mut() {
+            let is_statute_doc = doc_of
+                .get(id.as_str())
+                .map(|doc| statute_docs.contains(*doc))
+                .unwrap_or(false);
+            if is_statute_doc {
+                match cfg.mode {
+                    // DBSF scores are signed normalized units; a
+                    // multiplicative lift would push negatives down.
+                    FusionMode::Dbsf => *score += cfg.statute_boost - 1.0,
+                    _ => *score *= cfg.statute_boost,
+                }
+            }
+        }
+    }
+    // Recency term (Spice pattern): scale-free additive vote, strongest
+    // for a document effective today, halving every half-life. Dates are
+    // per document; chunk ids resolve through their records.
+    if cfg.recency_weight > 0.0 {
+        let scale = match cfg.mode {
+            FusionMode::Dbsf => 0.25,
+            _ => 1.0 / (k + 1.0),
+        };
+        for (id, score) in fused_score.iter_mut() {
+            let decay = doc_of
+                .get(id.as_str())
+                .and_then(|doc| doc_dates.get(*doc))
+                .map(|d| recency_decay(d.as_deref(), cfg.recency_half_life_days))
+                .unwrap_or(0.0);
+            *score += cfg.recency_weight * decay * scale;
+        }
+    }
     let vec_cosines: Vec<f32> = vec_hits.iter().map(|h| h.score).collect();
-    let mut rrf: std::collections::HashMap<String, f32> = std::collections::HashMap::new();
-    for (rank, h) in vec_hits.iter().enumerate() {
-        *rrf.entry(h.record.id.clone()).or_default() += 1.0 / (K + rank as f32 + 1.0);
-    }
-    for (rank, (id, _)) in kw_ranked.iter().enumerate() {
-        *rrf.entry(id.clone()).or_default() += 1.0 / (K + rank as f32 + 1.0);
-    }
     let mut by_id: std::collections::HashMap<String, ScoredChunk> =
         vec_hits.into_iter().map(|h| (h.record.id.clone(), h)).collect();
-    let mut ids: Vec<&String> = rrf.keys().collect();
+    let mut ids: Vec<&String> = fused_score.keys().collect();
     ids.sort_by(|a, b| {
-        rrf[*b].partial_cmp(&rrf[*a]).unwrap_or(std::cmp::Ordering::Equal)
+        fused_score[*b]
+            .partial_cmp(&fused_score[*a])
+            .unwrap_or(std::cmp::Ordering::Equal)
     });
     let mut fused: Vec<ScoredChunk> = Vec::with_capacity(top_k);
     for (pos, id) in ids.into_iter().take(top_k).enumerate() {
@@ -1641,6 +2282,35 @@ fn fuse_rrf(
         }
     }
     fused
+}
+
+/// Reciprocal-rank fusion (k=60) of a vector ranking with a BM25 ranking
+/// — the original fusion, kept as the `FusionMode::Rrf` default.
+fn fuse_rrf(
+    vec_hits: Vec<ScoredChunk>,
+    kw_ranked: &[(String, f32)],
+    extra: Vec<ChunkRecord>,
+    top_k: usize,
+) -> Vec<ScoredChunk> {
+    fuse_rankings(
+        "",
+        vec_hits,
+        kw_ranked,
+        extra,
+        top_k,
+        &FusionConfig {
+            mode: FusionMode::Rrf,
+            k: 60.0,
+            w_vector: 1.0,
+            w_bm25: 1.0,
+            identifier_bm25_boost: 1.0,
+            recency_weight: 0.0,
+            recency_half_life_days: 3650.0,
+            statute_boost: 1.0,
+        },
+        &std::collections::HashMap::new(),
+        &std::collections::HashSet::new(),
+    )
 }
 
 #[cfg(test)]
@@ -1864,6 +2534,238 @@ mod tests {
         assert!(ids.contains(&"d"), "keyword-only chunk must enter the pool");
         let d = fused.iter().find(|h| h.record.id == "d").unwrap();
         assert!((d.score - 0.7 * 0.98).abs() < 1e-4, "imputed score stays on the cosine scale");
+    }
+
+    fn fusion_cfg(mode: FusionMode) -> FusionConfig {
+        FusionConfig {
+            mode,
+            k: 20.0,
+            w_vector: 1.0,
+            w_bm25: 1.0,
+            identifier_bm25_boost: 1.5,
+            recency_weight: 0.0,
+            recency_half_life_days: 3650.0,
+            statute_boost: 1.0,
+        }
+    }
+
+    #[test]
+    fn weighted_rrf_identifier_query_trusts_exact_match() {
+        let rec = |id: &str| ChunkRecord {
+            id: id.into(),
+            doc_id: "d".into(),
+            ordinal: 0,
+            text: id.into(),
+            embedding: vec![],
+            metadata: Default::default(),
+        };
+        let scored = |id: &str, s: f32| ScoredChunk { record: rec(id), score: s };
+        let vec_hits = vec![scored("v1", 0.9), scored("v2", 0.8)];
+        let kw = vec![("k1".to_string(), 9.0)];
+        // Identifier query ("Section 11 … Contract Act"): BM25 weight is
+        // boosted ×1.5, so the keyword-only exact match leads the pool.
+        let fused = fuse_rankings(
+            "What does Section 11 of the Contract Act say?",
+            vec_hits.clone(),
+            &kw,
+            vec![rec("k1")],
+            3,
+            &fusion_cfg(FusionMode::WeightedRrf),
+            &Default::default(),
+            &Default::default(),
+        );
+        assert_eq!(fused[0].record.id, "k1");
+        // Same query with the BM25 leg downweighted: the vector leg's
+        // rank 1 leads instead — the weights, not luck, decide.
+        let fused = fuse_rankings(
+            "What does Section 11 of the Contract Act say?",
+            vec_hits,
+            &kw,
+            vec![rec("k1")],
+            3,
+            &FusionConfig { w_bm25: 0.4, ..fusion_cfg(FusionMode::WeightedRrf) },
+            &Default::default(),
+            &Default::default(),
+        );
+        assert_eq!(fused[0].record.id, "v1");
+    }
+
+    #[test]
+    fn dbsf_keeps_leg_dominant_keyword_hit() {
+        let rec = |id: &str| ChunkRecord {
+            id: id.into(),
+            doc_id: "d".into(),
+            ordinal: 0,
+            text: id.into(),
+            embedding: vec![],
+            metadata: Default::default(),
+        };
+        let scored = |id: &str, s: f32| ScoredChunk { record: rec(id), score: s };
+        // Flat vector leg; BM25 has one dominant exact hit (k1).
+        let vec_hits = vec![scored("v1", 0.81), scored("v2", 0.80), scored("v3", 0.79)];
+        let kw = vec![("k1".to_string(), 25.0), ("k2".to_string(), 2.0), ("k3".to_string(), 1.0)];
+        let extra = vec![rec("k1"), rec("k2"), rec("k3")];
+        let fused = fuse_rankings(
+            "q",
+            vec_hits,
+            &kw,
+            extra,
+            3,
+            &fusion_cfg(FusionMode::Dbsf),
+            &Default::default(),
+            &Default::default(),
+        );
+        let ids: Vec<&str> = fused.iter().map(|h| h.record.id.as_str()).collect();
+        assert_eq!(ids[0], "v1");
+        assert_eq!(ids[1], "k1", "dominant BM25 hit must survive distribution fusion");
+    }
+
+    #[test]
+    fn recency_term_prefers_recently_effective_doc() {
+        let rec = |id: &str, doc: &str| ChunkRecord {
+            id: id.into(),
+            doc_id: doc.into(),
+            ordinal: 0,
+            text: id.into(),
+            embedding: vec![],
+            metadata: Default::default(),
+        };
+        let old = ScoredChunk { record: rec("a1", "doc-old"), score: 0.9 };
+        let new = ScoredChunk { record: rec("b1", "doc-new"), score: 0.88 };
+        let today = chrono::Utc::now().date_naive().format("%Y-%m-%d").to_string();
+        let mut dates = std::collections::HashMap::new();
+        dates.insert("doc-old".to_string(), Some("2010-01-01".to_string()));
+        dates.insert("doc-new".to_string(), Some(today));
+        let cfg = FusionConfig { recency_weight: 2.0, ..fusion_cfg(FusionMode::WeightedRrf) };
+        let fused = fuse_rankings("q", vec![old.clone(), new.clone()], &[], vec![], 2, &cfg, &dates, &Default::default());
+        assert_eq!(fused[0].record.id, "b1", "recency term flips the order");
+        let cfg_off = FusionConfig { recency_weight: 0.0, ..cfg };
+        let fused = fuse_rankings("q", vec![old, new], &[], vec![], 2, &cfg_off, &dates, &Default::default());
+        assert_eq!(fused[0].record.id, "a1", "without the term, rank order stands");
+    }
+
+    #[test]
+    fn statute_term_lifts_named_act_inside_fusion() {
+        // The measured A/B failure: two Acts share a section number; the
+        // vector leg ranks the named Act second. The in-fusion statute
+        // term must promote it BEFORE the top_k cut.
+        let rec = |id: &str, doc: &str| ChunkRecord {
+            id: id.into(),
+            doc_id: doc.into(),
+            ordinal: 0,
+            text: id.into(),
+            embedding: vec![],
+            metadata: Default::default(),
+        };
+        let excise = ScoredChunk { record: rec("e1", "doc-excise"), score: 0.90 };
+        let it_act = ScoredChunk { record: rec("i1", "doc-it"), score: 0.88 };
+        let statute_docs: std::collections::HashSet<String> =
+            ["doc-it".to_string()].into_iter().collect();
+        let cfg = FusionConfig { statute_boost: 1.35, ..fusion_cfg(FusionMode::WeightedRrf) };
+        let fused = fuse_rankings(
+            "What does Section 86 of the IT Act deal with?",
+            vec![excise.clone(), it_act.clone()],
+            &[],
+            vec![],
+            2,
+            &cfg,
+            &Default::default(),
+            &statute_docs,
+        );
+        assert_eq!(fused[0].record.id, "i1", "named Act wins inside fusion");
+        let cfg_off = FusionConfig { statute_boost: 1.0, ..cfg };
+        let fused = fuse_rankings(
+            "What does Section 86 of the IT Act deal with?",
+            vec![excise, it_act],
+            &[],
+            vec![],
+            2,
+            &cfg_off,
+            &Default::default(),
+            &statute_docs,
+        );
+        assert_eq!(fused[0].record.id, "e1", "without the term, vector order stands");
+    }
+
+    #[test]
+    fn merge_legs_interleaves_by_rank_not_score() {
+        let rec = |id: &str| ChunkRecord {
+            id: id.into(),
+            doc_id: "d".into(),
+            ordinal: 0,
+            text: id.into(),
+            embedding: vec![],
+            metadata: Default::default(),
+        };
+        let scored = |id: &str, s: f32| ScoredChunk { record: rec(id), score: s };
+        // Vector leg: calibrated cosines. Graph leg: flat 0.85 scores
+        // that would swamp a raw-score merge (the measured Mix bug).
+        let vec_leg = vec![scored("v1", 0.45), scored("v2", 0.44), scored("v3", 0.43)];
+        let graph_leg = vec![scored("g1", 0.85), scored("g2", 0.85), scored("v2", 0.85)];
+        let merged = merge_legs(vec![vec_leg, graph_leg]);
+        let ids: Vec<&str> = merged.iter().map(|h| h.record.id.as_str()).collect();
+        assert_eq!(ids, vec!["v1", "g1", "v2", "g2", "v3"], "round-robin, deduped");
+        // Single leg passes through in its own order.
+        let merged = merge_legs(vec![vec![scored("a", 0.1), scored("b", 0.9)]]);
+        assert_eq!(merged[0].record.id, "a");
+        assert_eq!(merged[1].record.id, "b");
+    }
+
+    #[test]
+    fn identifier_and_statute_detection() {
+        assert!(query_has_identifier("What does Section 11 of the CPC provide?"));
+        assert!(query_has_identifier("Explain Article 21"));
+        assert!(!query_has_identifier("What makes an agreement enforceable?"));
+        assert!(statute_mentions("section 378 of the ipc").contains(&"indian penal code"));
+        assert!(statute_mentions("under the contract act, 1872").contains(&"indian contract act"));
+        assert!(jurisdiction_mentioned("what does delhi high court say", "IN-DL"));
+        assert!(jurisdiction_mentioned("indian law on bail", "IN"));
+        assert!(!jurisdiction_mentioned("french law on bail", "IN"));
+        // Abbreviated titles must match their statute (the Section 86
+        // doc is literally titled "Section 86 IT Act").
+        assert!(title_matches_statute("section 86 it act", "information technology act"));
+        assert!(title_matches_statute(
+            "indian contract act — sections 73-74",
+            "indian contract act"
+        ));
+        assert!(!title_matches_statute(
+            "indian contract act — sections 73-74",
+            "information technology act"
+        ));
+        assert!(title_matches_statute("ipc — section 378 (theft)", "indian penal code"));
+    }
+
+    #[test]
+    fn litm_order_puts_strongest_at_both_edges() {
+        assert_eq!(litm_order(5), vec![0, 2, 4, 3, 1]);
+        assert_eq!(litm_order(4), vec![0, 2, 3, 1]);
+        assert_eq!(litm_order(3), vec![0, 1, 2]);
+        assert_eq!(litm_order(6), vec![0, 2, 4, 5, 3, 1]);
+    }
+
+    #[test]
+    fn score_gap_cutoff_trims_the_cliff() {
+        std::env::set_var("LEGAL_RAG_AUTOCUT", "1");
+        let rec = |id: &str| ChunkRecord {
+            id: id.into(),
+            doc_id: "d".into(),
+            ordinal: 0,
+            text: id.into(),
+            embedding: vec![],
+            metadata: Default::default(),
+        };
+        let hits: Vec<ScoredChunk> = ["a", "b", "c", "d", "e"]
+            .iter()
+            .map(|id| ScoredChunk { record: rec(id), score: 0.5 })
+            .collect();
+        let scores = vec![0.95, 0.90, 0.88, 0.20, 0.15];
+        let kept = apply_score_gap_cutoff(hits.clone(), &scores);
+        assert_eq!(kept.len(), 3, "tail below the cliff is cut");
+        // No cliff → nothing cut.
+        let flat = vec![0.90, 0.88, 0.86, 0.84, 0.82];
+        let kept = apply_score_gap_cutoff(hits, &flat);
+        assert_eq!(kept.len(), 5);
+        std::env::remove_var("LEGAL_RAG_AUTOCUT");
     }
 
     #[test]

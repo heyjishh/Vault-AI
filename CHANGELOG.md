@@ -14,6 +14,37 @@ live**, what is **built but unverified**, and what is **roadmap**.
 
 ## [Unreleased]
 
+### Added
+- **Retrieval fusion suite + leg-merge fix + retrieval cache** (23 Oct
+  2026, **verified live**; Spice.ai-grade search patterns rewritten
+  natively in Rust — no sidecar runtime). (a) *Fusion suite*: the
+  vector↔BM25 fusion is now selectable — plain RRF, weighted RRF
+  (per-leg weights, tunable k, identifier boost), or DBSF distribution
+  normalization — plus two in-fusion terms: a **statute term** (when a
+  query names an Act, that Act's chunks are lifted inside fusion before
+  the cut; aliases match abbreviated titles like "Section 86 IT Act")
+  and an optional **recency-decay** term. (b) *Leg-merge fix*: Mix
+  mode's vector/local/global legs merged by raw score, but the legs'
+  scales are incommensurable (cosines ~0.4–0.6 vs the graph legs' flat
+  0.85), so graph-neighborhood chunks flooded the rerank pool and
+  truncated the vector leg's best hits — the Section 86 question's
+  rank-1 answer never reached the context and the model refused. Legs
+  now merge by **rank interleave**. (c) *Retrieval cache* (Spice's
+  results-caching pattern): fresh window + stale-while-revalidate,
+  keyed by question + mode + scope + corpus fingerprint. (d) Autocut
+  score-gap cutoff after reranking and lost-in-the-middle prompt
+  ordering (both env-gated). (e) Admin per-stage golden metrics
+  (`POST /admin/golden/stages`). **Measured** on the 20-rule golden set
+  (test instance): stage-level retrieval is saturated (recall 1.000 at
+  k=5/k=10 in every configuration — fusion variants are stage-neutral);
+  end-to-end, the leg-merge fix moved the golden score **12/20 →
+  15/20** (control run without it, same day: 11/20), flipping Section
+  86, Evidence Act s.101, CPC s.11 (res judicata) and the Puttaswamy
+  three-fold test to PASS; all remaining failures are answer-wording
+  only, zero source-attribution misses. Production defaults: RRF +
+  statute term 1.35; weighted RRF measured stage-neutral-to-harmful
+  (its identifier boost feeds the Act-blind BM25 leg) and ships opt-in.
+
 ### Changed
 - **Rename completed + limitations corrected** (23 Oct 2026, **verified
   live**) — every remaining legacy pre-rename product string removed

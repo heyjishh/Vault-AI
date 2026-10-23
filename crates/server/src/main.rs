@@ -264,6 +264,8 @@ async fn main() -> anyhow::Result<()> {
     // citation staleness flags, read live from the document registry.
     let rag_for_meta = rag.clone();
     query.set_doc_meta_source(Arc::new(move |id: &str| rag_for_meta.document_meta(id)));
+    // Let the retrieval cache spawn background revalidation tasks.
+    query.bind_self(&query);
     let workflows = Arc::new(legal_rag_rag::WorkflowEngine::new(query.clone()));
     let agent = Arc::new(legal_rag_rag::AutonomousAgent::new(query.clone()));
 

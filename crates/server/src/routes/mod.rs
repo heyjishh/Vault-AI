@@ -115,6 +115,7 @@ pub fn router(state: AppState) -> Router {
         .route("/api/v1/admin/golden/rules/from-activity", post(golden::from_activity))
         .route("/api/v1/admin/golden/rules/{id}", delete(golden::delete_rule))
         .route("/api/v1/admin/golden/run", post(golden::run_rules))
+        .route("/api/v1/admin/golden/stages", post(golden::run_stages))
         // Verified annotations: curated answers served verbatim.
         .route("/api/v1/admin/annotations", get(annotations::list_annotations).post(annotations::create_annotation))
         .route("/api/v1/admin/annotations/from-activity", post(annotations::from_activity))

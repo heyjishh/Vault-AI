@@ -16,7 +16,7 @@ document vault, with every answer grounded in cited, verifiable sources.
 
 | Surface | Capability |
 |---|---|
-| **Ask** | Grounded Q&A over the vault (plus optional live web blending), streamed token-by-token, with sentence-level citation pinpoints, a citation-integrity audit, an in-app source viewer that highlights the exact cited sentence, and an "As of" control — ask as of a date and jurisdiction, applied as a hard legal-validity boundary. |
+| **Ask** | Grounded Q&A over the vault (plus optional live web blending), streamed token-by-token, with sentence-level citation pinpoints, a citation-integrity audit, an in-app source viewer that highlights the exact cited sentence, and an "As of" control — ask as of a date and jurisdiction, applied as a hard legal-validity boundary. Retrieval runs a Spice-grade fusion suite rewritten natively in Rust (RRF / weighted RRF / DBSF, an in-fusion statute term, rank-interleave leg merging, and a stale-while-revalidate retrieval cache) — no sidecar search runtime. |
 | **Vault** | Document ingestion: PDF (text layer + Surya OCR for scans, incl. Hindi/Devanagari), pasted text, S3 import. Parent-child chunking, knowledge-graph extraction, per-document status, and legal-validity metadata (jurisdiction, in-force dates, superseded-by) per document. |
 | **Briefs** ("Living Brief") | Matter workspaces. Retrieval is hard-scoped to the brief's documents — a confidentiality boundary, not a filter hint. Briefs can be grouped into multi-tenant **Spaces** with owner/editor/viewer roles; non-members cannot even see that a space's briefs exist. |
 | **Interact** | Per-document summary, chronology, key clauses, risks, and grounded chat. |
@@ -159,16 +159,19 @@ annotations, hit-test). Full inventory: [docs/ARCHITECTURE.md](docs/ARCHITECTURE
 
 ## Testing & verification status
 
-- Rust workspace test suite: **79 tests green** at last full run (23 Oct 2026).
+- Rust workspace test suite: **91 tests green** at last full run (23 Oct 2026).
 - Retrieval benchmarks (offline, reproducible): hybrid BM25+vector fused
   MRR **0.833** vs 0.815 vector-only; reranker decision layer MRR **0.944**;
   Hindi↔English embedding cosine **0.89–0.92**.
 - OCR head-to-head: Surya 0.22 beat Tesseract 5 decisively on Hindi and ruled
   tables — the basis for the Surya-only decision (ADR-0007).
 - Golden-ruleset evaluation on an expanded 16-document corpus (23 Oct 2026):
-  **12/20** with the substance-based evaluator; the persistent misses are
-  retrieval ranking (fusion/rerank pool), not scoring — full classification
-  in [CHANGELOG.md](CHANGELOG.md).
+  **15/20** with the substance-based evaluator, up from 12/20 — the gain came
+  from fixing how Mix mode merges its retrieval legs (rank interleave
+  instead of raw-score merge across incommensurable scales) plus an
+  in-fusion statute term; remaining misses are answer-wording only, with
+  zero source-attribution misses — full classification in
+  [CHANGELOG.md](CHANGELOG.md).
 - End-to-end product sweeps (21 + 23 Oct 2026): every user and admin flow
   verified live, including a 17-check multi-tenant isolation suite for
   Spaces — details in [CHANGELOG.md](CHANGELOG.md).
@@ -185,4 +188,4 @@ annotations, hit-test). Full inventory: [docs/ARCHITECTURE.md](docs/ARCHITECTURE
 ## Ownership
 
 © 2026 **Jishan** and the **Juris Vault AI Team**. All rights reserved.
-Documentation set version 1.4 — 23 October 2026.
+Documentation set version 1.5 — 23 October 2026.

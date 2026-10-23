@@ -166,6 +166,93 @@ fn term_matches(term: &str, answer_norm: &str, answer_tokens: &std::collections:
     !content.is_empty() && content.iter().all(|t| answer_tokens.contains(t))
 }
 
+/// Per-stage retrieval score for one rule: did the expected source
+/// appear in this stage's ranking, and at what rank? This is the
+/// Haystack evaluation discipline — score every stage separately
+/// (vector, BM25, fused, reranked) so a golden failure is located to
+/// the stage that lost the document, not just observed end-to-end.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StageScore {
+    pub stage: String,
+    pub hit: bool,
+    pub reciprocal_rank: f32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StageAggregate {
+    pub stage: String,
+    pub rules: usize,
+    pub hits: usize,
+    pub recall: f32,
+    pub mrr: f32,
+}
+
+/// Score one hit-test report against a rule's expected sources, using
+/// the same matching semantics as the answer-level evaluator (title
+/// contains the expected string, any case). Only the first `limit`
+/// hits of each stage count — production reranks a wide pool down to
+/// the answer's top_k, so stage quality is judged at that cut. Rules
+/// without expected sources score a hit at every stage.
+pub fn stage_scores(
+    report: &legal_rag_rag::HitTestReport,
+    expected_sources: &[String],
+    limit: usize,
+) -> Vec<StageScore> {
+    let needles: Vec<String> = expected_sources.iter().map(|s| s.to_lowercase()).collect();
+    report
+        .stages
+        .iter()
+        .map(|stage| {
+            if needles.is_empty() {
+                return StageScore { stage: stage.name.clone(), hit: true, reciprocal_rank: 1.0 };
+            }
+            let mut rr = 0.0f32;
+            for (i, hit) in stage.hits.iter().take(limit.max(1)).enumerate() {
+                let title = hit.doc_title.clone().unwrap_or_default().to_lowercase();
+                if needles.iter().any(|n| title.contains(n.as_str())) {
+                    rr = 1.0 / (i as f32 + 1.0);
+                    break;
+                }
+            }
+            StageScore { stage: stage.name.clone(), hit: rr > 0.0, reciprocal_rank: rr }
+        })
+        .collect()
+}
+
+/// Aggregate per-rule stage scores into recall / MRR per stage name,
+/// preserving first-seen stage order.
+pub fn aggregate_stages(all: &[Vec<StageScore>]) -> Vec<StageAggregate> {
+    let mut order: Vec<String> = Vec::new();
+    let mut acc: std::collections::HashMap<String, (usize, usize, f32)> =
+        std::collections::HashMap::new();
+    for scores in all {
+        for s in scores {
+            if !acc.contains_key(&s.stage) {
+                order.push(s.stage.clone());
+            }
+            let e = acc.entry(s.stage.clone()).or_default();
+            e.0 += 1;
+            if s.hit {
+                e.1 += 1;
+            }
+            e.2 += s.reciprocal_rank;
+        }
+    }
+    order
+        .into_iter()
+        .map(|stage| {
+            let (rules, hits, rr_sum) = acc[&stage];
+            StageAggregate {
+                stage,
+                rules,
+                hits,
+                recall: hits as f32 / rules.max(1) as f32,
+                mrr: rr_sum / rules.max(1) as f32,
+            }
+        })
+        .collect()
+}
+
 pub fn evaluate(
     rule: &GoldenRule,
     answer: &str,
@@ -231,6 +318,44 @@ mod tests {
         assert!(!bad.passed);
         assert_eq!(bad.missing_terms.len(), 2);
         assert_eq!(bad.missing_sources.len(), 1);
+    }
+
+    #[test]
+    fn stage_scores_locate_the_losing_stage() {
+        use legal_rag_rag::{HitStage, HitTestReport, HitView};
+        let view = |title: &str| HitView {
+            chunk_id: "c".into(),
+            doc_id: "d".into(),
+            doc_title: Some(title.into()),
+            score: 0.5,
+            snippet: String::new(),
+            is_child: false,
+        };
+        let report = HitTestReport {
+            question: "q".into(),
+            stages: vec![
+                HitStage {
+                    name: "vector".into(),
+                    hits: vec![view("Indian Penal Code"), view("Indian Contract Act")],
+                },
+                HitStage {
+                    name: "fused".into(),
+                    hits: vec![view("Indian Contract Act"), view("Code of Civil Procedure")],
+                },
+            ],
+        };
+        let scores = stage_scores(&report, &["contract act".to_string()], 10);
+        assert_eq!(scores[0].stage, "vector");
+        assert!(scores[0].hit);
+        assert_eq!(scores[0].reciprocal_rank, 0.5, "contract act is rank 2 in vector");
+        assert_eq!(scores[1].reciprocal_rank, 1.0, "fusion promoted it to rank 1");
+        let agg = aggregate_stages(&[scores]);
+        assert_eq!(agg.len(), 2);
+        assert_eq!(agg[0].recall, 1.0);
+        assert_eq!(agg[1].mrr, 1.0);
+        // A stage missing the source entirely scores zero.
+        let miss = stage_scores(&report, &["motor vehicles act".to_string()], 10);
+        assert!(!miss[0].hit && miss[0].reciprocal_rank == 0.0);
     }
 
     #[test]
