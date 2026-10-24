@@ -71,7 +71,7 @@ live**, what is **built but unverified**, and what is **roadmap**.
   the MCP panel with a copyable client config, and the new hit-test
   stage. Kill switch `LEGAL_RAG_MCP=0`.
   Verification status: **live-verified on the test instance**
-  (24 Oct): 112 workspace tests + both frontend builds green;
+  (24 Oct): 110 workspace tests + both frontend builds green;
   augmentation, hyperedges (after a cross-pairing bug found in
   verification was fixed via nearest-Act pairing), HyDE expansions,
   MCP round-trips, retrieval-status and the late-interaction
@@ -105,6 +105,13 @@ live**, what is **built but unverified**, and what is **roadmap**.
   matches AWS's published signing vector) with the live round-trip
   gated behind real AWS credentials (`S3VECTORS_LIVE_TEST=1`) — the
   sandbox holds none, stated plainly rather than implied.
+
+### Fixed
+- **Stack restore now self-heals the ColBERT sidecar** (24 Oct 2026):
+  `restore-stack.sh` predated the Tier-2 sidecar, so `:8084` had to be
+  started manually after every sandbox restart; it now launches with
+  the other sidecars and joins the health-check loop. Verified: all
+  seven ports up from a bare restore with no manual step.
 
 ### Added
 - **Retrieval fusion suite + leg-merge fix + retrieval cache** (23 Oct

@@ -720,7 +720,7 @@ regression-tested); a 3-word HyDE query returned 4 expansions
 MCP initialize/tools/call round-trips passed; the hit-test
 late-interaction stage appeared and, on the Section 86 IT Act
 question, its blend corrected the top hit that vector/BM25/fusion/
-reranker stages had all ranked second. 112 workspace tests green.
+reranker stages had all ranked second. 110 workspace tests green.
 The one arc item NOT verified: S3 Vectors live round-trip (still
 gated on AWS credentials — see ADR-0020).
 
