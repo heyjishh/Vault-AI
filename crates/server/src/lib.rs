@@ -14,6 +14,7 @@ pub mod settings;
 pub mod billing;
 pub mod error;
 pub mod frontend;
+pub mod feedback;
 pub mod golden;
 pub mod routes;
 pub mod state;

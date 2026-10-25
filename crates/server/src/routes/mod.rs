@@ -8,6 +8,7 @@ pub mod annotations;
 pub mod auth;
 pub mod billing;
 pub mod create;
+pub mod feedback;
 pub mod golden;
 pub mod insights;
 pub mod knowledge;
@@ -48,6 +49,8 @@ pub fn router(state: AppState) -> Router {
         .route("/api/v1/admin/mcp", get(mcp::admin_info))
         // Knowledge: RAG query.
         .route("/api/v1/knowledge/query", post(knowledge::query))
+        .route("/api/v1/knowledge/feedback", post(feedback::submit_vote))
+        .route("/api/v1/admin/feedback", get(feedback::list_votes))
         .route("/api/v1/knowledge/source-document", post(knowledge::source_document))
         .route("/api/v1/knowledge/query/stream", post(knowledge::query_stream))
         .route("/api/v1/knowledge/research", post(knowledge::research))
@@ -119,7 +122,7 @@ pub fn router(state: AppState) -> Router {
         // Golden ruleset: evaluation questions + runs.
         .route("/api/v1/admin/golden/rules", get(golden::list_rules).post(golden::add_rule))
         .route("/api/v1/admin/golden/rules/from-activity", post(golden::from_activity))
-        .route("/api/v1/admin/golden/rules/{id}", delete(golden::delete_rule))
+        .route("/api/v1/admin/golden/rules/{id}", delete(golden::delete_rule).put(golden::update_rule))
         .route("/api/v1/admin/golden/run", post(golden::run_rules))
         .route("/api/v1/admin/golden/stages", post(golden::run_stages))
         // Verified annotations: curated answers served verbatim.

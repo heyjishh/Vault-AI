@@ -3,7 +3,7 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { motion } from 'framer-motion'
 import {
-  ArrowUp, BadgeCheck, Check, ChevronDown, Copy, ExternalLink, Globe, Lock, PanelRight, RotateCcw, ShieldCheck, Square, X,
+  ArrowUp, BadgeCheck, Check, ChevronDown, Copy, ExternalLink, Globe, Lock, PanelRight, RotateCcw, ShieldCheck, Square, ThumbsDown, ThumbsUp, X,
 } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { mattersApi, privateVaultApi, publicSettingsApi, queryStream, ragApi } from '../api/client'
@@ -515,6 +515,22 @@ function TurnView({ turn, onCopy, onRegenerate, onFollowUp, onCite, onShowSource
   onShowSources: () => void
 }) {
   const shownAnswer = useTypewriter(turn.answer, turn.streaming)
+  const [vote, setVote] = useState<'up' | 'down' | null>(null)
+  const [voting, setVoting] = useState(false)
+  const [voteError, setVoteError] = useState<string | null>(null)
+  const castVote = async (v: 'up' | 'down') => {
+    if (voting) return
+    setVoting(true)
+    setVoteError(null)
+    try {
+      await ragApi.voteFeedback(turn.question, turn.answer, v)
+      setVote(v)
+    } catch (e) {
+      setVoteError((e as Error).message)
+    } finally {
+      setVoting(false)
+    }
+  }
   const [tick, setTick] = useState(0)
   useEffect(() => {
     if (!turn.streaming) return
@@ -617,7 +633,25 @@ function TurnView({ turn, onCopy, onRegenerate, onFollowUp, onCite, onShowSource
                 <button onClick={onRegenerate} className="flex items-center gap-1.5 rounded-lex border border-stone-200 bg-white px-2.5 py-1.5 text-[12px] font-medium text-stone-600 hover:text-ink hover:border-stone-300 transition-colors">
                   <RotateCcw size={13} /> Regenerate
                 </button>
+                <button
+                  onClick={() => void castVote('up')}
+                  disabled={voting}
+                  title="This answer was helpful"
+                  className={`flex items-center gap-1.5 rounded-lex border px-2.5 py-1.5 text-[12px] font-medium transition-colors disabled:opacity-40 ${vote === 'up' ? 'bg-ink text-ivory border-ink' : 'border-stone-200 bg-white text-stone-600 hover:text-ink hover:border-stone-300'}`}
+                >
+                  <ThumbsUp size={13} /> Helpful
+                </button>
+                <button
+                  onClick={() => void castVote('down')}
+                  disabled={voting}
+                  title="This answer was not helpful"
+                  className={`flex items-center gap-1.5 rounded-lex border px-2.5 py-1.5 text-[12px] font-medium transition-colors disabled:opacity-40 ${vote === 'down' ? 'bg-ink text-ivory border-ink' : 'border-stone-200 bg-white text-stone-600 hover:text-ink hover:border-stone-300'}`}
+                >
+                  <ThumbsDown size={13} /> Not helpful
+                </button>
+                {vote && <span className="text-[12px] text-stone-400">Feedback saved</span>}
               </div>
+              {voteError && <p className="mt-2 text-[12px] text-[#a02c2c]">Could not save feedback: {voteError}</p>}
               <div className="mt-4 flex flex-wrap gap-2">
                 {FOLLOW_UPS.map((f) => (
                   <button

@@ -233,6 +233,12 @@ export const adminApi = {
   async deleteGoldenRule(id: string): Promise<void> {
     await api.delete(`/admin/golden/rules/${id}`)
   },
+  async updateGoldenRule(id: string, body: { question?: string; expected_terms?: string[]; expected_sources?: string[]; notes?: string }): Promise<GoldenRule> {
+    try {
+      const r = await api.put<GoldenRule>(`/admin/golden/rules/${id}`, body)
+      return r.data
+    } catch (e) { throw new Error(errMsg(e)) }
+  },
   async hitTest(question: string, top_k = 8): Promise<HitTestReport> {
     try {
       const r = await api.post<HitTestReport>('/admin/hit-test', { question, top_k })

@@ -20,7 +20,12 @@ impl IngestService {
     pub async fn new(config: &Config) -> Result<Self> {
         let (s3, s3_prefix) = match &config.s3 {
             Some(s3c) => {
-                let source = S3Source::connect(&s3c.bucket, &s3c.region).await?;
+                let source = S3Source::connect_with_endpoint(
+                    &s3c.bucket,
+                    &s3c.region,
+                    s3c.endpoint_url.as_deref(),
+                )
+                .await?;
                 (Some(source), s3c.prefix.clone())
             }
             None => (None, String::new()),

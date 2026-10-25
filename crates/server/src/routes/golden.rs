@@ -102,6 +102,35 @@ pub async fn delete_rule(
     }
 }
 
+#[derive(Deserialize)]
+pub struct UpdateRuleRequest {
+    pub question: Option<String>,
+    pub expected_terms: Option<Vec<String>>,
+    pub expected_sources: Option<Vec<String>>,
+    pub notes: Option<String>,
+}
+
+/// Edit an existing rule in place: only the fields present in the body
+/// change, so fixing a term or a source no longer means deleting the
+/// rule (and its run history) and re-adding it.
+pub async fn update_rule(
+    State(state): State<AppState>,
+    AdminUser(_admin): AdminUser,
+    Path(id): Path<String>,
+    Json(body): Json<UpdateRuleRequest>,
+) -> Result<Json<GoldenRule>, ApiError> {
+    if let Some(q) = &body.question {
+        if q.trim().is_empty() {
+            return Err(legal_rag_common::Error::BadRequest("question is empty".into()).into());
+        }
+    }
+    let question = body.question.map(|q| q.trim().to_string());
+    match state.golden.update(&id, question, body.expected_terms, body.expected_sources, body.notes) {
+        Some(rule) => Ok(Json(rule)),
+        None => Err(legal_rag_common::Error::NotFound("rule not found".into()).into()),
+    }
+}
+
 #[derive(Serialize)]
 pub struct RuleRunView {
     pub rule_id: String,

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Play, Plus, Trash2 } from 'lucide-react'
+import { Pencil, Play, Plus, Trash2 } from 'lucide-react'
 import { adminApi, type GoldenRule } from '../api'
 import { ErrorBanner, PageHead, Spinner, StatCard } from '../ui'
 
@@ -48,6 +48,31 @@ export default function GoldenPage() {
     onSuccess: invalidate,
   })
 
+  const [editing, setEditing] = useState<GoldenRule | null>(null)
+  const [editQuestion, setEditQuestion] = useState('')
+  const [editTerms, setEditTerms] = useState('')
+  const [editSources, setEditSources] = useState('')
+  const [editNotes, setEditNotes] = useState('')
+
+  const startEdit = (rule: GoldenRule) => {
+    setEditing(rule)
+    setEditQuestion(rule.question)
+    setEditTerms(rule.expected_terms.join(', '))
+    setEditSources(rule.expected_sources.join(', '))
+    setEditNotes(rule.notes)
+  }
+
+  const update = useMutation({
+    mutationFn: () =>
+      adminApi.updateGoldenRule(editing!.id, {
+        question: editQuestion.trim(),
+        expected_terms: editTerms.split(',').map((s) => s.trim()).filter(Boolean),
+        expected_sources: editSources.split(',').map((s) => s.trim()).filter(Boolean),
+        notes: editNotes.trim(),
+      }),
+    onSuccess: () => { setEditing(null); invalidate() },
+  })
+
   const run = useMutation({
     mutationFn: adminApi.runGolden,
     onSuccess: () => { setRunError(null); invalidate() },
@@ -84,6 +109,44 @@ export default function GoldenPage() {
       </div>
       {runError && <div className="mt-4"><ErrorBanner message={runError} /></div>}
       {add.isError && <div className="mt-4"><ErrorBanner message={(add.error as Error).message} /></div>}
+      {update.isError && <div className="mt-4"><ErrorBanner message={(update.error as Error).message} /></div>}
+      {editing && (
+        <div className="rounded-lex-lg border border-stone-200 bg-white shadow-lex px-6 py-5 grid gap-3.5 mt-9">
+          <h2 className="font-display text-xl">Edit rule</h2>
+          <label className="block">
+            <span className="text-meta uppercase tracking-wider text-stone-500 font-medium">Question</span>
+            <input value={editQuestion} onChange={(e) => setEditQuestion(e.target.value)} className="mt-1.5 w-full rounded-lex border border-stone-300 px-3 py-2 text-[14px]" />
+          </label>
+          <label className="block">
+            <span className="text-meta uppercase tracking-wider text-stone-500 font-medium">Expected terms (comma-separated)</span>
+            <input value={editTerms} onChange={(e) => setEditTerms(e.target.value)} className="mt-1.5 w-full rounded-lex border border-stone-300 px-3 py-2 text-[14px]" />
+          </label>
+          <label className="block">
+            <span className="text-meta uppercase tracking-wider text-stone-500 font-medium">Expected sources (comma-separated)</span>
+            <input value={editSources} onChange={(e) => setEditSources(e.target.value)} className="mt-1.5 w-full rounded-lex border border-stone-300 px-3 py-2 text-[14px]" />
+          </label>
+          <label className="block">
+            <span className="text-meta uppercase tracking-wider text-stone-500 font-medium">Notes</span>
+            <input value={editNotes} onChange={(e) => setEditNotes(e.target.value)} className="mt-1.5 w-full rounded-lex border border-stone-300 px-3 py-2 text-[14px]" />
+          </label>
+          <div className="flex gap-3">
+            <button
+              onClick={() => update.mutate()}
+              disabled={!editQuestion.trim() || update.isPending}
+              className="rounded-lex bg-ink text-ivory px-4 py-2.5 text-[13.5px] font-medium disabled:opacity-40"
+            >
+              Save changes
+            </button>
+            <button
+              onClick={() => setEditing(null)}
+              className="rounded-lex border border-stone-300 px-4 py-2.5 text-[13.5px] font-medium"
+            >
+              Cancel
+            </button>
+          </div>
+          <p className="text-meta text-stone-400">Editing keeps the rule's run history — only the fields above change.</p>
+        </div>
+      )}
 
       {/* Rules table */}
       <h2 className="font-display text-xl mt-9 mb-3">Rules</h2>
@@ -127,6 +190,9 @@ export default function GoldenPage() {
                     <span className="line-clamp-3">{r.last_result?.answer_excerpt ?? '—'}</span>
                   </td>
                   <td className="px-3 py-3">
+                    <button onClick={() => startEdit(r)} className="text-stone-300 hover:text-ink mr-2" title="Edit rule">
+                      <Pencil size={15} />
+                    </button>
                     <button onClick={() => remove.mutate(r.id)} className="text-stone-300 hover:text-[#a02c2c]" title="Delete rule">
                       <Trash2 size={15} />
                     </button>
@@ -193,7 +259,7 @@ export default function GoldenPage() {
             ))}
           </div>
           <p className="text-meta text-stone-400 mt-3">
-            Promoted rules start with no expectations — edit them by deleting and re-adding with terms/sources, or add expectations when you promote from Insights.
+            Promoted rules start with no expectations — use the pencil icon on a rule to add or fix its terms and sources.
           </p>
         </div>
       </div>

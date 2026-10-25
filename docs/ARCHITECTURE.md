@@ -5,7 +5,7 @@
 | **Document** | System Architecture (engineering, infrastructure & AWS platform teams) |
 | **Product** | Juris Vault AI — legal document intelligence for Indian law practice |
 | **Owner** | **Jishan** — Juris Vault AI Team |
-| **Version** | 1.7 — 24 October 2026 |
+| **Version** | 1.8 — 25 October 2026 |
 | **System version** | 0.1.0 (Cargo workspace version) |
 | **Companion documents** | [ADR.md](ADR.md) (decision records ADR-0001…0018) · [README.md](../README.md) · [CHANGELOG.md](../CHANGELOG.md) · [DEPLOY.md](../DEPLOY.md) |
 | **Status labels** | **LIVE-VERIFIED** = proven end-to-end in production-like runs · **BUILT** = implemented, verification partial · **TARGET** = design for the AWS move, not yet deployed · **ROADMAP** = agreed direction, not built |
@@ -195,7 +195,10 @@ Question
   8. Private leg (if private=true and vault unlocked): owner's chunks only,
      top-3 decrypted in memory, [private:N] citations
   9. Generation (streaming SSE: heartbeat Status every 1.6s → Sources →
-     Deltas → Done; verdict-first format addendum when web is blended)
+     Deltas → Done; verdict-first format addendum for all grounded
+     answers — corpus answers got the same Verdict/Analysis/Caveats
+     contract as web answers on 25 Oct 2026, citing [doc:N] only;
+     Bypass answers are untouched)
  10. Citation-integrity audit — every [doc|web|private:N] marker checked
      against the exact excerpt shown to the model; <50% key-term support
      or unknown source → marker stripped; receipt returned to the client
@@ -230,6 +233,20 @@ server** (`POST /mcp`, tools `search_vault` / `list_documents` /
 `ask`, caller-token auth). The Command Center's Retrieval & Models
 page reports the live stack state (`GET /api/v1/admin/retrieval-status`)
 and hit-testing shows the late-interaction stage when it is active.
+
+25 Oct 2026 additions (this release): a **reranker token cache** in
+the :8081 sidecar (tokenized (query, document) pairs cached server-side
+by SHA-256 of the pair; `RERANK_TOKEN_CACHE=0` disables, cap
+`RERANK_TOKEN_CACHE_MAX_ENTRIES` default 10000; stats on `GET /health`
+and `GET /stats`; repeat-pair scores match fresh `CrossEncoder.predict`
+to 7.5e-09); a **golden-rule edit endpoint** (`PUT
+/api/v1/admin/golden/rules/{id}`, partial edit, run history preserved)
+with a pencil button on the admin Golden Ruleset page; a **thumbs
+up/down feedback loop** (Ask buttons; votes in `feedback.json`, one per
+user per answer with upsert on re-vote; `GET /api/v1/admin/feedback`
+read endpoint); and an **S3-compatible endpoint option** for the vault
+import (`LEGAL_RAG_S3_ENDPOINT_URL`, path-style addressing — R2;
+live round-trip not verified, no credentials in this environment).
 
 ### 5.3 Research & workflows
 
@@ -585,12 +602,14 @@ Server (C1) environment. Defaults in `crates/common` / `.env.example`.
 `LEGAL_RAG_EMBEDDING_DIMS`.
 **Retrieval**: `LEGAL_RAG_RERANKER` (`local`|`llm`), `LEGAL_RAG_RERANK_URL`,
 `LEGAL_RAG_RERANK` (on/off), `LEGAL_RAG_RERANK_CANDIDATES`, `LEGAL_RAG_RERANK_POOL`,
-`LEGAL_RAG_RERANK_TIMEOUT_MS`, `LEGAL_RAG_CACHE_ENABLED`, `LEGAL_RAG_SEMANTIC_CACHE`,
+`LEGAL_RAG_RERANK_TIMEOUT_MS`, `RERANK_TOKEN_CACHE` (on/off),
+`RERANK_TOKEN_CACHE_MAX_ENTRIES`, `LEGAL_RAG_CACHE_ENABLED`, `LEGAL_RAG_SEMANTIC_CACHE`,
 `LEGAL_RAG_SEMANTIC_THRESHOLD`, `LEGAL_RAG_ANNOTATION_THRESHOLD`,
 `LEGAL_RAG_PARENT_CHILD`, `LEGAL_RAG_CHILD_CHARS`, `LEGAL_RAG_CHUNK_SIZE`,
 `LEGAL_RAG_CHUNK_OVERLAP`.
 **Vector store**: `SERENEDB_URL`, `SERENEDB_TABLE`.
 **Ingest/OCR**: `LEGAL_RAG_S3_BUCKET`, `LEGAL_RAG_S3_REGION`, `LEGAL_RAG_S3_PREFIX`,
+`LEGAL_RAG_S3_ENDPOINT_URL` (S3-compatible endpoint, path-style; e.g. R2),
 `RAG_ANYTHING_MAX_CONCURRENT_FILES`, `RAG_ANYTHING_ENABLE_IMAGE_PROCESSING`,
 `RAG_ANYTHING_ENABLE_TABLE_PROCESSING`, `RAG_ANYTHING_ENABLE_EQUATION_PROCESSING`,
 `RAG_ANYTHING_OCR_ENABLED`, `RAG_ANYTHING_OCR_MIN_TEXT_CHARS`,
@@ -599,20 +618,25 @@ Server (C1) environment. Defaults in `crates/common` / `.env.example`.
 **Billing**: `LEGAL_RAG_PAYMENT_PROVIDER` (`mock`|`youpi`), `LEGAL_RAG_YOUPI_URL`,
 `LEGAL_RAG_YOUPI_MERCHANT_ID`, `LEGAL_RAG_YOUPI_WEBHOOK_SECRET`.
 
-## Appendix B — API inventory (65 routes, `/api/v1`)
+## Appendix B — API inventory (66 paths, `/api/v1`; count verified
+25 Oct 2026 from the route table; 73 method-endpoints on those paths)
 
 - **auth**: register · login · refresh · me · oidc/login · oidc/callback
 - **vault**: documents (create/list/delete) · search · ingest (S3)
 - **knowledge**: query · query/stream (SSE) · research · workflows ·
   workflows/run · interact · draft · source-document · graph · stats ·
-  cache-stats · documents (interact corpus)
+  cache-stats · documents (interact corpus) · feedback (thumbs vote) ·
+  agents/autonomous
 - **matters**: briefs CRUD · documents attach/detach · timeline · memory
+- **spaces**: list/create · members
 - **billing**: plans · me · checkout · payments · payments/:id · webhook/youpi
 - **private-vault**: status · password (set) · unlock · lock · documents
 - **settings**: public · **dashboard**: me
 - **admin**: users (list/get/patch) · settings (get/put) · billing/overview ·
   billing/settings · insights · insights/users/:id · golden/rules (+from-activity) ·
-  golden/run · annotations (+from-activity, toggle) · hit-test
+  golden/rules/:id (edit/put, delete) · golden/run · golden/stages ·
+  annotations (+from-activity, toggle) · hit-test · retrieval-status ·
+  mcp · feedback (read)
 
 ## Appendix C — Port & process inventory
 
@@ -624,10 +648,11 @@ Server (C1) environment. Defaults in `crates/common` / `.env.example`.
 | 8081 | reranker sidecar | all |
 | 8082 | Gemini bridge | test only |
 | 8083 | local bge-m3 embeddings sidecar | test/local |
+| 8084 | ColBERT late-interaction sidecar (opt-in, off by default) | all |
 
 ---
 
-*Document control: v1.2 — authored 21 Oct 2026 by the Juris Vault AI Team (v1.1 adds §12.6, the shared-estimate alternative; v1.2 adds the AWS WAF line to §12.6, 23 Oct 2026)
+*Document control: v1.3 — authored 21 Oct 2026 by the Juris Vault AI Team (v1.1 adds §12.6, the shared-estimate alternative; v1.2 adds the AWS WAF line to §12.6, 23 Oct 2026; v1.3 adds the 25 Oct 2026 release notes — verdict-first corpus answers, reranker token cache, golden-rule edit, thumbs feedback, R2 endpoint — to §5.2 and Appendices A–C)
 (owner: Jishan). Update this document in the same change as any architecture
 change, and add the corresponding ADR (or amend the existing one) — see the
 changelog discipline in [CHANGELOG.md](../CHANGELOG.md).*

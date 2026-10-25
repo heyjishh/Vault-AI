@@ -54,6 +54,14 @@ pub struct S3Config {
     pub bucket: String,
     pub region: String,
     pub prefix: String,
+    /// S3-compatible endpoint override (`LEGAL_RAG_S3_ENDPOINT_URL`).
+    /// Set for Cloudflare R2 (`https://<account-id>.r2.cloudflarestorage.com`)
+    /// or any other S3-compatible store; `None` keeps stock AWS
+    /// endpoints. When set, the client uses path-style addressing
+    /// (`<endpoint>/<bucket>/<key>`), which is what R2-style stores
+    /// expect, instead of virtual-hosted addressing.
+    #[serde(default)]
+    pub endpoint_url: Option<String>,
 }
 
 /// Embedding provider configuration (OpenAI-compatible HTTP API).
@@ -124,6 +132,7 @@ impl Config {
                 bucket,
                 region,
                 prefix: env_or("LEGAL_RAG_S3_PREFIX", ""),
+                endpoint_url: env_opt("LEGAL_RAG_S3_ENDPOINT_URL"),
             }),
             _ => None,
         };

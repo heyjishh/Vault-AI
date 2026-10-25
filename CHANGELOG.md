@@ -14,7 +14,77 @@ live**, what is **built but unverified**, and what is **roadmap**.
 
 ## [Unreleased]
 
+## [1.8.0] — 2026-10-25
+
 ### Added
+- **R2 / S3-compatible endpoint option for the S3 vault import**
+  (25 Oct 2026). `S3Config` gains `endpoint_url`
+  (`LEGAL_RAG_S3_ENDPOINT_URL`); `S3Source::connect_with_endpoint`
+  builds the SDK client with that endpoint and path-style addressing
+  forced (`<endpoint>/<bucket>/<key>`), which is what R2-style
+  stores expect, instead of virtual-hosted AWS addressing. Region is
+  still required for signing (R2 users set it to `auto`). Unset, the
+  client is stock AWS, unchanged. **Not live-verified by design**:
+  no R2/S3 credentials exist in this environment, so verification is
+  a unit test (endpoint and AWS-default construction, accessors,
+  hermetic dummy credentials, 0.05s, no network touched) — a live
+  R2 round-trip still needs real credentials.
+- **Verdict-first format for corpus Ask answers** (25 Oct 2026).
+  The verdict-first shape that web-augmented answers already used
+  (a `## Verdict` section with the direct answer in 2–4 sentences,
+  then `## Analysis`, then `## Caveats` only when sources conflict or
+  a source is dated) now applies to corpus (non-web) answers too, via
+  a new `CORPUS_FORMAT_ADDENDUM` in `crates/rag/src/query.rs` that
+  cites `[doc:N]` only — it never mentions `[web:N]`, so a corpus
+  answer is never invited to invent a web citation. Web answers keep
+  their existing addendum byte-for-byte; Bypass (own-knowledge)
+  answers are untouched, and the citation-integrity audit is
+  format-agnostic, so it keeps checking every marker either way.
+  **Verified live 25 Oct** on the :3001 test instance: a fresh corpus
+  question answered starting with `## Verdict` plus `## Analysis`,
+  3 citations, audit 15 checked / 14 verified / 1 stripped, zero
+  `[web:N]` markers; a web-augmented question also opened with
+  `## Verdict` with the web leg running (web:0, web:1 in citations)
+  and audit 11 checked / 10 verified / 1 stripped.
+- **Thumbs up/down feedback loop** (25 Oct 2026). Ask answers now
+  carry Helpful / Not helpful buttons; votes are stored server-side
+  (`feedback.json`) with the question and an excerpt of the judged
+  answer, one vote per user per answer (re-voting updates instead of
+  duplicating). Votes are retrievable at the documented read endpoint
+  `GET /api/v1/admin/feedback` (votes newest-first with up/down
+  counts); no admin UI page was added for it. Invalid votes are
+  rejected (400) and voting requires login (401 without a token).
+  **Verified live 25 Oct** on the :3001 test instance: vote up, then
+  re-vote down on the same answer (same vote id, counts flipped
+  1/0 to 0/1), with the probe vote cleaned from test data after.
+- **Golden-rule edit endpoint** (25 Oct 2026). Admins can now edit an
+  existing golden rule in place via `PUT /api/v1/admin/golden/rules/{id}`
+  (only the fields present in the body change; id, source, created_at,
+  and run history are never touched), with a pencil button on each row
+  of the admin Golden Ruleset page. Editing no longer means deleting
+  the rule and re-adding it. Empty questions are rejected (400) and
+  unknown ids return 404. **Verified live 25 Oct** on the :3001 test
+  instance: a temp rule was added, partially edited (terms + notes
+  changed, question preserved), confirmed via GET, then deleted,
+  leaving the 20-rule set intact.
+- **Reranker token cache** (25 Oct 2026; txtai-style). The
+  cross-encoder sidecar (`tools/rerank/bge_reranker_sidecar.py`, :8081)
+  now caches tokenized (query, document) pairs server-side, keyed by
+  SHA-256 over the full pair text, so repeat pairs skip tokenization
+  and go straight to the model forward. Kill switch
+  `RERANK_TOKEN_CACHE=0` (default enabled; disabled mode falls back
+  to the original `CrossEncoder.predict` path unchanged); cap
+  `RERANK_TOKEN_CACHE_MAX_ENTRIES` (default 10000, oldest evicted
+  first); cache stats (`enabled`, `hits`, `misses`, `entries`) are
+  reported additively in `GET /health` and in the new `GET /stats`.
+  The `/rerank` request/response contract is unchanged. **Verified
+  live 25 Oct** with the repeatable probe
+  `tools/rerank/test_token_cache.py` (no Rust dependency): a repeat
+  identical 3-document call went from 3 misses to 3 hits, and sidecar
+  scores matched a fresh `CrossEncoder.predict` computation to a max
+  abs diff of 7.5e-09 (tolerance 1e-4); the disable knob was verified
+  by restart (`enabled: false`, 0 hits on repeat calls) and the
+  sidecar was left running cache-enabled.
 - **Tier-2 retrieval arc — augmentation, hyperedges, HyDE, late
   interaction, Tantivy, MCP** (24 Oct 2026; ADR-0021). Directed by the
   owner as the complete remaining take-list from the RAG landscape

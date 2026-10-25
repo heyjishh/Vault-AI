@@ -86,6 +86,11 @@ export const ragApi = {
       return r.data
     } catch (e) { throw new Error(err(e)) }
   },
+  async voteFeedback(question: string, answer: string, vote: 'up' | 'down'): Promise<void> {
+    try {
+      await api.post('/knowledge/feedback', { question, answer, vote })
+    } catch (e) { throw new Error(err(e)) }
+  },
   async sourceDocument(body: { source_url?: string; chunk_id?: string; doc_id?: string }): Promise<SourceDocument> {
     try {
       const r = await api.post<SourceDocument>('/knowledge/source-document', body)

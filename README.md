@@ -137,6 +137,7 @@ annotated template). The load-bearing variables:
 | `LEGAL_RAG_WEB_SIDECAR` | Path to `tools/web` (web blending on/off: `LEGAL_RAG_WEB_SEARCH`) |
 | `LEGAL_RAG_OIDC_*` | Optional OIDC (Auth0-compatible) sign-in |
 | `LEGAL_RAG_S3_BUCKET` / `_REGION` / `_PREFIX` | S3 vault import source |
+| `LEGAL_RAG_S3_ENDPOINT_URL` | S3-compatible endpoint override (e.g. Cloudflare R2 `https://<account-id>.r2.cloudflarestorage.com`); enables path-style addressing; unset = stock AWS endpoints |
 | `LEGAL_RAG_PAYMENT_PROVIDER` | `mock` (test) or `youpi` (UPI; see ADR-0013 caveat) |
 | `LEGAL_RAG_SEMANTIC_THRESHOLD` / `LEGAL_RAG_ANNOTATION_THRESHOLD` | Cache / verified-answer match thresholds |
 | `LEGAL_RAG_CHILD_CHARS` / `LEGAL_RAG_PARENT_CHILD` | Parent-child chunking controls |
@@ -188,4 +189,4 @@ annotations, hit-test). Full inventory: [docs/ARCHITECTURE.md](docs/ARCHITECTURE
 ## Ownership
 
 © 2026 **Jishan** and the **Juris Vault AI Team**. All rights reserved.
-Documentation set version 1.7 — 24 October 2026. Tier-2 retrieval arc (ADR-0021): index-time augmentation, statute hyperedges, HyDE/multi-query, ColBERT late interaction (opt-in), Tantivy BM25 option, MCP server.
+Documentation set version 1.8 — 25 October 2026. This release: verdict-first format for corpus Ask answers, reranker token cache, golden-rule edit endpoint, thumbs up/down feedback loop, R2/S3-compatible endpoint option for the vault import. Tier-2 retrieval arc (ADR-0021): index-time augmentation, statute hyperedges, HyDE/multi-query, ColBERT late interaction (opt-in), Tantivy BM25 option, MCP server.

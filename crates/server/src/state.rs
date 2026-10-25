@@ -29,6 +29,7 @@ pub struct AppState {
     pub billing: Arc<crate::billing::BillingStore>,
     pub activity: Arc<crate::activity::ActivityStore>,
     pub golden: Arc<crate::golden::GoldenStore>,
+    pub feedback: Arc<crate::feedback::FeedbackStore>,
     pub annotations: Arc<crate::annotations::AnnotationStore>,
     pub matters: Arc<crate::matters::MatterStore>,
     pub spaces: Arc<crate::spaces::SpaceStore>,

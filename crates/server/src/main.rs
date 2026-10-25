@@ -370,6 +370,9 @@ async fn main() -> anyhow::Result<()> {
     let golden = std::sync::Arc::new(
         legal_rag_server::golden::GoldenStore::load(data_dir.join("golden.json")),
     );
+    let feedback = std::sync::Arc::new(
+        legal_rag_server::feedback::FeedbackStore::load(data_dir.join("feedback.json")),
+    );
     let annotations = std::sync::Arc::new(
         legal_rag_server::annotations::AnnotationStore::load(data_dir.join("annotations.json")),
     );
@@ -427,6 +430,7 @@ async fn main() -> anyhow::Result<()> {
         billing,
         activity,
         golden,
+        feedback,
         annotations,
         matters,
         spaces,

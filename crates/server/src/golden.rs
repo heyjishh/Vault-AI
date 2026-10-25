@@ -102,6 +102,39 @@ impl GoldenStore {
         removed
     }
 
+    /// Partial edit of an existing rule: only `Some` fields change.
+    /// The id, source, created_at, and last_result are never touched, so
+    /// editing expectations does not erase a rule's run history.
+    /// Returns the updated rule, or `None` when the id is unknown.
+    pub fn update(
+        &self,
+        id: &str,
+        question: Option<String>,
+        expected_terms: Option<Vec<String>>,
+        expected_sources: Option<Vec<String>>,
+        notes: Option<String>,
+    ) -> Option<GoldenRule> {
+        let updated = {
+            let mut data = self.data.write().unwrap();
+            let rule = data.rules.iter_mut().find(|r| r.id == id)?;
+            if let Some(q) = question {
+                rule.question = q;
+            }
+            if let Some(t) = expected_terms {
+                rule.expected_terms = t;
+            }
+            if let Some(s) = expected_sources {
+                rule.expected_sources = s;
+            }
+            if let Some(n) = notes {
+                rule.notes = n;
+            }
+            rule.clone()
+        };
+        self.save();
+        Some(updated)
+    }
+
     pub fn set_result(&self, id: &str, result: RuleResult) {
         {
             let mut data = self.data.write().unwrap();
@@ -318,6 +351,47 @@ mod tests {
         assert!(!bad.passed);
         assert_eq!(bad.missing_terms.len(), 2);
         assert_eq!(bad.missing_sources.len(), 1);
+    }
+
+    #[test]
+    fn update_edits_only_given_fields_and_preserves_history() {
+        let path = std::env::temp_dir()
+            .join(format!("golden-update-test-{}.json", std::process::id()));
+        let _ = std::fs::remove_file(&path);
+        let store = GoldenStore::load(path.clone());
+        let mut rule = rule(vec!["old term"], vec!["old source"]);
+        rule.id = "r-update".into();
+        rule.notes = "old notes".into();
+        rule.source = "captured".into();
+        rule.last_result = Some(RuleResult {
+            passed: true,
+            missing_terms: vec![],
+            missing_sources: vec![],
+            answer_excerpt: "old answer".into(),
+            citations: 2,
+            ran_at: Utc::now(),
+        });
+        let created = rule.created_at;
+        store.add(rule);
+        let updated = store
+            .update("r-update", None, Some(vec!["new term".into()]), None, Some("new notes".into()))
+            .expect("rule must exist");
+        assert_eq!(updated.question, "q", "question untouched when absent");
+        assert_eq!(updated.expected_terms, vec!["new term"]);
+        assert_eq!(updated.expected_sources, vec!["old source"], "sources untouched when absent");
+        assert_eq!(updated.notes, "new notes");
+        assert_eq!(updated.id, "r-update");
+        assert_eq!(updated.source, "captured");
+        assert_eq!(updated.created_at, created);
+        assert!(updated.last_result.is_some(), "run history must survive an edit");
+        assert!(store.update("missing-id", None, None, None, None).is_none());
+        // The edit persisted: a fresh load sees it.
+        let reloaded = GoldenStore::load(path.clone());
+        let again = reloaded.list().into_iter().find(|r| r.id == "r-update").expect("rule persisted");
+        assert_eq!(again.expected_terms, vec!["new term"]);
+        assert_eq!(again.notes, "new notes");
+        let _ = std::fs::remove_file(&path);
+        let _ = std::fs::remove_file(path.with_extension("json.tmp"));
     }
 
     #[test]

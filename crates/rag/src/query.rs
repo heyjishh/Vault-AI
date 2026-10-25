@@ -82,6 +82,24 @@ Cite a source ONLY for propositions its text actually states — never for gener
 Prefer court and government sources over commentary; when sources disagree, say so and cite both. \
 One bracket per source: write [web:1] [web:2], not [web:1, web:2].";
 
+/// Format contract appended to the system prompt for corpus-only
+/// answers: the same verdict-first shape as web answers, but citing
+/// corpus sources only. Corpus answers previously got no format
+/// contract at all, so their shape was whatever the model chose. The
+/// web addendum is kept byte-for-byte for web answers; this one never
+/// mentions [web:N], so a corpus answer is never invited to invent a
+/// web citation (the audit would strip it anyway, but not inviting it
+/// is cleaner). Bypass answers are untouched — they return before any
+/// addendum is applied.
+pub const CORPUS_FORMAT_ADDENDUM: &str = "\n\nCORPUS ANSWER FORMAT — follow exactly:\n\
+## Verdict\nThe direct answer in 2-4 sentences. Every factual claim cited inline.\n\
+## Analysis\nThe reasoning, organised with short sub-headings where the material warrants it. \
+Cite every factual claim inline as [doc:N], attached to the sentence it supports.\n\
+## Caveats\nInclude this section ONLY if sources conflict, a key source is dated, or the position may have changed since publication.\n\
+Cite a source ONLY for propositions its text actually states — never for general background. \
+Prefer primary sources (statutes, judgments) over commentary; when sources disagree, say so and cite both. \
+One bracket per source: write [doc:1] [doc:2], not [doc:1, doc:2].";
+
 /// Pick the most question-relevant passages from a fetched page rather
 /// than its head (usually navigation/boilerplate). Paragraphs are scored
 /// by distinct query-term coverage; the best are re-joined in original
@@ -1304,6 +1322,8 @@ impl QueryService {
         let mut system = self.answer_system();
         if !web_pages.is_empty() {
             system.push_str(WEB_FORMAT_ADDENDUM);
+        } else {
+            system.push_str(CORPUS_FORMAT_ADDENDUM);
         }
         Ok((system, user_prompt, citations, scope_note, expansions))
     }
@@ -2848,6 +2868,35 @@ mod tests {
         let ans = svc.query("What is a contract?", QueryMode::Bypass, 3).await.unwrap();
         assert!(ans.citations.is_empty());
         assert!(!ans.answer.is_empty());
+    }
+
+    #[tokio::test]
+    async fn verdict_first_format_for_corpus_and_web() {
+        let (svc, _) = seeded().await;
+        let (system, _, _, _, _) = svc
+            .prepare_context("What did Acme agree to?", QueryMode::Mix, 3, &[], None, &[], false)
+            .await
+            .unwrap();
+        assert!(system.contains("## Verdict"), "corpus answers must carry the verdict-first format");
+        assert!(system.contains("[doc:N]"), "corpus format must cite corpus sources");
+        assert!(!system.contains("[web:N]"), "corpus format must never invite web citations");
+        let page = crate::web::FetchedPage {
+            url: "https://example.com".into(),
+            title: "Example".into(),
+            text: "Acme agrees to confidentiality.".into(),
+            date: None,
+        };
+        let (web_system, _, _, _, _) = svc
+            .prepare_context("What did Acme agree to?", QueryMode::Mix, 3, &[page], None, &[], false)
+            .await
+            .unwrap();
+        assert!(web_system.contains("## Verdict"), "web answers keep the verdict-first format");
+        assert!(web_system.contains("WEB-AUGMENTED ANSWER FORMAT"));
+        let (bypass_system, _, _, _, _) = svc
+            .prepare_context("What is a contract?", QueryMode::Bypass, 3, &[], None, &[], false)
+            .await
+            .unwrap();
+        assert!(!bypass_system.contains("## Verdict"), "bypass answers get no format contract");
     }
 
     /// Embeddings that map every text to the same vector — paraphrases
