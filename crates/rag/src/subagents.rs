@@ -279,6 +279,46 @@ fn truncate(s: &str, n: usize) -> String {
     s.chars().take(n).collect()
 }
 
+/// Fold one researcher's answer into the run's global citation space:
+/// dedupe by chunk id, remap the branch's per-answer markers onto
+/// global keys, and return (branch citations, remapped answer text).
+/// Shared by the parallel wave and the sequential retry so both paths
+/// produce identical citation numbering.
+#[allow(clippy::too_many_arguments)]
+fn incorporate_branch(
+    ans: &crate::query::QueryAnswer,
+    global_citations: &mut Vec<Citation>,
+    by_chunk: &mut HashMap<String, String>,
+    doc_counter: &mut usize,
+    web_counter: &mut usize,
+) -> (Vec<Citation>, String) {
+    let mut map: HashMap<String, String> = HashMap::new();
+    let mut branch_citations: Vec<Citation> = Vec::new();
+    for c in &ans.citations {
+        if let Some(existing) = by_chunk.get(&c.chunk_id) {
+            map.insert(c.doc_id.clone(), existing.clone());
+            continue;
+        }
+        let (kind, _) = c.doc_id.split_once(':').unwrap_or(("doc", "0"));
+        let new_key = if kind == "web" {
+            let k = format!("web:{web_counter}");
+            *web_counter += 1;
+            k
+        } else {
+            let k = format!("doc:{doc_counter}");
+            *doc_counter += 1;
+            k
+        };
+        by_chunk.insert(c.chunk_id.clone(), new_key.clone());
+        map.insert(c.doc_id.clone(), new_key.clone());
+        let mut gc = c.clone();
+        gc.doc_id = new_key;
+        global_citations.push(gc.clone());
+        branch_citations.push(gc);
+    }
+    (branch_citations, remap_markers(&ans.answer, &map))
+}
+
 pub struct SubAgentOrchestrator {
     query: Arc<QueryService>,
     /// Admin-set standing instructions, injected into the drafter
@@ -509,35 +549,13 @@ impl SubAgentOrchestrator {
                 usage::record_embeddings(totals.embedding_tokens);
                 total_tokens += totals.total();
                 if let Some(ans) = answer {
-                    // Remap this branch's markers onto global keys.
-                    let mut map: HashMap<String, String> = HashMap::new();
-                    let mut branch_citations: Vec<Citation> = Vec::new();
-                    for c in &ans.citations {
-                        if let Some(existing) = by_chunk.get(&c.chunk_id) {
-                            map.insert(c.doc_id.clone(), existing.clone());
-                            continue;
-                        }
-                        let (kind, _) = c
-                            .doc_id
-                            .split_once(':')
-                            .unwrap_or(("doc", "0"));
-                        let new_key = if kind == "web" {
-                            let k = format!("web:{web_counter}");
-                            web_counter += 1;
-                            k
-                        } else {
-                            let k = format!("doc:{doc_counter}");
-                            doc_counter += 1;
-                            k
-                        };
-                        by_chunk.insert(c.chunk_id.clone(), new_key.clone());
-                        map.insert(c.doc_id.clone(), new_key.clone());
-                        let mut gc = c.clone();
-                        gc.doc_id = new_key;
-                        global_citations.push(gc.clone());
-                        branch_citations.push(gc);
-                    }
-                    let remapped = remap_markers(&ans.answer, &map);
+                    let (branch_citations, remapped) = incorporate_branch(
+                        &ans,
+                        &mut global_citations,
+                        &mut by_chunk,
+                        &mut doc_counter,
+                        &mut web_counter,
+                    );
                     receipt.citations = branch_citations.clone();
                     receipt.contribution = truncate(&remapped, 1200);
                     if !findings_text.is_empty() {
@@ -567,6 +585,116 @@ impl SubAgentOrchestrator {
                 if over_cap(total_tokens) {
                     stopped = "budget".to_string();
                     break;
+                }
+            }
+
+            // Sequential retry for branches whose PARALLEL attempt
+            // timed out: on a contended provider the same leg call
+            // usually succeeds alone (verified on the anonymous
+            // Gemini bridge, where one leg call takes ~80s but three
+            // in parallel blow the 120s deadline). Bounded — one
+            // retry per timed-out branch, same timeout — so the run
+            // still cannot hang, and on a fast provider this never
+            // triggers. Failed (non-timeout) branches are not retried.
+            if stopped != "budget" {
+                let timed_out: Vec<(String, String)> = receipts
+                    .iter()
+                    .filter(|r| r.role == "researcher" && r.status == "timeout")
+                    .filter_map(|r| {
+                        r.name
+                            .strip_prefix("researcher-")
+                            .and_then(|n| n.parse::<usize>().ok())
+                            .and_then(|n| branches.get(n - 1).map(|b| (r.name.clone(), b.clone())))
+                    })
+                    .collect();
+                for (name, branch) in timed_out {
+                    if over_cap(total_tokens) {
+                        stopped = "budget".to_string();
+                        break;
+                    }
+                    self.progress(&progress, &format!("{name}: sequential retry"));
+                    let t0 = Instant::now();
+                    let child = usage::new_scope();
+                    let child2 = child.clone();
+                    let branch_owned = branch.clone();
+                    let fut = usage::scope_usage(child2, async {
+                        self.researcher_query(&branch_owned, &scope_docs).await
+                    });
+                    let retry = tokio::time::timeout(timeout, fut).await;
+                    let totals = child.lock().map(|t| *t).unwrap_or_default();
+                    usage::record_llm(totals.llm_prompt_tokens, totals.llm_completion_tokens);
+                    usage::record_embeddings(totals.embedding_tokens);
+                    total_tokens += totals.total();
+                    match retry {
+                        Ok(Ok(ans)) => {
+                            let idx = branches.iter().position(|b| *b == branch).unwrap_or(0);
+                            let (branch_citations, remapped) = incorporate_branch(
+                                &ans,
+                                &mut global_citations,
+                                &mut by_chunk,
+                                &mut doc_counter,
+                                &mut web_counter,
+                            );
+                            if !findings_text.is_empty() {
+                                findings_text.push_str("\n\n");
+                            }
+                            findings_text.push_str(&format!(
+                                "## Branch {} — {}\n{}\n\nCited sources in this branch:\n{}",
+                                idx + 1,
+                                branch,
+                                remapped,
+                                branch_citations
+                                    .iter()
+                                    .map(|c| format!(
+                                        "[{}] {}",
+                                        c.doc_id,
+                                        c.doc_title.clone().unwrap_or_default()
+                                    ))
+                                    .collect::<Vec<_>>()
+                                    .join("\n")
+                            ));
+                            if let Some(r) =
+                                receipts.iter_mut().find(|r| r.name == name)
+                            {
+                                r.status = "completed".to_string();
+                                r.citations = branch_citations;
+                                r.contribution = format!(
+                                    "Parallel attempt timed out; sequential retry succeeded. {}",
+                                    truncate(&remapped, 1200)
+                                );
+                                r.tokens_used += totals.total();
+                                r.elapsed_ms += t0.elapsed().as_millis() as u64;
+                            }
+                            // A rescued branch is no longer partial.
+                            if !receipts.iter().any(|r| {
+                                r.role == "researcher"
+                                    && (r.status == "timeout" || r.status == "failed")
+                            }) {
+                                any_partial = false;
+                            }
+                            self.progress(&progress, &format!("{name}: retry succeeded"));
+                        }
+                        Ok(Err(e)) => {
+                            if let Some(r) =
+                                receipts.iter_mut().find(|r| r.name == name)
+                            {
+                                r.tokens_used += totals.total();
+                                r.contribution =
+                                    format!("{} Sequential retry also failed: {e}", r.contribution);
+                            }
+                            self.progress(&progress, &format!("{name}: retry failed"));
+                        }
+                        Err(_) => {
+                            if let Some(r) =
+                                receipts.iter_mut().find(|r| r.name == name)
+                            {
+                                r.tokens_used += totals.total();
+                                r.contribution =
+                                    format!("{} Sequential retry also timed out.", r.contribution);
+                            }
+                            self.progress(&progress, &format!("{name}: retry timed out"));
+                        }
+                    }
                 }
             }
         }
