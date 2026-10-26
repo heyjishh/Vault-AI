@@ -15,6 +15,59 @@ live**, what is **built but unverified**, and what is **roadmap**.
 ## [Unreleased]
 
 ### Added
+- **True sub-agent orchestration, P1 + P2** (26 Oct 2026, LIVE-VERIFIED on
+  :3001). `POST /api/v1/knowledge/agents/autonomous` now defaults to a
+  lead → researchers → drafter → checker → reconciler pipeline
+  (`crates/rag/src/subagents.rs`); `orchestrated: false` keeps the legacy
+  planner-executor loop (live-verified: 72s, finished, correct verdict),
+  and `stream: true` streams SSE status per sub-agent plus an extended
+  Done event carrying every sub-agent's receipt (live-verified: Done
+  carried all 6 receipts + audit 5 checked / 5 verified). Lead plans up
+  to 3 branches; researchers run concurrently (tokio tasks) over the
+  corpus + web legs with STRICT brief scoping (no full-vault fallback);
+  drafter writes from findings + sources only; checker receives draft +
+  cited sources ONLY (never the drafter's rationale) and runs the
+  citation-integrity audit + a verdict-consistency check; on conflict
+  the lead runs one narrowed re-query and FLAGS anything unresolved in
+  the answer — it never invents a resolution. Defaults: max 3 parallel
+  researchers, 25,000 tokens/sub-agent, 100,000 tokens/run (admin knob:
+  `settings.orchestration_run_cap_tokens`, clamped 10k–1M), 120s per
+  sub-agent (timeout aborts that specialist; run continues as
+  `partial`). Metered through `usage.rs` child scopes — receipt token
+  sums matched billing deltas exactly in every live run. Fixed
+  workflows untouched. Agents page renders receipts + conflict flags
+  (no P3 UI: no plan approval, per-run budget display, or run history).
+  - **Measured, honestly**: 20-rule golden did NOT regress — **15/20**
+    after (floor 14/20; all 5 fails wording-only, zero source misses).
+    Unit tests 122 → **129** (7 new sub-agent tests).
+  - **New multi-hop brief eval** (one Brief, 3 docs: IT Act s.79,
+    2021 Rules r.3, Shreya Singhal; questions needing 2–3 sources):
+    single-agent baseline 3/3 content hits (~5.3k tokens, 104–417s, 2/3
+    ending `planner_error`). Orchestration: MH1 5,806 tokens / 530s
+    (36h verdict hit, researcher-1 timed out twice, audit strip
+    flagged + reconciler ran); MH2 refusal MISS (sole researcher timed
+    out twice — drafter honestly refused rather than hallucinate);
+    MH3 10,972 tokens / 571s (all 3 elements hit, checker flagged a
+    Shreya claim + 16 audit strips, reconciler re-query timed out so
+    the conflict stands flagged). SSE MH1: 36h hit, checker 5/5
+    verified. Conflict probe (30-day vs 90-day Sharma clauses, one
+    Brief): finished 106s, checker 8/8 verified, draft correctly hedged
+    both periods + "which version governs not established" — conflict
+    surfaced, nothing invented.
+  - **Verdict: not a 3× failed trade, not a quality win either.**
+    Orchestration costs ~1.1–2.1× single-agent tokens for the same
+    content hits on this eval — because one Mix query already retrieves
+    all three one-chunk docs, the single agent has nothing to beat
+    here. What orchestration measurably adds is provenance (receipts),
+    independent checking + flagging, and graceful degradation. Its
+    liability on this stack is the anonymous Gemini bridge: one leg
+    call takes ~80–90s, so three in parallel routinely blow the 120s
+    deadline (web leg exonerated by probe: 79s with web vs 92s
+    without) — the bounded sequential retry for timed-out researchers
+    and lenient checker-JSON parsing were both added because live
+    eval proved them necessary. Judge quality again on a fast
+    provider before claiming a hit-rate gain; do not ship this as
+    "better answers" on bridge evidence alone.
 - **Password-protected PDF uploads (P1) + S3 encrypted-object skip (P2)**
   (26 Oct 2026). Both upload endpoints — corpus
   `POST /api/v1/vault/documents` and private-vault upload — accept an

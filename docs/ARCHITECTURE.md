@@ -314,8 +314,38 @@ live round-trip not verified, no credentials in this environment).
   web), up to a step budget (1–10, default 6), then synthesizes a
   verdict-first report from its findings only, with deduplicated
   citations. `POST /api/v1/knowledge/agents/autonomous`, billed like a
-  workflow run. Honest limit: the planner is the main LLM — there are no
-  separate sub-agent models.
+  workflow run. Still available via `orchestrated: false`.
+- **Sub-agent orchestration** (`subagents.rs`, 26 Oct 2026; P1 + P2, the
+  default behind the same autonomous endpoint): a lead agent decomposes
+  the goal into at most 3 independent research branches, one Researcher
+  per branch running concurrently (tokio tasks), then a Drafter writes
+  the verdict-first answer from the researchers' findings + cited
+  sources only, and a Checker — independent by construction, receiving
+  the draft + the cited sources only, never the drafter's rationale —
+  runs the citation-integrity audit plus a verdict-consistency check.
+  The lead reconciles: on conflict it runs one narrowed re-query and,
+  if the conflict stands, FLAGS it in the answer (with a reconciliation
+  section); it never invents a resolution. Every sub-agent emits a
+  receipt (role, task, contribution, citations, tokens, status) that
+  rides the JSON response and, with `stream: true`, the SSE stream as
+  an extended Done event (`sub_agents`). Defaults: max 3 parallel
+  researchers, 25,000 tokens per sub-agent, 100,000 tokens per run
+  (admin knob: `orchestration_run_cap_tokens` in `settings.json`,
+  clamped 10,000–1,000,000), 120s per sub-agent (a timeout aborts that
+  specialist; the run continues as `partial`). Timed-out researchers
+  get one bounded sequential retry — on a contended provider the same
+  leg call often succeeds alone. Brief scoping is strict in every leg
+  call (no full-vault fallback), so no sub-agent can work across
+  briefs; metering goes through `usage.rs` child scopes, so runs bill
+  like any other LLM call. No new tool surface (corpus + web legs
+  only), no sub-sub-agents, user-invoked only. Honest limits, measured
+  live on :3001 against the anonymous Gemini bridge: one leg call takes
+  ~80–90s there, so three in parallel routinely blow the 120s deadline
+  and the retry is what rescues branches; checker verdicts are only as
+  reliable as the model's JSON (parsing is lenient, unparseable verdicts
+  fall back to the mechanical audit); the audit strips loosely-cited
+  markers aggressively, which surfaces as flagged conflicts. Fixed
+  workflows (`agent.rs`) are untouched.
 
 ## 6. Frontend architecture
 
@@ -668,6 +698,9 @@ Server (C1) environment. Defaults in `crates/common` / `.env.example`.
 **Web**: `LEGAL_RAG_WEB_SEARCH`, `LEGAL_RAG_WEB_SIDECAR`.
 **Billing**: `LEGAL_RAG_PAYMENT_PROVIDER` (`mock`|`youpi`), `LEGAL_RAG_YOUPI_URL`,
 `LEGAL_RAG_YOUPI_MERCHANT_ID`, `LEGAL_RAG_YOUPI_WEBHOOK_SECRET`.
+**Orchestration** (`settings.json`, admin knob, not env):
+`orchestration_run_cap_tokens` (per-run token cap for sub-agent runs,
+default 100,000, clamped 10,000–1,000,000).
 
 ## Appendix B — API inventory (66 paths, `/api/v1`; count verified
 25 Oct 2026 from the route table; 73 method-endpoints on those paths)
