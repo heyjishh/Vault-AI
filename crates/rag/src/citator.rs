@@ -35,6 +35,9 @@
 //!   edge. Evaluative language with no treatment verb (`are seriously
 //!   flawed`) likewise creates nothing — that sentence is evidence of
 //!   criticism, not of a treatment, and is reported as Unknown.
+//! - **Self-edge guard**: a document cannot treat itself — a target
+//!   matching the source document's own title is skipped (a judgment
+//!   describing its own holding is not a later treatment of it).
 //!
 //! Resolution rules (at Ask time):
 //! - Only edges whose **source document is visible in the current
@@ -228,6 +231,20 @@ impl TreatmentStore {
         let mut guard = self.edges.write().expect("lock poisoned");
         let before = guard.len();
         guard.retain(|e| !removed.contains(e.source_chunk_id.as_str()));
+        before - guard.len()
+    }
+
+    /// Drop edges whose target is their own source document
+    /// (self-treatment, e.g. backfilled before the self-edge guard).
+    /// `titles` maps source doc id -> display title. Returns removed.
+    pub fn prune_self_edges(&self, titles: &std::collections::HashMap<String, String>) -> usize {
+        let mut guard = self.edges.write().expect("lock poisoned");
+        let before = guard.len();
+        guard.retain(|e| {
+            titles
+                .get(e.source_doc_id.as_str())
+                .is_none_or(|t| !names_match(&e.target, t))
+        });
         before - guard.len()
     }
 }
@@ -557,6 +574,14 @@ pub fn detect_treatments(
     let mut edges: Vec<TreatmentEdge> = Vec::new();
     let mut seen: HashSet<String> = HashSet::new();
     let mut push = |target: String, kind: TreatmentKind, passage: String| {
+        // A document cannot treat itself: `The court in Smith v. Jones
+        // applied the foreseeability rule...` inside the Smith v. Jones
+        // document is its own holding, not a later treatment of it.
+        if let Some(st) = source_title {
+            if names_match(&target, st) {
+                return;
+            }
+        }
         let key = format!("{}|{kind:?}", normalize_case_name(&target));
         if seen.insert(key) {
             edges.push(TreatmentEdge {
@@ -850,6 +875,57 @@ mod tests {
         ] {
             assert!(detect(text).is_empty(), "for {text:?} got {:?}", detect(text));
         }
+    }
+
+    #[test]
+    fn document_cannot_treat_itself() {
+        // The Smith document describing its own holding is not a
+        // treatment of Smith by a later judgment.
+        let edges = detect_treatments(
+            "The court in Smith v. Jones applied the foreseeability rule to deny recovery.",
+            "smith-doc",
+            "c1",
+            Some("Smith v. Jones (2021) — Contract Damages"),
+        );
+        assert!(edges.is_empty(), "got {edges:?}");
+        // The same sentence in a DIFFERENT document is a real edge.
+        let edges = detect_treatments(
+            "The court in Smith v. Jones applied the foreseeability rule to deny recovery.",
+            "later-doc",
+            "c2",
+            Some("Later Commentary"),
+        );
+        assert_eq!(edges.len(), 1);
+        assert_eq!(edges[0].kind, TreatmentKind::Applied);
+    }
+
+    #[test]
+    fn prune_self_edges_removes_only_self_matches() {
+        let store = TreatmentStore::new();
+        store.add(vec![
+            TreatmentEdge {
+                target: "Smith v. Jones".into(),
+                kind: TreatmentKind::Applied,
+                source_doc_id: "d-smith".into(),
+                source_chunk_id: "c1".into(),
+                source_title: Some("Smith v. Jones".into()),
+                passage: "The court in Smith v. Jones applied the rule.".into(),
+            },
+            TreatmentEdge {
+                target: "Smith v. Jones".into(),
+                kind: TreatmentKind::Overruled,
+                source_doc_id: "d-later".into(),
+                source_chunk_id: "c2".into(),
+                source_title: Some("Later Judgment".into()),
+                passage: "We overrule Smith v. Jones.".into(),
+            },
+        ]);
+        let mut titles = std::collections::HashMap::new();
+        titles.insert("d-smith".to_string(), "Smith v. Jones".to_string());
+        titles.insert("d-later".to_string(), "Later Judgment".to_string());
+        assert_eq!(store.prune_self_edges(&titles), 1);
+        assert_eq!(store.count(), 1);
+        assert_eq!(store.all()[0].kind, TreatmentKind::Overruled);
     }
 
     #[test]

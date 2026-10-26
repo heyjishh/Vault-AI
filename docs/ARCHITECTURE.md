@@ -377,7 +377,10 @@ citation audit, in both blocking and streaming paths).
   verb, noun-ish `the overruling`) creates no edge, and evaluative
   language without a verb creates none. A verb that already governs
   a bare object after it (`which followed ADM Jabalpur`) does not
-  also attach to a preceding `v.`-target. Kill switch
+  also attach to a preceding `v.`-target. A document cannot treat
+  itself: a target matching the source document's own title is
+  skipped (a judgment describing its own holding is not a later
+  treatment of it; backfill prunes such edges too). Kill switch
   `LEGAL_RAG_CITATOR=0`. Backfill: `POST
   /api/v1/admin/citator/backfill` re-scans stored parent chunks
   only — no re-embedding — and is idempotent.

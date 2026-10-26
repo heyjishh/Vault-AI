@@ -33,7 +33,11 @@ live**, what is **built but unverified**, and what is **roadmap**.
     (`ADM Jabalpur must be and is accordingly overruled`). Negation
     (`do not follow`, `declined to overrule`, noun-ish `the
     overruling`) and evaluative language without a verb (`are
-    seriously flawed`) create no edge. Kill switch `LEGAL_RAG_CITATOR=0`.
+    seriously flawed`) create no edge. A document cannot treat
+    itself (self-edge guard; backfill prunes such edges) — found
+    live on :3001, where a fixture judgment describing its own
+    holding had first surfaced as an `applied` self-edge. Kill switch
+    `LEGAL_RAG_CITATOR=0`.
   - **Backfill — BUILT, not deferred**: `POST
     /api/v1/admin/citator/backfill` re-scans stored parent chunks only
     (no re-embedding, no LLM calls), idempotent; the existing corpus

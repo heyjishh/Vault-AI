@@ -284,7 +284,8 @@ impl RagAnything {
     /// re-embedding anything: detection is a pure text scan over the
     /// stored parent chunks (children / aux / hyper units excluded —
     /// they duplicate parent text). Idempotent: re-running adds
-    /// nothing already present. Returns new edges added.
+    /// nothing already present. Also prunes self-edges (e.g. edges
+    /// backfilled before the self-edge guard). Returns new edges added.
     pub async fn backfill_treatments(&self) -> Result<usize> {
         let chunks = self.store.all_chunks().await?;
         let mut added = 0usize;
@@ -302,6 +303,12 @@ impl RagAnything {
             );
             added += self.treatments.add(edges);
         }
+        let titles: std::collections::HashMap<String, String> = self
+            .list_documents()
+            .into_iter()
+            .map(|d| (d.id, d.title))
+            .collect();
+        self.treatments.prune_self_edges(&titles);
         Ok(added)
     }
 
@@ -732,6 +739,10 @@ impl RagAnything {
                 all_records.extend(child_records);
                 all_records.extend(aux_records);
                 self.store.upsert(all_records).await?;
+                // Display title for the citator self-edge guard (same
+                // fallback the registry insert below uses).
+                let ingest_source_title =
+                    title.as_deref().filter(|t| !t.trim().is_empty()).unwrap_or(file_ref);
                 for record in &records {
                     let (entities, relations) =
                         extract_graph_elements(self.llm.as_ref(), record).await;
@@ -752,7 +763,7 @@ impl RagAnything {
                             &record.text,
                             doc_id,
                             &record.id,
-                            title.as_deref(),
+                            Some(ingest_source_title),
                         );
                         treatments_total += self.treatments.add(edges);
                     }
