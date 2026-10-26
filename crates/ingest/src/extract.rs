@@ -4,8 +4,26 @@ use legal_rag_common::{Error, Result};
 
 /// Extract plain text based on file extension.
 pub fn extract_text(file_name: &str, bytes: &[u8]) -> Result<String> {
+    extract_text_with_password(file_name, bytes, None)
+}
+
+/// Like [`extract_text`], but a password-protected PDF is decrypted in
+/// memory first (see [`crate::pdf_password`]). `password` is ignored for
+/// unprotected files and for non-PDF inputs. The caller zeroizes it.
+pub fn extract_text_with_password(
+    file_name: &str,
+    bytes: &[u8],
+    password: Option<&str>,
+) -> Result<String> {
     let lower = file_name.to_lowercase();
     if lower.ends_with(".pdf") {
+        if crate::pdf_password::is_encrypted_pdf(bytes) {
+            let pw = password.ok_or_else(|| {
+                Error::BadRequest(crate::pdf_password::PROTECTED_NO_PASSWORD_MSG.to_string())
+            })?;
+            let decrypted = crate::pdf_password::decrypt_pdf(bytes, pw)?;
+            return extract_pdf(&decrypted);
+        }
         extract_pdf(bytes)
     } else if lower.ends_with(".txt")
         || lower.ends_with(".md")
@@ -41,5 +59,16 @@ mod tests {
     #[test]
     fn rejects_empty_unknown() {
         assert!(extract_text("blob.bin", b"").is_err());
+    }
+
+    #[test]
+    fn encrypted_pdf_without_password_reports_protected_not_generic() {
+        let enc =
+            std::fs::read(format!("{}/tests/fixtures/enc-aes256.pdf", env!("CARGO_MANIFEST_DIR")))
+                .unwrap();
+        let err = extract_text("enc-aes256.pdf", &enc).unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("password-protected"), "got {msg}");
+        assert!(!msg.contains("pdf extraction failed"), "got {msg}");
     }
 }

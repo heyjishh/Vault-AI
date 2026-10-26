@@ -6,6 +6,7 @@
 pub mod chunk;
 pub mod document;
 pub mod extract;
+pub mod pdf_password;
 pub mod s3;
 pub mod service;
 
