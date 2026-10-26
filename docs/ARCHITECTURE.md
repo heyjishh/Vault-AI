@@ -150,6 +150,11 @@ Cross-cutting behaviour in the server:
 
 ```
 Upload (text / base64 file / S3 object)
+  → password-protected PDF? decrypt in memory first (optional
+    `file_password` on both upload endpoints; lopdf for RC4, pypdf
+    helper fallback for AES — see §5.1a; password zeroized, never
+    stored/logged; S3 objects that are encrypted are skipped per-file,
+    never batch-halting — see §5.1b)
   → parse: text layer (PDF) → typed content blocks (text/image/table/equation)
   → pages with insufficient text rendered (poppler) → Surya OCR (C5)
   → modal processors describe non-text blocks with extracted context
@@ -161,6 +166,47 @@ Upload (text / base64 file / S3 object)
   → index: vector store + BM25 corpus + document registry
   → DocStatus: pending → processing → ready / failed
 ```
+
+### 5.1a Password-protected PDF inputs (LIVE-VERIFIED on :3001)
+
+`file_password` (optional) exists on `POST /api/v1/vault/documents` and
+on the private-vault upload. Decryption is a pre-parse step in the rag
+pipeline (`prepared_pdf_bytes` → `legal_rag_ingest::pdf_password`), so
+decrypted bytes flow through the unchanged parser, including the
+render → Surya OCR path for scanned pages. Mechanism, measured on
+fixtures (plain + RC4 / AES-128 / AES-256, committed under
+`crates/ingest/tests/fixtures/`): `lopdf` 0.34 decrypts RC4 and
+round-trips it to the plain text; it cannot do AES, and `lopdf` 0.46
+— which can decrypt AES — loads only the `/Encrypt` object from
+xref-stream files and re-saves an empty document, so it was rejected.
+`lopdf` runs first; anything it cannot handle falls through to
+`tools/pdf_decrypt_sidecar.py` (`pypdf`, password on stdin first line
++ PDF bytes, never argv, exit 42 = wrong password, stderr discarded
+and never logged). Error contract: wrong password → `wrong file
+password`; encrypted without a password → the protected-file error,
+before extraction; unprotected + password → ignored. The password is
+taken out of the request body and zeroized (`zeroize` crate) once
+decryption returns, on success and error alike; the private-vault
+route logs neither it nor its presence. The private vault's stored
+SHA-256 is of the uploaded bytes as received; the corpus content doc
+id is of the decrypted bytes (re-uploads of the same encrypted file
+deduplicate; the encrypted form does not share the plain form's id,
+because decrypt-and-resave rewrites the bytes). Out of scope:
+Office-encrypted documents, and per-file at-rest passwords (rejected
+— the Confidential Vault already owns at-rest encryption). Requires
+`pypdf` (+ `cryptography` for AES-256) present for AES files; RC4
+needs no runtime dependency. Passwords containing a newline cannot be
+expressed in the helper's stdin framing — the one accepted limitation.
+
+### 5.1b S3 ingest and encrypted objects
+
+S3 ingest cannot take per-file passwords (a password map is a later
+phase, not v1). `ingest_s3` pre-splits downloaded objects
+(`split_encrypted_s3`): encrypted PDFs go to
+`IngestReport.skipped_encrypted` and the batch continues; download
+and batch failures are likewise surfaced in `IngestReport.failed`
+instead of being swallowed. Unit-tested only — no S3/R2 credentials
+exist in this environment, so no live S3 round-trip was claimed.
 
 ### 5.2 Query flow (LIVE-VERIFIED)
 
@@ -349,7 +395,7 @@ and on SIGTERM/SIGINT; state restores on boot.
 | Brief confidentiality | Retrieval hard-filters to the brief's document set for chunks **and** graph context; zero in-scope hits → grounded refusal, no silent full-vault fallback (fallback only when scope matches nothing retrieved, and it is disclosed in-product as a scope note) |
 | Spaces (multi-tenancy) | Briefs may belong to a Space with owner/editor/viewer membership. Enforcement is server-side on every surface: brief lists and detail, scoped queries, vault document lists, and the source viewer. Non-members get **404** (a space brief's existence is itself confidential); viewers read but cannot upload or edit (**403**); deleting a space un-files its briefs rather than deleting them. Admins bypass membership. Verified live with a 17-check isolation suite across three accounts (23 Oct 2026) |
 | Legal-validity scoping | Documents carry jurisdiction / effective-from / effective-to / superseded-by metadata. Ask's "As of" (date + jurisdiction) applies metadata as a **strict** boundary — stricter than brief scoping: no full-vault fallback, and superseded sources are flagged on their citations |
-| Private Vault | Per-user password → Argon2id KDF → AES-256-GCM; key exists only in server memory while unlocked; **no recovery by design**; titles + chunks stored only as ciphertext; uploads never enter the shared corpus, snapshots, or graph; activity logs redact private content. Optional dedicated endpoints (`LEGAL_RAG_PRIVATE_EMBEDDING_URL` / `LEGAL_RAG_PRIVATE_LLM_URL`) route vault uploads, private question embeddings and private answers to local providers; private clients are never wrapped in the shared semantic cache, and the vault status reports where private traffic goes. *Honest limits: without the dedicated endpoints, an unlocked vault's decrypted context is sent to the main LLM for answering and embeddings are computed by the main provider; vectors sit beside ciphertext; switching the private embedder's model/dimension requires re-uploading sealed documents.* |
+| Private Vault | Per-user password → Argon2id KDF → AES-256-GCM; key exists only in server memory while unlocked; **no recovery by design**; titles + chunks stored only as ciphertext; uploads never enter the shared corpus, snapshots, or graph; activity logs redact private content. Private uploads also accept `file_password` for password-protected PDFs (decrypted in memory before parsing; password zeroized, never logged — not even its presence). Optional dedicated endpoints (`LEGAL_RAG_PRIVATE_EMBEDDING_URL` / `LEGAL_RAG_PRIVATE_LLM_URL`) route vault uploads, private question embeddings and private answers to local providers; private clients are never wrapped in the shared semantic cache, and the vault status reports where private traffic goes. *Honest limits: without the dedicated endpoints, an unlocked vault's decrypted context is sent to the main LLM for answering and embeddings are computed by the main provider; vectors sit beside ciphertext; switching the private embedder's model/dimension requires re-uploading sealed documents.* |
 | Secrets | Provider keys + JWT secret in `.env` (gitignored) / Secrets Manager in target; never in code, logs, or docs |
 | Web fetching | Per-source failure isolation; fetch caps (10MB), timeouts; fetched content is data, never instructions |
 | Payments | YouPI webhook verified with HMAC-SHA256; mock provider is test-only |

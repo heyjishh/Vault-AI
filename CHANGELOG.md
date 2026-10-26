@@ -14,6 +14,47 @@ live**, what is **built but unverified**, and what is **roadmap**.
 
 ## [Unreleased]
 
+### Added
+- **Password-protected PDF uploads (P1) + S3 encrypted-object skip (P2)**
+  (26 Oct 2026). Both upload endpoints — corpus
+  `POST /api/v1/vault/documents` and private-vault upload — accept an
+  optional `file_password`. The file is decrypted in memory before
+  extraction, so a scanned encrypted PDF flows through the unchanged
+  render → Surya OCR path; the password is zeroized once decryption
+  returns, never stored, never logged, and for private-vault uploads
+  not even the fact one was supplied is logged. Wrong password →
+  distinct HTTP 400 `wrong file password` (not the generic extraction
+  failure); encrypted file without a password → HTTP 400 naming the
+  protection; unprotected file + password → password ignored, normal
+  path. Mechanism settled by measurement on real fixtures (plain +
+  RC4 / AES-128 / AES-256 PDFs, one test-only password, committed under
+  `crates/ingest/tests/fixtures/`): pure-Rust `lopdf` 0.34 covers RC4
+  only (AES-128 "scheme not supported", AES-256 "unsupported key
+  length"); `lopdf` 0.46 decrypts AES but loads only the `/Encrypt`
+  object (1 object, 0 pages) from xref-stream files and re-saves an
+  empty document, so it was rejected. The implementation therefore
+  tries `lopdf` first and falls through to a `pypdf` helper
+  (`tools/pdf_decrypt_sidecar.py`, password on stdin, never argv,
+  exit 42 = wrong password, stderr discarded). S3 ingest pre-skips
+  encrypted PDFs into `IngestReport.skipped_encrypted` and surfaces
+  download + batch failures in `IngestReport.failed` instead of
+  swallowing them — batch continues, per-file errors reported.
+  **Live-verified on the :3001 test instance** (26 Oct): AES-256 and
+  RC4 uploads with the correct password returned 200 with chunk text
+  identical to the unprotected original (same entities/relations);
+  wrong password 400 `wrong file password` on both endpoints;
+  no-password 400 protected-file error; unprotected + password 200;
+  private-vault AES-128 upload 200 with 1 chunk; all live docs deleted
+  afterwards and the private vault re-locked. **Not live-verified by
+  design:** the S3 skip path is unit-tested only — no S3/R2
+  credentials exist in this environment. Out of v1 per spec:
+  Office-encrypted documents, and per-file at-rest passwords (the
+  Confidential Vault already owns at-rest encryption). Honest limit
+  carried over: decrypted text still reaches the embedding/LLM
+  provider exactly as today's vault limits state; and the `pypdf`
+  helper (with `cryptography` for AES-256) must be present for AES
+  files — RC4 works with no runtime dependency.
+
 ## [1.8.0] — 2026-10-25
 
 ### Added

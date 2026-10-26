@@ -350,8 +350,10 @@ impl RagAnything {
     /// Like [`Self::process_document_complete`], but a password-protected
     /// PDF is decrypted in memory first (see `legal_rag_ingest::
     /// pdf_password`). The content-based doc id is computed from the
-    /// *decrypted* bytes, so the same document uploaded encrypted or plain
-    /// deduplicates. The caller zeroizes `file_password` after this returns;
+    /// *decrypted* bytes, so re-uploading the same encrypted file
+    /// deduplicates; it does NOT match the plain form's id, because the
+    /// decrypt-and-resave round-trip rewrites the file bytes. The caller
+    /// zeroizes `file_password` after this returns;
     /// it is never stored or logged. An encrypted PDF without a password
     /// fails here with the protected-file error, before any extraction.
     pub async fn process_document_complete_with_password(
