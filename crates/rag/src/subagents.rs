@@ -337,11 +337,12 @@ fn checker_input(goal: &str, draft: &str, citations: &[Citation]) -> String {
     let mut sources = String::new();
     for c in citations {
         let title = c.doc_title.clone().unwrap_or_else(|| c.doc_id.clone());
-        let excerpt: String = c
-            .sentence
-            .clone()
-            .unwrap_or_else(|| c.snippet.chars().take(600).collect());
-        sources.push_str(&format!("[{}] {}\n{}\n\n", c.doc_id, title, excerpt));
+        // The FULL citation snippet, not the one-sentence pinpoint:
+        // verdict-consistency needs the passage around the claim, and
+        // live eval showed a pinpoint-only excerpt making the checker
+        // flag a claim its source does support. Still only the cited
+        // sources — no other findings, no rationale.
+        sources.push_str(&format!("[{}] {}\n{}\n\n", c.doc_id, title, c.snippet));
     }
     if sources.is_empty() {
         sources.push_str("(no cited sources — every claim in the draft is therefore unsupported)\n");
@@ -1145,15 +1146,16 @@ mod tests {
             chunk_id: "chunk-1".to_string(),
             ordinal: 0,
             score: 1.0,
-            snippet: "the source passage".to_string(),
-            sentence: None,
+            snippet: "the source passage with full context around the claim".to_string(),
+            sentence: Some("one pinpoint sentence".to_string()),
             stale: None,
             source_url: None,
             source_date: None,
         }];
         let input = checker_input("goal?", draft, &citations);
         assert!(input.contains(draft));
-        assert!(input.contains("the source passage"));
+        // Full snippet, not just the pinpoint sentence.
+        assert!(input.contains("the source passage with full context around the claim"));
         // The rationale is never an input: it is not in the string at
         // all, and no other text beyond draft + sources + goal is.
         assert!(!input.contains(rationale));
