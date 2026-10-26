@@ -19,3 +19,6 @@ data-sdb/
 
 # Vendored tool venvs
 .venv/
+# Vendored pypdf (+cryptography) for the PDF-decrypt sidecar; installed
+# by restore-stack.sh, must not be committed (22 MB of wheels).
+tools/pdf-decrypt-pylibs/

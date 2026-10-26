@@ -53,7 +53,16 @@ live**, what is **built but unverified**, and what is **roadmap**.
   carried over: decrypted text still reaches the embedding/LLM
   provider exactly as today's vault limits state; and the `pypdf`
   helper (with `cryptography` for AES-256) must be present for AES
-  files — RC4 works with no runtime dependency.
+  files — RC4 works with no runtime dependency. **Durability fix same
+  day:** a VM restart wiped the system-wide pip install and the AES
+  path failed outright (rag suite caught it: 95/96 until fixed), so
+  `pypdf`/`cryptography` are now vendored under
+  `tools/pdf-decrypt-pylibs/` (gitignored, 22 MB), the helper
+  bootstraps that path itself, and `restore-stack.sh` reinstalls the
+  vendored libs when missing. Re-verified live after the restart
+  (AES-256 corpus 200 with identical text, wrong-password 400,
+  no-password 400, private AES-128 200) and the full rag suite is
+  96/96.
 
 ## [1.8.0] — 2026-10-25
 

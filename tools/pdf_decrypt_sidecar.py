@@ -15,11 +15,21 @@ any error output — failures are reported by exit code only. Passwords
 containing a newline cannot be expressed in this framing; that is the one
 accepted limitation (documented in pdf_password.rs).
 
-Requires `pypdf` on PATH (pip install pypdf cryptography for AES-256).
+Requires `pypdf` (+ `cryptography` for AES-256). The import is served
+from the vendored directory next to this script
+(`tools/pdf-decrypt-pylibs/`, installed by `restore-stack.sh` and kept
+under `~` so it survives VM replacement — a system-wide pip install
+does NOT survive, which is exactly how the AES path broke after the
+2026-10-26 restart). A system-wide `pypdf` still works as a fallback
+via the normal import path.
 """
 
 import io
 import sys
+from pathlib import Path
+
+# Vendored deps first; system site-packages remain as fallback.
+sys.path.insert(0, str(Path(__file__).with_name("pdf-decrypt-pylibs")))
 
 
 def main() -> int:

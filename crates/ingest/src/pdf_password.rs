@@ -19,7 +19,9 @@
 //!   empty document — unusable as pipeline input. It was rejected.
 //! * So: try `lopdf` first; anything it cannot handle falls through to the
 //!   `pypdf` helper (`tools/pdf_decrypt_sidecar.py`, same sidecar pattern
-//!   as the Surya OCR script). The helper receives the password on stdin
+//!   as the Surya OCR script; its `pypdf`/`cryptography` deps are vendored
+//!   under `tools/pdf-decrypt-pylibs/` because a system pip install does
+//!   not survive VM replacement). The helper receives the password on stdin
 //!   (first line) followed by the raw PDF bytes — never argv, never logs —
 //!   writes decrypted PDF bytes on stdout, and exits 42 for a wrong
 //!   password (42, not 2: the interpreter itself exits 2 when the script

@@ -195,8 +195,13 @@ because decrypt-and-resave rewrites the bytes). Out of scope:
 Office-encrypted documents, and per-file at-rest passwords (rejected
 — the Confidential Vault already owns at-rest encryption). Requires
 `pypdf` (+ `cryptography` for AES-256) present for AES files; RC4
-needs no runtime dependency. Passwords containing a newline cannot be
-expressed in the helper's stdin framing — the one accepted limitation.
+needs no runtime dependency. The deps are vendored under
+`tools/pdf-decrypt-pylibs/` (gitignored; `restore-stack.sh`
+reinstalls when missing) because a system-wide pip install does not
+survive VM replacement — the 2026-10-26 restart proved it by breaking
+the AES path until the vendoring landed. Passwords containing a
+newline cannot be expressed in the helper's stdin framing — the one
+accepted limitation.
 
 ### 5.1b S3 ingest and encrypted objects
 

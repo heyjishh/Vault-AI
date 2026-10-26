@@ -23,6 +23,12 @@ if ! up 8084; then
   (cd ~/workspace/legal-rag && setsid nohup env NO_PROXY=localhost,127.0.0.1 no_proxy=localhost,127.0.0.1 HF_HUB_OFFLINE=1 COLBERT_MODEL=colbert-ir/colbertv2.0 COLBERT_PORT=8084 ~/workspace/ocr-bench/bench-env/bin/python tools/colbert/colbert_sidecar.py >> tools/colbert/sidecar.log 2>&1 < /dev/null &)
 fi
 sleep 40
+# 3c. Vendored pypdf for the PDF-decrypt sidecar (AES uploads). A
+# system-wide pip install does NOT survive VM replacement, so the libs
+# live under tools/ (inside ~) and are reinstalled here when missing.
+if [ ! -f tools/pdf-decrypt-pylibs/pypdf/__init__.py ]; then
+  (cd ~/workspace/legal-rag && pip3 install --break-system-packages --quiet --target tools/pdf-decrypt-pylibs pypdf cryptography >> tools/pdf-decrypt-install.log 2>&1 || true)
+fi
 # 4. Prod :3000 + tunnel + test :3001
 if ! up 3000; then
   (cd ~/workspace/legal-rag && setsid nohup env SERENEDB_URL=postgres://postgres@127.0.0.1:7890/postgres ./target/release/legal-rag-server >> server.log 2>&1 < /dev/null &)
