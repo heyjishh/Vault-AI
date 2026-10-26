@@ -9,6 +9,7 @@
 
 pub mod agent;
 pub mod orchestrator;
+pub mod subagents;
 pub mod audit;
 pub mod batch;
 pub mod bm25;
@@ -39,6 +40,11 @@ pub mod web;
 pub use batch::{filter_supported_files, BatchItemResult};
 pub use agent::{StepResult, WorkflowDef, WorkflowEngine, WorkflowRun, BUILTIN_WORKFLOWS};
 pub use orchestrator::{AgentStepTrace, AutonomousAgent, AutonomousRun};
+pub use subagents::{
+    OrchestratedRun, OrchestratorConfig, SubAgentOrchestrator, SubAgentReceipt,
+    DEFAULT_MAX_PARALLEL_RESEARCHERS, DEFAULT_PER_RUN_TOKEN_CAP,
+    DEFAULT_PER_SUBAGENT_TIMEOUT_SECS, DEFAULT_PER_SUBAGENT_TOKEN_BUDGET,
+};
 pub use cache::{CacheStats, CachedEmbeddings, CachedLlm, SemanticCache};
 pub use config::RagAnythingConfig;
 pub use content::{ContentBlock, ModalItem, PageInterval};

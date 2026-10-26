@@ -26,6 +26,7 @@ pub struct AppState {
     pub emb_cache: Option<Arc<SemanticCache>>,
     pub workflows: Arc<WorkflowEngine>,
     pub agent: Arc<legal_rag_rag::AutonomousAgent>,
+    pub orchestrator: Arc<legal_rag_rag::SubAgentOrchestrator>,
     pub billing: Arc<crate::billing::BillingStore>,
     pub activity: Arc<crate::activity::ActivityStore>,
     pub golden: Arc<crate::golden::GoldenStore>,

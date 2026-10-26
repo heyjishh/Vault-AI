@@ -335,6 +335,7 @@ async fn main() -> anyhow::Result<()> {
     }
     let workflows = Arc::new(legal_rag_rag::WorkflowEngine::new(query.clone()));
     let agent = Arc::new(legal_rag_rag::AutonomousAgent::new(query.clone()));
+    let orchestrator = Arc::new(legal_rag_rag::SubAgentOrchestrator::new(query.clone()));
 
     // ---- Persistence: load snapshots, then save periodically + on shutdown.
     let data_dir = legal_rag_rag::persist::data_dir();
@@ -427,6 +428,7 @@ async fn main() -> anyhow::Result<()> {
         emb_cache,
         workflows,
         agent,
+        orchestrator,
         billing,
         activity,
         golden,

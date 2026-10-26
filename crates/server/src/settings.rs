@@ -91,6 +91,10 @@ pub struct Settings {
     /// requires re-indexing the corpus (vectors are not interchangeable).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub embedding_model: Option<String>,
+    /// Per-run token cap for sub-agent orchestration runs (admin knob;
+    /// `None` = the built-in default of 100,000 tokens).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub orchestration_run_cap_tokens: Option<u64>,
     #[serde(default)]
     pub brand: Brand,
     #[serde(default)]
@@ -101,6 +105,7 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             default_mode: "mix".to_string(),
+            orchestration_run_cap_tokens: None,
             system_prompt: None,
             prompts: Prompts::default(),
             llm_model: None,

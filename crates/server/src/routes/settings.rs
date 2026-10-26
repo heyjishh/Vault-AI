@@ -21,6 +21,7 @@ pub fn apply_prompts(state: &AppState, settings: &Settings) {
     );
     state.workflows.set_instruction(settings.prompts.agent.clone());
     state.agent.set_instruction(settings.prompts.agent.clone());
+    state.orchestrator.set_instruction(settings.prompts.agent.clone());
 }
 
 /// What the user panel needs: branding, visible custom tabs, and the

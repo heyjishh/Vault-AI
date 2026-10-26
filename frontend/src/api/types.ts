@@ -297,13 +297,30 @@ export interface AgentStepTrace {
   citations: Citation[]
 }
 
+export interface SubAgentReceipt {
+  role: string
+  name: string
+  input: string
+  contribution: string
+  citations: Citation[]
+  tokens_used: number
+  status: string
+  elapsed_ms: number
+}
+
 export interface AutonomousRun {
   goal: string
-  steps: AgentStepTrace[]
+  /** Legacy planner-executor steps; absent on orchestrated runs. */
+  steps?: AgentStepTrace[]
   final_report: string
   citations: Citation[]
   stopped: string
-  max_steps: number
+  max_steps?: number
+  /** Orchestrated runs only: one receipt per sub-agent. */
+  sub_agents?: SubAgentReceipt[]
+  /** Orchestrated runs only: unresolved conflicts, flagged not hidden. */
+  conflicts?: string[]
+  total_tokens?: number
 }
 
 export interface CacheStats {

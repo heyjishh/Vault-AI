@@ -554,22 +554,81 @@ pub struct AutonomousRunRequest {
     pub goal: String,
     /// Confine vault searches to this brief (space-checked).
     pub matter_id: Option<String>,
-    /// Planner step budget, 1..=10 (default 6).
+    /// Planner step budget, 1..=10 (default 6). Legacy mode only;
+    /// ignored by orchestrated runs.
     pub max_steps: Option<usize>,
+    /// Orchestrated sub-agent run: lead → parallel researchers →
+    /// drafter → checker → reconciler (default true). `false` runs
+    /// the legacy single-agent planner-executor loop instead.
+    pub orchestrated: Option<bool>,
+    /// When true (orchestrated only), stream SSE instead of JSON:
+    /// a `status` event per sub-agent, then a `done` event carrying
+    /// the final report plus every sub-agent's receipt.
+    pub stream: Option<bool>,
 }
 
-/// Autonomous agent run: a planner loop over vault/web search tools,
-/// ending in a synthesized, cited report. Billed like a workflow run.
+/// Orchestrator config for this server: commissioned defaults, with
+/// the per-run token cap overridable by the admin settings knob.
+fn orchestration_config(state: &AppState) -> legal_rag_rag::OrchestratorConfig {
+    let mut cfg = legal_rag_rag::OrchestratorConfig::default();
+    if let Some(cap) = state.settings.get().orchestration_run_cap_tokens {
+        cfg.per_run_token_cap = cap.clamp(10_000, 1_000_000);
+    }
+    cfg
+}
+
+/// Autonomous agent run. Default: the orchestrated sub-agent pipeline
+/// (P1 sequential specialists + P2 parallel research) with per-sub-agent
+/// receipts; `orchestrated: false` keeps the legacy planner-executor.
+/// Billed like a workflow run in every mode.
 pub async fn autonomous_run(
     State(state): State<AppState>,
     AuthUser(user): AuthUser,
     Json(body): Json<AutonomousRunRequest>,
-) -> Result<Json<legal_rag_rag::AutonomousRun>, ApiError> {
+) -> Result<axum::response::Response, ApiError> {
+    use axum::response::IntoResponse;
     if body.goal.trim().is_empty() {
         return Err(legal_rag_common::Error::BadRequest("goal is empty".to_string()).into());
     }
+    let orchestrated = body.orchestrated.unwrap_or(true);
+    let stream = body.stream.unwrap_or(false);
+    if stream && !orchestrated {
+        return Err(legal_rag_common::Error::BadRequest(
+            "stream requires an orchestrated run".to_string(),
+        )
+        .into());
+    }
     crate::routes::billing::ensure_quota(&state, &user.id)?;
     let docs = doc_scope(&state, &body.matter_id, &user)?;
+
+    if stream {
+        return Ok(autonomous_stream(state, user, body, docs).await.into_response());
+    }
+
+    if orchestrated {
+        let cfg = orchestration_config(&state);
+        let scope = legal_rag_rag::usage::new_scope();
+        let run = legal_rag_rag::usage::scope_usage(scope.clone(), async {
+            state
+                .orchestrator
+                .run(body.goal.trim(), docs, cfg, None)
+                .await
+        })
+        .await?;
+        crate::routes::billing::settle_with_payload(
+            &state,
+            &user,
+            &scope,
+            "autonomous",
+            &body.goal,
+            "Autonomous research (orchestrated)",
+            &run.final_report,
+            run.citations.len(),
+            Some(serde_json::json!({ "goal": body.goal, "run": run })),
+        );
+        return Ok(Json(run).into_response());
+    }
+
     let scope = legal_rag_rag::usage::new_scope();
     let run = legal_rag_rag::usage::scope_usage(scope.clone(), async {
         state
@@ -589,7 +648,94 @@ pub async fn autonomous_run(
         run.citations.len(),
         Some(serde_json::json!({ "goal": body.goal, "run": run })),
     );
-    Ok(Json(run))
+    Ok(Json(run).into_response())
+}
+
+/// SSE variant of the orchestrated run: status per sub-agent, then an
+/// extended Done event carrying the final report, the citation audit
+/// and every sub-agent's receipt. Billing/activity settle when the run
+/// completes, mirroring the streamed Ask path.
+async fn autonomous_stream(
+    state: AppState,
+    user: legal_rag_auth::User,
+    body: AutonomousRunRequest,
+    docs: Option<Vec<String>>,
+) -> axum::response::Sse<
+    impl futures::Stream<Item = Result<axum::response::sse::Event, std::convert::Infallible>>,
+> {
+    use axum::response::sse::{Event, KeepAlive, Sse};
+    use legal_rag_rag::QueryEvent;
+
+    let cfg = orchestration_config(&state);
+    let goal = body.goal.trim().to_string();
+    let matter_id = body.matter_id.clone();
+    let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<QueryEvent>();
+    let orchestrator = state.orchestrator.clone();
+    let billing = state.billing.clone();
+    let activity = state.activity.clone();
+    let user_id = user.id.clone();
+    let user_email = user.email.clone();
+    tokio::spawn(async move {
+        let progress_tx = tx.clone();
+        let scope = legal_rag_rag::usage::new_scope();
+        let scope_in = scope.clone();
+        let run = legal_rag_rag::usage::scope_usage(scope_in, async {
+            orchestrator
+                .run(&goal, docs, cfg, Some(progress_tx))
+                .await
+        })
+        .await;
+        match run {
+            Ok(run) => {
+                let totals = scope.lock().map(|t| *t).unwrap_or_default();
+                billing.add_usage(&user_id, &totals);
+                activity.record(
+                    crate::activity::ActivityEvent::new(
+                        &user_id,
+                        &user_email,
+                        "autonomous",
+                        &goal,
+                        "orchestrated",
+                        &run.final_report,
+                        run.citations.len(),
+                        totals.total(),
+                    )
+                    .with_matter(matter_id)
+                    .with_payload(Some(serde_json::json!({
+                        "goal": goal,
+                        "run": run,
+                    }))),
+                );
+                let _ = tx.send(QueryEvent::Done {
+                    answer: run.final_report,
+                    audit: run.citation_audit,
+                    expansions: Vec::new(),
+                    sub_agents: run.sub_agents,
+                });
+            }
+            Err(e) => {
+                let _ = tx.send(QueryEvent::Status {
+                    message: format!("error: {e}"),
+                });
+            }
+        }
+    });
+
+    let stream = futures::stream::unfold(rx, |mut rx| async move {
+        match rx.recv().await {
+            Some(ev) => {
+                let (name, data) = match &ev {
+                    QueryEvent::Status { .. } => ("status", serde_json::to_string(&ev).unwrap_or_default()),
+                    QueryEvent::Sources { .. } => ("sources", serde_json::to_string(&ev).unwrap_or_default()),
+                    QueryEvent::Delta { .. } => ("delta", serde_json::to_string(&ev).unwrap_or_default()),
+                    QueryEvent::Done { .. } => ("done", serde_json::to_string(&ev).unwrap_or_default()),
+                };
+                Some((Ok(Event::default().event(name).data(data)), rx))
+            }
+            None => None,
+        }
+    });
+    Sse::new(stream).keep_alive(KeepAlive::default())
 }
 
 #[derive(Serialize)]

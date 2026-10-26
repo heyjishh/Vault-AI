@@ -292,6 +292,11 @@ pub enum QueryEvent {
         /// retrieval (skipped in serialization when empty).
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         expansions: Vec<String>,
+        /// Per-sub-agent receipts for an orchestrated run (extended
+        /// Done event): each specialist's contribution, tokens and
+        /// status. Empty for ordinary streamed answers.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        sub_agents: Vec<crate::subagents::SubAgentReceipt>,
     },
 }
 
@@ -1474,7 +1479,7 @@ impl QueryService {
                             let _ = tx.send(QueryEvent::Delta { text: chunk.to_string() });
                         }
                     }
-                    let _ = tx.send(QueryEvent::Done { answer: hit.answer, audit: None, expansions: Vec::new() });
+                    let _ = tx.send(QueryEvent::Done { answer: hit.answer, audit: None, expansions: Vec::new(), sub_agents: Vec::new() });
                     return Ok(());
                 }
                 if self.answer_cache_enabled {
@@ -1497,6 +1502,7 @@ impl QueryService {
                             answer: hit.answer.clone(),
                             audit: hit.citation_audit,
                             expansions: hit.expansions.clone(),
+                            sub_agents: Vec::new(),
                         });
                         return Ok(());
                     }
@@ -1575,7 +1581,7 @@ impl QueryService {
                 );
             }
         }
-        let _ = tx.send(QueryEvent::Done { answer, audit: Some(audit), expansions });
+        let _ = tx.send(QueryEvent::Done { answer, audit: Some(audit), expansions, sub_agents: Vec::new() });
         Ok(())
     }
 

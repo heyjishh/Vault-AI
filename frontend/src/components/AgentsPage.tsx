@@ -119,7 +119,7 @@ export default function AgentsPage({ go }: { go?: (view: string) => void } = {})
           <Compass size={18} className="text-stone-500" /> Autonomous research
         </h2>
         <p className="text-meta2 text-stone-500 mt-1">
-          Give it a goal — the agent plans its own steps across your vault and the web, then writes a cited report. Fixed workflows below run a set recipe; this one chooses.
+          Give it a goal — a lead agent splits it across specialist researchers, a drafter, and an independent checker, then reconciles their work into a cited report. Fixed workflows below run a set recipe; this one chooses.
         </p>
         <textarea
           value={goal} onChange={(e) => setGoal(e.target.value)} rows={3}
@@ -151,8 +151,27 @@ export default function AgentsPage({ go }: { go?: (view: string) => void } = {})
         {startAuto.isPending && <Spinner label="The agent is planning and running its own research steps…" />}
         {autoRun && !startAuto.isPending && (
           <div className="mt-5 fade-up">
+            {(autoRun.sub_agents?.length ?? 0) > 0 && (
+              <div className="space-y-1.5 mb-4">
+                {autoRun.sub_agents!.map((r) => (
+                  <div key={r.name} className="flex items-start gap-2.5 text-meta2">
+                    <span className="shrink-0 rounded-full bg-stone-100 border border-stone-200 px-2 py-0.5 text-meta font-medium text-stone-600">
+                      {r.role} · {r.name} · {r.status}
+                    </span>
+                    <span className="text-stone-600">
+                      {r.input}
+                      {r.citations.length > 0 && <span className="text-stone-400"> · {r.citations.length} sources</span>}
+                      <span className="text-stone-400"> · {r.tokens_used.toLocaleString()} tokens</span>
+                    </span>
+                  </div>
+                ))}
+                {(autoRun.conflicts?.length ?? 0) > 0 && (
+                  <p className="text-meta2 text-[#a02c2c]">⚠ Conflicts flagged (see the reconciliation section in the report): {autoRun.conflicts!.join(' · ')}</p>
+                )}
+              </div>
+            )}
             <div className="space-y-1.5 mb-4">
-              {autoRun.steps.map((s) => (
+              {(autoRun.steps ?? []).map((s) => (
                 <div key={s.n} className="flex items-start gap-2.5 text-meta2">
                   <span className="shrink-0 rounded-full bg-stone-100 border border-stone-200 px-2 py-0.5 text-meta font-medium text-stone-600">
                     {s.n}. {s.action.replace('_', ' ')}
