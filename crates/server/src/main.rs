@@ -318,6 +318,9 @@ async fn main() -> anyhow::Result<()> {
     // citation staleness flags, read live from the document registry.
     let rag_for_meta = rag.clone();
     query.set_doc_meta_source(Arc::new(move |id: &str| rag_for_meta.document_meta(id)));
+    // Citator: the query service reads the same treatment store the
+    // ingest pipeline writes (new uploads) and backfill populates.
+    query.set_treatment_store(rag.treatments());
     // Let the retrieval cache spawn background revalidation tasks.
     query.bind_self(&query);
     // ColBERT late interaction (optional, Tier-2): LEGAL_RAG_COLBERT_URL
@@ -339,7 +342,7 @@ async fn main() -> anyhow::Result<()> {
 
     // ---- Persistence: load snapshots, then save periodically + on shutdown.
     let data_dir = legal_rag_rag::persist::data_dir();
-    restore_snapshots(&data_dir, mem_store.as_ref(), &store, &graph_store, &rag, &user_store).await;
+    restore_snapshots(&data_dir, mem_store.as_ref(), &store, &graph_store, &rag, &rag.treatments(), &user_store).await;
 
     let snapshot_handles = SnapshotHandles {
         data_dir: data_dir.clone(),
@@ -347,6 +350,7 @@ async fn main() -> anyhow::Result<()> {
         store: store.clone(),
         graph_store: graph_store.clone(),
         rag: rag.clone(),
+        treatments: rag.treatments(),
         user_store: user_store.clone(),
     };
     // Periodic saver every 5 minutes (also covers crash-durability between saves).
@@ -499,6 +503,7 @@ struct SnapshotHandles {
     store: Arc<dyn VectorStore>,
     graph_store: Arc<InMemoryGraphStore>,
     rag: Arc<RagAnything>,
+    treatments: Arc<legal_rag_rag::TreatmentStore>,
     user_store: Arc<InMemoryUserStore>,
 }
 
@@ -535,6 +540,7 @@ impl SnapshotHandles {
             "documents.json",
             &serde_json::json!({ "documents": documents, "status": status }),
         )?;
+        persist::save_json(&self.data_dir, "citator.json", &self.treatments.snapshot())?;
         persist::save_json(&self.data_dir, "users.json", &self.user_store.snapshot())?;
         tracing::info!(dir = %self.data_dir.display(), "snapshot saved");
         Ok(())
@@ -548,6 +554,7 @@ async fn restore_snapshots(
     store: &Arc<dyn VectorStore>,
     graph_store: &Arc<InMemoryGraphStore>,
     rag: &Arc<RagAnything>,
+    treatments: &Arc<legal_rag_rag::TreatmentStore>,
     user_store: &Arc<InMemoryUserStore>,
 ) {
     use legal_rag_rag::persist;
@@ -596,6 +603,14 @@ async fn restore_snapshots(
         }
         Ok(None) => {}
         Err(e) => tracing::warn!(error = %e, "document snapshot load failed"),
+    }
+    match persist::load_json::<Vec<legal_rag_rag::TreatmentEdge>>(data_dir, "citator.json") {
+        Ok(Some(edges)) => {
+            info!(edges = edges.len(), "restored citator snapshot");
+            treatments.restore(edges);
+        }
+        Ok(None) => {}
+        Err(e) => tracing::warn!(error = %e, "citator snapshot load failed"),
     }
     match persist::load_json::<Vec<legal_rag_auth::UserSnapshot>>(data_dir, "users.json") {
         Ok(Some(users)) => {

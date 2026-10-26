@@ -179,6 +179,7 @@ impl QueryService {
                     score: hit.score,
                     source_url: None,
                     source_date: None,
+                    treatment: None,
                 });
             }
             doc_offset += hits.len();
@@ -205,6 +206,7 @@ impl QueryService {
                         score: 0.7,
                         source_url: Some(page.url.clone()),
                         source_date: page.date.clone(),
+                        treatment: None,
                     });
                 }
                 web_offset += pages.len();

@@ -347,6 +347,76 @@ live round-trip not verified, no credentials in this environment).
   markers aggressively, which surfaces as flagged conflicts. Fixed
   workflows (`agent.rs`) are untouched.
 
+### 5.x Citator — "is this case still good law?" (V1, 26 Oct 2026)
+
+Every cited authority in an Ask answer carries a treatment status
+with provenance: Overruled / Followed / Distinguished / Applied /
+Good law / Unknown (`crates/rag/src/citator.rs`, `Citation.treatment`).
+The governing rule is absolute: **a status is never asserted without
+a cited passage**. With no evidence the status is Unknown — never a
+guess, never an assumed good law. A citation is never dropped for
+its status; Overruled / Distinguished authorities additionally get a
+deterministic treatment-note line appended to the answer (after the
+citation audit, in both blocking and streaming paths).
+
+- **Edge model** — `TreatmentEdge { target, kind, source_doc_id,
+  source_chunk_id, source_title, passage }`: a later judgment's
+  sentence treating an earlier case. `target` is the case name as
+  written (`ADM Jabalpur`, `Union of India v Bhanudas Krishna
+  Gawde`). Edges live in a shared in-memory `TreatmentStore`
+  (pipeline writes, query service reads), persisted as
+  `citator.json` by the 5-minute / shutdown snapshotter and restored
+  on boot. Document removal deletes its edges with its chunks.
+- **Detection (ingest, deterministic, zero LLM / embedding cost)** —
+  per parent chunk, sentences split with an initial-aware splitter
+  (does not break `M.P.` or `v.`): `A v. B` names near a treatment
+  verb (12-word window, so a far verb in another clause cannot
+  attach); `(supra)` short forms governed by the sentence's verb;
+  verb-following bare phrases; sentence-initial operative subjects.
+  Negation (`not / never / decline / refuse / fail to` before the
+  verb, noun-ish `the overruling`) creates no edge, and evaluative
+  language without a verb creates none. A verb that already governs
+  a bare object after it (`which followed ADM Jabalpur`) does not
+  also attach to a preceding `v.`-target. Kill switch
+  `LEGAL_RAG_CITATOR=0`. Backfill: `POST
+  /api/v1/admin/citator/backfill` re-scans stored parent chunks
+  only — no re-embedding — and is idempotent.
+- **Resolution (Ask time)** — only edges whose source document is
+  visible in the effective scope count (brief docs when brief-scoped,
+  full vault otherwise; a brief→vault fallback widens evidence
+  exactly as it widens the answer — never another brief's edges).
+  Name matching is normalized token-subset with alias expansion
+  (`ADM` = Additional District Magistrate) and merged initials
+  (`M P` = `M.P.`); a partial match is Unknown. Precedence when
+  several edges match: Overruled > Distinguished > Good law
+  (affirmed) > Followed > Applied, and the winning edge's passage is
+  the provenance shown. Web / private citations are always Unknown.
+  Semantic-cache hits re-resolve statuses against the current edge
+  set, so backfill fixes even cached answers (their stored
+  treatment-note text is replayed as generated).
+- **Surface** — status badges + evidence passage on Ask citation
+  cards (`AssistantPage`); treatment-note line in the answer text.
+- **Real-pair eval (genuine text, honestly reported)** — source:
+  Justice K.S. Puttaswamy (Retd.) v. Union of India, W.P.(C) No. 494
+  of 2012, Supreme Court, 24 Aug 2017 (full text via
+  legalauthority.in). Detection + resolution: 4/4 — Chandrachud J.,
+  para 121: `ADM Jabalpur must be and is accordingly overruled`
+  → Overruled vs `Additional District Magistrate, Jabalpur v.
+  Shivakant Shukla`; `We also overrule the decision in Union of
+  India v Bhanudas Krishna Gawde, which followed ADM Jabalpur` →
+  Overruled (Gawde) + Followed (ADM, by Gawde — precedence keeps
+  Overruled); Nariman J.: `M.P. Sharma (supra) and the majority in
+  Kharak Singh (supra) ... stand overruled` → Overruled vs both
+  real titles. Documented non-detection, by design: the para-119
+  `are seriously flawed` sentence states criticism without a
+  treatment verb, so it yields no edge (Unknown, not a guess).
+- **Honest limits** — adjective `overruling` uses outside the
+  `the`-guard can still misfire; multi-verb sentences attach by
+  nearest verb in-window; conflicting edges are ordered by
+  precedence, not by date (no date ordering yet); web verification
+  for authorities with no corpus evidence is deferred follow-up
+  (same provenance + scope rules to be verified, not assumed).
+
 ## 6. Frontend architecture
 
 Two independent Vite SPAs served as static files by C1 (no server restart
@@ -392,6 +462,7 @@ and on SIGTERM/SIGINT; state restores on boot.
 | `activity.json` | Action history (≤5,000 entries; private content redacted) | Medium |
 | `annotations.json` | Verified Answers (curated Q/A + stored question vectors) | Medium |
 | `golden.json` | Golden-ruleset evaluation cases | Low |
+| `citator.json` | Treatment edges: target case, kind, source doc/chunk, passage provenance | Client data |
 | `settings.json` | Admin settings + prompt overrides | Medium |
 
 ### 7.2 Vector data

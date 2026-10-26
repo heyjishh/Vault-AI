@@ -20,6 +20,18 @@ export interface AuthResponse {
 
 export type QueryMode = 'naive' | 'local' | 'global' | 'hybrid' | 'mix' | 'bypass'
 
+/** Citator treatment status of a cited authority. A status is only
+ *  ever asserted with a cited passage (`evidence_passage`); `unknown`
+ *  carries no evidence and is never a guess. */
+export type TreatmentStatus = 'overruled' | 'followed' | 'distinguished' | 'applied' | 'good_law' | 'unknown'
+
+export interface CitationTreatment {
+  status: TreatmentStatus
+  evidence_source_title?: string | null
+  evidence_passage?: string | null
+  evidence_doc_id?: string | null
+}
+
 export interface Citation {
   doc_id: string
   doc_title?: string | null
@@ -35,6 +47,8 @@ export interface Citation {
   source_url?: string | null
   /** Publication / judgment date (YYYY-MM-DD) for web citations. */
   source_date?: string | null
+  /** Citator treatment status with provenance (absent on old cached answers). */
+  treatment?: CitationTreatment | null
 }
 
 /** Full text behind one citation, for the in-app source viewer modal. */

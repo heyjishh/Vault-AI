@@ -67,6 +67,12 @@ pub struct Citation {
     /// Publication / judgment date (YYYY-MM-DD) for web citations.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source_date: Option<String>,
+    /// Citator status of this authority (see `crate::citator`): the
+    /// treatment a later judgment in the visible scope gave it, with
+    /// the passage as provenance — or Unknown when no corpus passage
+    /// says. Web / private citations are always Unknown.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub treatment: Option<crate::citator::CitationTreatment>,
 }
 
 /// Format contract appended to the system prompt for web-augmented
@@ -316,6 +322,10 @@ pub struct QueryService {
     /// Legal-validity metadata lookup by document id, pushed in by the
     /// server (defaults to a no-metadata source).
     doc_meta: std::sync::RwLock<Arc<dyn Fn(&str) -> Option<crate::pipeline::DocMeta> + Send + Sync>>,
+    /// Citator treatment store, pushed in by the server (defaults to an
+    /// empty store, so every citation resolves Unknown until ingest
+    /// or backfill populates it).
+    treatments: std::sync::RwLock<Arc<crate::citator::TreatmentStore>>,
     web: Arc<dyn WebSearch>,
     reranker: Option<Arc<dyn Reranker>>,
     /// Optional ColBERT-style late-interaction rescorer, bound by the
@@ -372,6 +382,7 @@ impl QueryService {
             llm,
             doc_titles,
             doc_meta: std::sync::RwLock::new(Arc::new(|_| None)),
+            treatments: std::sync::RwLock::new(Arc::new(crate::citator::TreatmentStore::new())),
             web,
             reranker,
             late_interactor: std::sync::RwLock::new(None),
@@ -743,6 +754,38 @@ impl QueryService {
         f: Arc<dyn Fn(&str) -> Option<crate::pipeline::DocMeta> + Send + Sync>,
     ) {
         *self.doc_meta.write().expect("lock poisoned") = f;
+    }
+
+    /// Bind the shared citator treatment store (server, right after
+    /// construction — the same store the ingest pipeline writes).
+    pub fn set_treatment_store(&self, store: Arc<crate::citator::TreatmentStore>) {
+        *self.treatments.write().expect("lock poisoned") = store;
+    }
+
+    /// Re-resolve every corpus citation's treatment against the
+    /// current edge set. Used for cache hits (edges may have landed
+    /// after the answer was cached, e.g. via backfill) — verified
+    /// annotations are never rewritten.
+    fn refresh_treatments(&self, answer: &mut QueryAnswer, scope: Option<&DocScope>) {
+        if answer.verified {
+            return;
+        }
+        let effective: Option<DocScope> = match &answer.scope_note {
+            Some(note) if note.contains("answered from the full vault") => None,
+            _ => scope.cloned(),
+        };
+        let edges = self.treatments.read().expect("lock poisoned").all();
+        for c in answer.citations.iter_mut() {
+            if c.doc_id.starts_with("doc:") {
+                c.treatment = Some(crate::citator::resolve_treatment(
+                    c.doc_title.as_deref(),
+                    &edges,
+                    effective.as_ref(),
+                ));
+            } else {
+                c.treatment = Some(crate::citator::CitationTreatment::unknown());
+            }
+        }
     }
 
     /// Staleness note for one document, when it is known superseded.
@@ -1188,6 +1231,11 @@ impl QueryService {
             .retrieve_expanded(question, mode, fetch_k, scope.as_ref(), &expansions)
             .await?;
         let mut scope_note = None;
+        // Citator scope follows retrieval scope exactly: a fallback to
+        // the full vault widens treatment evidence with it (the answer
+        // itself is full-vault then); otherwise only in-scope treating
+        // judgments count — never another brief's.
+        let mut fell_back = false;
         if scope.is_some() && hits.is_empty() && graph_context.is_empty() {
             if strict {
                 // A legal-validity scope (as-of date / jurisdiction) is a
@@ -1204,6 +1252,7 @@ impl QueryService {
                 let (h2, g2) = self.retrieve(question, mode, fetch_k, None).await?;
                 hits = h2;
                 graph_context = g2;
+                fell_back = true;
                 scope_note =
                     Some("No documents in this brief matched — answered from the full vault.".to_string());
             }
@@ -1292,6 +1341,7 @@ impl QueryService {
                 score: h.score,
                 source_url: None,
                 source_date: None,
+                treatment: None,
             })
             .collect();
         for (i, p) in web_pages.iter().enumerate() {
@@ -1308,6 +1358,7 @@ impl QueryService {
                 score: 0.7,
                 source_url: Some(p.url.clone()),
                 source_date: p.date.clone(),
+                treatment: None,
             });
         }
         for (i, s) in extra.iter().enumerate() {
@@ -1322,7 +1373,27 @@ impl QueryService {
                 score: s.score,
                 source_url: None,
                 source_date: None,
+                treatment: None,
             });
+        }
+        // Citator resolution (see `crate::citator`): corpus citations
+        // resolve against treatment edges visible in the effective
+        // scope; web / private citations are always Unknown, and a
+        // citation is never dropped for its status.
+        {
+            let effective_scope: Option<DocScope> = if fell_back { None } else { scope.clone() };
+            let edges = self.treatments.read().expect("lock poisoned").all();
+            for c in citations.iter_mut() {
+                c.treatment = Some(if c.doc_id.starts_with("doc:") {
+                    crate::citator::resolve_treatment(
+                        c.doc_title.as_deref(),
+                        &edges,
+                        effective_scope.as_ref(),
+                    )
+                } else {
+                    crate::citator::CitationTreatment::unknown()
+                });
+            }
         }
         let mut system = self.answer_system();
         if !web_pages.is_empty() {
@@ -1365,8 +1436,11 @@ impl QueryService {
                 }
                 if self.answer_cache_enabled {
                     let key = self.answer_scope_key(mode, top_k, scope.as_ref(), &fp);
-                    if let Some(hit) = self.answer_cache.lookup(&qvec, &key) {
+                    if let Some(mut hit) = self.answer_cache.lookup(&qvec, &key) {
                         info!("semantic answer cache hit (zero LLM cost)");
+                        // Edges may have landed since this answer was
+                        // cached (ingest / backfill): refresh statuses.
+                        self.refresh_treatments(&mut hit, scope.as_ref());
                         return Ok(hit);
                     }
                     cache_slot = Some((qvec, key));
@@ -1389,6 +1463,9 @@ impl QueryService {
         if audit.stripped > 0 {
             warn!(checked = audit.checked, stripped = audit.stripped, "citation audit stripped unsupported markers");
         }
+        // Treatment flag, never a silent drop: an overruled or
+        // distinguished cited authority gets a line in the answer.
+        let answer = crate::citator::append_treatment_note(answer, &citations);
         info!(mode = ?mode, citations = citations.len(), web_pages = web_pages.len(), "answered query");
         let out = QueryAnswer {
             answer,
@@ -1484,10 +1561,13 @@ impl QueryService {
                 }
                 if self.answer_cache_enabled {
                     let key = self.answer_scope_key(mode, top_k, scope.as_ref(), &fp);
-                    if let Some(hit) = self.answer_cache.lookup(&qvec, &key) {
+                    if let Some(mut hit) = self.answer_cache.lookup(&qvec, &key) {
                         let _ = tx.send(QueryEvent::Status {
                             message: "Matched an earlier answer — serving it instantly.".to_string(),
                         });
+                        // Same refresh as the blocking path: statuses
+                        // track the current edge set, not cache time.
+                        self.refresh_treatments(&mut hit, scope.as_ref());
                         let _ = tx.send(QueryEvent::Sources {
                             citations: hit.citations.clone(),
                             mode,
@@ -1564,6 +1644,10 @@ impl QueryService {
             .map(|c| (c.doc_id.clone(), c.snippet.clone()))
             .collect();
         let (answer, audit) = crate::audit::audit_answer(&answer, &audit_sources);
+        // Same treatment-note rule as the blocking path; the Done
+        // event carries the noted answer, which is what the client
+        // persists and re-renders.
+        let answer = crate::citator::append_treatment_note(answer, &citations);
         if let Some((qvec, key)) = cache_slot {
             if !citations.is_empty() {
                 self.answer_cache.store(
@@ -2866,6 +2950,78 @@ mod tests {
             assert!(!ans.answer.is_empty(), "mode {mode:?} gave empty answer");
             assert_eq!(ans.mode, mode);
         }
+    }
+
+    #[tokio::test]
+    async fn citator_status_attaches_and_flags_overruled() {
+        let (svc, _) = seeded().await;
+        let store = std::sync::Arc::new(crate::citator::TreatmentStore::new());
+        store.add(vec![crate::citator::TreatmentEdge {
+            target: "Nda".into(),
+            kind: crate::citator::TreatmentKind::Overruled,
+            source_doc_id: "later-doc".into(),
+            source_chunk_id: "later-chunk".into(),
+            source_title: Some("Later Judgment".into()),
+            passage: "We overrule Nda.".into(),
+        }]);
+        svc.set_treatment_store(store);
+        let ans = svc.query("What did Acme agree to?", QueryMode::Mix, 3).await.unwrap();
+        assert!(!ans.citations.is_empty());
+        let t = ans.citations[0].treatment.as_ref().expect("treatment attached");
+        assert_eq!(t.status, crate::citator::TreatmentStatus::Overruled);
+        assert_eq!(t.evidence_passage.as_deref(), Some("We overrule Nda."));
+        // The citation stays AND the answer flags it — never a silent drop.
+        assert!(ans.answer.contains("Treatment note:"));
+        assert!(ans.answer.contains("was overruled in Later Judgment"));
+    }
+
+    #[tokio::test]
+    async fn citator_respects_brief_scope() {
+        // Edge sourced in ANOTHER brief must not leak into a
+        // brief-scoped answer, even though the cited doc is in scope.
+        let (svc, rag) = seeded().await;
+        let cited = rag.list_documents()[0].id.clone();
+        let store = std::sync::Arc::new(crate::citator::TreatmentStore::new());
+        store.add(vec![crate::citator::TreatmentEdge {
+            target: "Nda".into(),
+            kind: crate::citator::TreatmentKind::Overruled,
+            source_doc_id: "other-brief-doc".into(),
+            source_chunk_id: "x".into(),
+            source_title: Some("Other Brief Judgment".into()),
+            passage: "We overrule Nda.".into(),
+        }]);
+        svc.set_treatment_store(store);
+        let ans = svc
+            .query_scoped("What did Acme agree to?", QueryMode::Mix, 3, vec![cited.clone()])
+            .await
+            .unwrap();
+        assert!(!ans.citations.is_empty(), "in-scope hits expected");
+        assert!(ans.scope_note.is_none(), "no fallback: cited doc is in scope");
+        let t = ans.citations[0].treatment.as_ref().expect("treatment attached");
+        assert_eq!(t.status, crate::citator::TreatmentStatus::Unknown);
+        assert!(!ans.answer.contains("Treatment note:"));
+        // Same edge sourced INSIDE the scope is visible.
+        let (svc2, rag2) = seeded().await;
+        let cited2 = rag2.list_documents()[0].id.clone();
+        let store2 = std::sync::Arc::new(crate::citator::TreatmentStore::new());
+        store2.add(vec![crate::citator::TreatmentEdge {
+            target: "Nda".into(),
+            kind: crate::citator::TreatmentKind::Overruled,
+            source_doc_id: cited2.clone(),
+            source_chunk_id: "y".into(),
+            source_title: Some("In-Scope Judgment".into()),
+            passage: "We overrule Nda.".into(),
+        }]);
+        svc2.set_treatment_store(store2);
+        let ans2 = svc2
+            .query_scoped("What did Acme agree to?", QueryMode::Mix, 3, vec![cited2])
+            .await
+            .unwrap();
+        assert!(!ans2.citations.is_empty());
+        assert_eq!(
+            ans2.citations[0].treatment.as_ref().unwrap().status,
+            crate::citator::TreatmentStatus::Overruled
+        );
     }
 
     #[tokio::test]

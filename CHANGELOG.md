@@ -15,6 +15,58 @@ live**, what is **built but unverified**, and what is **roadmap**.
 ## [Unreleased]
 
 ### Added
+- **Citator — "is this case still good law?"** (V1, 26 Oct 2026).
+  Every cited authority in an Ask answer now carries a treatment status
+  with provenance — Overruled / Followed / Distinguished / Applied /
+  Good law / Unknown — on the citation card, and an overruled or
+  distinguished authority additionally gets a deterministic
+  treatment-note line in the answer. A citation is NEVER dropped for
+  its status. The governing rule is absolute: a status is never
+  asserted without a cited passage; with no evidence the status is
+  Unknown, never a guess and never an assumed good law.
+  - **Detection** (`crates/rag/src/citator.rs`): deterministic pattern
+    matching over judgment text at ingest — no LLM call, no extra
+    embedding. Covers `A v. B` names near a treatment verb (12-word
+    window), Indian `(supra)` short forms (`ADM Jabalpur (supra)`,
+    `M.P. Sharma (supra)`), verb-following phrases (`which followed
+    ADM Jabalpur`), and the operative sentence-initial formula
+    (`ADM Jabalpur must be and is accordingly overruled`). Negation
+    (`do not follow`, `declined to overrule`, noun-ish `the
+    overruling`) and evaluative language without a verb (`are
+    seriously flawed`) create no edge. Kill switch `LEGAL_RAG_CITATOR=0`.
+  - **Backfill — BUILT, not deferred**: `POST
+    /api/v1/admin/citator/backfill` re-scans stored parent chunks only
+    (no re-embedding, no LLM calls), idempotent; the existing corpus
+    is small (69 parent/legacy chunks on :3001), so backfill is a
+    seconds-long text scan, verified live (see below).
+  - **Resolution at Ask time**: only treatment edges whose source
+    document is visible in the current scope count (brief docs when
+    brief-scoped, full vault otherwise; a brief→vault fallback widens
+    evidence exactly as it widens the answer). Name matching is
+    normalized token-subset with alias expansion (`ADM` = Additional
+    District Magistrate) and merged initials (`M P` = `M.P.`).
+    Precedence: Overruled > Distinguished > Good law (affirmed) >
+    Followed > Applied. Web and private citations are always Unknown.
+    Cache hits re-resolve statuses against the current edge set.
+  - **Surface**: status badges + evidence passage on Ask citation
+    cards; treatment-note line in blocking and streaming answers
+    (appended after the citation audit, so the quoted passage is
+    never mistaken for a marker). Fixed workflows untouched.
+  - **Verified**: 14 new unit/integration tests incl. synthetic
+    fixtures for every verb and every guard, a brief-boundary test
+    (out-of-scope edge does not leak; in-scope edge does show), and
+    a real-pair eval on genuine Puttaswamy judgment text (see
+    Architecture §5). Live-verified on :3001: synthetic uploads,
+    backfill, brief-boundary Ask, and golden (below).
+  - **Golden**: 15/20 before and after on :3001 — no regression
+    (floor 14/20). Known honest limits: adjective `overruling`
+    uses are excluded by the `the`-guard but other noun-ish uses can
+    still misfire; multi-verb sentences attach by nearest verb within
+    the window; dates are not yet used to order conflicting edges
+    (precedence stands in). **Stretch deferred**: on-demand web
+    verification for authorities with no corpus evidence — the web
+    leg exists, but wiring it under the same provenance + scope rules
+    needs its own verification pass and is follow-up, not V1.
 - **True sub-agent orchestration, P1 + P2** (26 Oct 2026, LIVE-VERIFIED on
   :3001). `POST /api/v1/knowledge/agents/autonomous` now defaults to a
   lead → researchers → drafter → checker → reconciler pipeline

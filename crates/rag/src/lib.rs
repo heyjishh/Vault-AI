@@ -8,6 +8,7 @@
 //! LightRAG's six modes (naive/local/global/hybrid/mix/bypass).
 
 pub mod agent;
+pub mod citator;
 pub mod orchestrator;
 pub mod subagents;
 pub mod audit;
@@ -46,6 +47,9 @@ pub use subagents::{
     DEFAULT_PER_SUBAGENT_TIMEOUT_SECS, DEFAULT_PER_SUBAGENT_TOKEN_BUDGET,
 };
 pub use cache::{CacheStats, CachedEmbeddings, CachedLlm, SemanticCache};
+pub use citator::{
+    CitationTreatment, TreatmentEdge, TreatmentKind, TreatmentStatus, TreatmentStore,
+};
 pub use config::RagAnythingConfig;
 pub use content::{ContentBlock, ModalItem, PageInterval};
 pub use embeddings::{Embeddings, MockEmbeddings, OpenAiEmbeddings};

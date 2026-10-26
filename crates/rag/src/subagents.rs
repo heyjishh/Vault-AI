@@ -1151,6 +1151,7 @@ mod tests {
             stale: None,
             source_url: None,
             source_date: None,
+            treatment: None,
         }];
         let input = checker_input("goal?", draft, &citations);
         assert!(input.contains(draft));

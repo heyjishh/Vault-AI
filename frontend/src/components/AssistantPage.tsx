@@ -456,6 +456,28 @@ function SourcesSidebar({ turn, selectedChunkId, onClose, go, onOpenSource }: {
                     Superseded
                   </span>
                 )}
+                {c.treatment && c.treatment.status !== 'unknown' && (
+                  <span
+                    title={c.treatment.evidence_passage ?? undefined}
+                    className={`rounded-full border px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide ${
+                      c.treatment.status === 'overruled'
+                        ? 'bg-red-50 border-red-600/30 text-red-800'
+                        : c.treatment.status === 'distinguished'
+                          ? 'bg-amber-50 border-amber-600/30 text-amber-800'
+                          : 'bg-emerald-50 border-emerald-600/30 text-emerald-800'
+                    }`}
+                  >
+                    {c.treatment.status === 'good_law' ? 'Good law' : c.treatment.status}
+                  </span>
+                )}
+                {c.treatment && c.treatment.status === 'unknown' && (
+                  <span
+                    title="No judgment in the visible scope states a treatment for this authority — status unknown, not assumed good law."
+                    className="rounded-full bg-stone-50 border border-stone-200 px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide text-stone-500"
+                  >
+                    Status unknown
+                  </span>
+                )}
                 {isWeb && (
                   <span className="ml-auto text-[10px] font-semibold uppercase tracking-wide text-stone-400">Web</span>
                 )}
@@ -464,6 +486,11 @@ function SourcesSidebar({ turn, selectedChunkId, onClose, go, onOpenSource }: {
               <div className="text-[12.5px] text-stone-600 leading-relaxed mt-1.5 max-h-72 overflow-y-auto pr-1">
                 <Highlighted text={c.snippet} terms={terms} />
               </div>
+              {c.treatment && c.treatment.status !== 'unknown' && c.treatment.evidence_passage && (
+                <p className="text-[12px] text-stone-500 italic leading-relaxed mt-2 border-l-2 border-stone-200 pl-2">
+                  “{c.treatment.evidence_passage}” — {c.treatment.evidence_source_title ?? 'a later judgment'}
+                </p>
+              )}
               {c.source_url && (
                 <a
                   href={c.source_url}

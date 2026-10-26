@@ -166,6 +166,8 @@ pub struct ProcessReport {
     pub modal_processed: usize,
     pub entities: usize,
     pub relations: usize,
+    /// Citator treatment edges detected in this document's text.
+    pub treatments: usize,
 }
 
 /// The RAG-Anything pipeline orchestrator.
@@ -179,6 +181,8 @@ pub struct RagAnything {
     chunker: Chunker,
     doc_status: RwLock<HashMap<String, DocStatusRecord>>,
     documents: RwLock<HashMap<String, DocumentInfo>>,
+    /// Citator treatment edges (shared with the query service).
+    treatments: Arc<crate::citator::TreatmentStore>,
 }
 
 impl RagAnything {
@@ -235,6 +239,7 @@ impl RagAnything {
             chunker: Chunker::new(chunk_size, chunk_overlap),
             doc_status: RwLock::new(HashMap::new()),
             documents: RwLock::new(HashMap::new()),
+            treatments: Arc::new(crate::citator::TreatmentStore::new()),
         }
     }
 
@@ -263,6 +268,41 @@ impl RagAnything {
 
     pub fn doc_title(&self, doc_id: &str) -> Option<String> {
         self.doc_info(doc_id).map(|d| d.title)
+    }
+
+    /// The shared citator treatment store (query service reads it;
+    /// ingest and backfill write it; snapshots persist it).
+    pub fn treatments(&self) -> Arc<crate::citator::TreatmentStore> {
+        self.treatments.clone()
+    }
+
+    pub fn treatment_count(&self) -> usize {
+        self.treatments.count()
+    }
+
+    /// Backfill treatment edges for the existing corpus WITHOUT
+    /// re-embedding anything: detection is a pure text scan over the
+    /// stored parent chunks (children / aux / hyper units excluded —
+    /// they duplicate parent text). Idempotent: re-running adds
+    /// nothing already present. Returns new edges added.
+    pub async fn backfill_treatments(&self) -> Result<usize> {
+        let chunks = self.store.all_chunks().await?;
+        let mut added = 0usize;
+        for chunk in chunks.iter().filter(|c| {
+            matches!(
+                c.metadata.get("pc").map(|s| s.as_str()),
+                None | Some("parent")
+            )
+        }) {
+            let edges = crate::citator::detect_treatments(
+                &chunk.text,
+                &chunk.doc_id,
+                &chunk.id,
+                self.doc_title(&chunk.doc_id).as_deref(),
+            );
+            added += self.treatments.add(edges);
+        }
+        Ok(added)
     }
 
     /// Snapshot the document registry (documents + statuses) for disk persistence.
@@ -377,6 +417,7 @@ impl RagAnything {
                 modal_processed: 0,
                 entities: 0,
                 relations: 0,
+                treatments: 0,
             });
         }
         self.set_status(&doc_id, &file_ref, DocStatus::Processing, None, 0, 0);
@@ -503,6 +544,7 @@ impl RagAnything {
 
         let mut entities_total = 0usize;
         let mut relations_total = 0usize;
+        let mut treatments_total = 0usize;
         let mut chunk_ids: Vec<String> = Vec::new();
 
         // Step 3: insert pure text (chunk → embed → graph).
@@ -701,6 +743,19 @@ impl RagAnything {
                     if !relations.is_empty() {
                         self.graph.upsert_relations(relations).await?;
                     }
+                    // Citator: deterministic treatment detection over
+                    // the parent text — no LLM call, no embedding, so
+                    // it rides the existing chunk pipeline for free.
+                    // Kill switch LEGAL_RAG_CITATOR=0.
+                    if crate::citator::citator_enabled() {
+                        let edges = crate::citator::detect_treatments(
+                            &record.text,
+                            doc_id,
+                            &record.id,
+                            title.as_deref(),
+                        );
+                        treatments_total += self.treatments.add(edges);
+                    }
                 }
                 chunk_count = records.len();
                 chunk_ids.extend(records.iter().map(|r| r.id.clone()));
@@ -778,6 +833,7 @@ impl RagAnything {
             modal_processed,
             entities: entities_total,
             relations: relations_total,
+            treatments: treatments_total,
         })
     }
 
@@ -814,6 +870,9 @@ impl RagAnything {
         let removed = self.store.remove_doc(doc_id).await?;
         if !chunk_ids.is_empty() {
             self.graph.remove_chunks(&chunk_ids).await?;
+            // Treatment evidence dies with its source document: a
+            // deleted treating judgment must stop flagging citations.
+            self.treatments.remove_chunks(&chunk_ids);
         }
         self.doc_status.write().expect("lock poisoned").remove(doc_id);
         self.documents.write().expect("lock poisoned").remove(doc_id);
@@ -1361,6 +1420,29 @@ mod tests {
         let doc_id = parents[0].doc_id.clone();
         let full = rag.document_text(&doc_id, 100_000).await.unwrap();
         assert_eq!(full.matches("reasonable opportunity").count(), 3, "each repetition appears once");
+    }
+
+    #[tokio::test]
+    async fn ingest_detects_treatment_edges_and_backfill_is_idempotent() {
+        let rag = rag();
+        let report = rag
+            .process_document_complete(
+                "later.txt",
+                b"We overrule Smith v. Jones. The holding in Smith v. Jones is no longer good law.",
+                None,
+                None,
+            )
+            .await
+            .unwrap();
+        assert!(report.treatments >= 1, "treatments: {}", report.treatments);
+        assert_eq!(rag.treatment_count(), report.treatments);
+        // Backfill re-scans the same parents: nothing new (dedupe).
+        assert_eq!(rag.backfill_treatments().await.unwrap(), 0);
+        assert_eq!(rag.treatment_count(), report.treatments);
+        // Removing the document removes its treatment evidence too.
+        let doc_id = rag.list_documents()[0].id.clone();
+        rag.remove_document(&doc_id).await.unwrap();
+        assert_eq!(rag.treatment_count(), 0);
     }
 
     #[tokio::test]

@@ -55,6 +55,21 @@ pub async fn set_role(
     Ok(Json(user.into()))
 }
 
+/// Backfill citator treatment edges for the existing corpus: a pure
+/// text scan over stored parent chunks — no re-embedding, no LLM
+/// calls. Idempotent (re-running adds nothing already present).
+/// Returns new edges added and the store total.
+pub async fn backfill_citator(
+    State(state): State<AppState>,
+    AdminUser(_admin): AdminUser,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    let added = state.rag.backfill_treatments().await?;
+    Ok(Json(serde_json::json!({
+        "added": added,
+        "total": state.rag.treatment_count(),
+    })))
+}
+
 /// Delete a user. Admins cannot delete themselves (prevents lockout).
 pub async fn delete_user(
     State(state): State<AppState>,
