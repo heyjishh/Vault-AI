@@ -134,6 +134,30 @@ pub struct DocumentInfo {
     pub meta: DocMeta,
 }
 
+/// Prepare PDF bytes for the pipeline: a password-protected PDF is
+/// decrypted in memory (see `legal_rag_ingest::pdf_password`); anything
+/// else passes through untouched. Non-PDF inputs ignore the password.
+/// An encrypted PDF without a password fails here, before extraction.
+fn prepared_pdf_bytes(
+    file_name: &str,
+    bytes: &[u8],
+    file_password: Option<&str>,
+) -> Result<Vec<u8>> {
+    if !file_name.to_lowercase().ends_with(".pdf") {
+        return Ok(bytes.to_vec());
+    }
+    if legal_rag_ingest::pdf_password::is_encrypted_pdf(bytes) {
+        let pw = file_password.ok_or_else(|| {
+            legal_rag_common::Error::BadRequest(
+                legal_rag_ingest::pdf_password::PROTECTED_NO_PASSWORD_MSG.to_string(),
+            )
+        })?;
+        legal_rag_ingest::pdf_password::decrypt_pdf(bytes, pw)
+    } else {
+        Ok(bytes.to_vec())
+    }
+}
+
 /// Report for one `process_document_complete` run.
 #[derive(Debug, Clone)]
 pub struct ProcessReport {
@@ -319,6 +343,27 @@ impl RagAnything {
         title: Option<String>,
         doc_id: Option<String>,
     ) -> Result<ProcessReport> {
+        self.process_document_complete_with_password(file_name, bytes, title, doc_id, None)
+            .await
+    }
+
+    /// Like [`Self::process_document_complete`], but a password-protected
+    /// PDF is decrypted in memory first (see `legal_rag_ingest::
+    /// pdf_password`). The content-based doc id is computed from the
+    /// *decrypted* bytes, so the same document uploaded encrypted or plain
+    /// deduplicates. The caller zeroizes `file_password` after this returns;
+    /// it is never stored or logged. An encrypted PDF without a password
+    /// fails here with the protected-file error, before any extraction.
+    pub async fn process_document_complete_with_password(
+        &self,
+        file_name: &str,
+        bytes: &[u8],
+        title: Option<String>,
+        doc_id: Option<String>,
+        file_password: Option<&str>,
+    ) -> Result<ProcessReport> {
+        let bytes = prepared_pdf_bytes(file_name, bytes, file_password)?;
+        let bytes = bytes.as_slice();
         let doc_id = doc_id.unwrap_or_else(|| Self::content_doc_id(bytes));
         let file_ref = self.file_reference(file_name);
 
@@ -385,9 +430,25 @@ impl RagAnything {
         bytes: &[u8],
         embeddings: Arc<dyn Embeddings>,
     ) -> Result<Vec<ExtractedChunk>> {
+        self.extract_chunks_with_password(file_name, bytes, embeddings, None)
+            .await
+    }
+
+    /// Like [`Self::extract_chunks_with`], but a password-protected PDF is
+    /// decrypted in memory first, so the parser (and its render → Surya
+    /// OCR path for scanned pages) always sees plain PDF bytes. The caller
+    /// zeroizes `file_password` after this returns.
+    pub async fn extract_chunks_with_password(
+        &self,
+        file_name: &str,
+        bytes: &[u8],
+        embeddings: Arc<dyn Embeddings>,
+        file_password: Option<&str>,
+    ) -> Result<Vec<ExtractedChunk>> {
+        let bytes = prepared_pdf_bytes(file_name, bytes, file_password)?;
         let parser = get_parser(&self.config.parser, file_name, &self.config)?;
         let file_name_owned = file_name.to_string();
-        let bytes_owned = bytes.to_vec();
+        let bytes_owned = bytes;
         let blocks = tokio::task::spawn_blocking(move || parser.parse(&file_name_owned, &bytes_owned))
             .await
             .map_err(|e| {
@@ -1327,5 +1388,92 @@ mod tests {
         let rag = rag();
         let err = rag.process_document_complete("a.xyz", b"data", None, None).await.unwrap_err();
         assert!(err.to_string().contains("unsupported file type"));
+    }
+
+    fn fixture(name: &str) -> Vec<u8> {
+        // Shared with the ingest crate's test data (same workspace).
+        let path = format!(
+            "{}/../ingest/tests/fixtures/{name}",
+            env!("CARGO_MANIFEST_DIR")
+        );
+        std::fs::read(&path).unwrap_or_else(|e| panic!("missing fixture {path}: {e}"))
+    }
+
+    #[tokio::test]
+    async fn encrypted_pdf_round_trips_through_pipeline() {
+        // The private-vault path (extract_chunks_with_password) and the
+        // corpus path share prepared_pdf_bytes; exercise both here.
+        let rag = rag();
+        let enc = fixture("enc-aes256.pdf");
+        let chunks = rag
+            .extract_chunks_with_password(
+                "enc-aes256.pdf",
+                &enc,
+                rag.embeddings.clone(),
+                Some("test-fixture-pw"),
+            )
+            .await
+            .unwrap();
+        let joined = chunks
+            .iter()
+            .map(|c| c.text.as_str())
+            .collect::<Vec<_>>()
+            .join(" ");
+        assert!(
+            joined.contains("Section 86 of the Information Technology Act"),
+            "decrypted chunks must carry the fixture text, got: {joined}"
+        );
+        let plain = fixture("plain.pdf");
+        let plain_chunks = rag
+            .extract_chunks("plain.pdf", &plain)
+            .await
+            .unwrap();
+        let plain_joined = plain_chunks
+            .iter()
+            .map(|c| c.text.as_str())
+            .collect::<Vec<_>>()
+            .join(" ");
+        assert_eq!(joined, plain_joined, "encrypted and plain must chunk identically");
+    }
+
+    #[tokio::test]
+    async fn encrypted_pdf_errors_are_distinct_in_pipeline() {
+        let rag = rag();
+        let enc = fixture("enc-rc4.pdf");
+        let err = rag
+            .process_document_complete_with_password("enc-rc4.pdf", &enc, None, None, None)
+            .await
+            .unwrap_err();
+        assert!(
+            err.to_string().contains("password-protected"),
+            "no-password case must name protection, got {err}"
+        );
+        let err = rag
+            .process_document_complete_with_password(
+                "enc-rc4.pdf",
+                &enc,
+                None,
+                None,
+                Some("wrong-password"),
+            )
+            .await
+            .unwrap_err();
+        assert!(
+            err.to_string().contains("wrong file password"),
+            "wrong-password case must be distinct, got {err}"
+        );
+        // Unprotected + password: ignored, normal path.
+        let plain = fixture("plain.pdf");
+        let report = rag
+            .process_document_complete_with_password(
+                "plain.pdf",
+                &plain,
+                None,
+                None,
+                Some("test-fixture-pw"),
+            )
+            .await
+            .unwrap();
+        assert!(report.chunks > 0);
     }
 }
