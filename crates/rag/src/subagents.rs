@@ -182,6 +182,80 @@ fn parse_json_object<T: serde::de::DeserializeOwned>(raw: &str) -> Option<T> {
     serde_json::from_str::<T>(&raw[start..=end]).ok()
 }
 
+/// Extract the first brace-matched JSON object from `raw`, honouring
+/// string literals (so a `}` inside a quoted issue string does not end
+/// the object early, and trailing prose after the object is ignored).
+fn first_json_object(raw: &str) -> Option<&str> {
+    let bytes = raw.as_bytes();
+    let mut start = None;
+    let mut depth = 0i32;
+    let mut in_string = false;
+    let mut escaped = false;
+    for (i, &b) in bytes.iter().enumerate() {
+        if start.is_none() {
+            if b == b'{' {
+                start = Some(i);
+                depth = 1;
+            }
+            continue;
+        }
+        if in_string {
+            if escaped {
+                escaped = false;
+            } else if b == b'\\' {
+                escaped = true;
+            } else if b == b'"' {
+                in_string = false;
+            }
+            continue;
+        }
+        match b {
+            b'"' => in_string = true,
+            b'{' => depth += 1,
+            b'}' => {
+                depth -= 1;
+                if depth == 0 {
+                    return Some(&raw[start.unwrap()..=i]);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+/// Parse a checker verdict leniently. The checker model sometimes wraps
+/// its JSON in prose or emits a malformed issues list; a strict-only
+/// parse would discard a usable verdict. Fallback: if a
+/// `verdict_supported` boolean can be found at all, trust it, and when
+/// it is false but the issues list is unrecoverable, flag exactly that
+/// (a flagged unknown is honest; a silently dropped verdict is not).
+/// Returns None only when no verdict boolean is present anywhere.
+fn parse_checker_verdict(raw: &str) -> Option<CheckerVerdict> {
+    if let Some(obj) = first_json_object(raw) {
+        if let Ok(v) = serde_json::from_str::<CheckerVerdict>(obj) {
+            return Some(v);
+        }
+    }
+    // Lenient scan for the verdict boolean (handles `"true"` strings
+    // and prose-wrapped output alike).
+    let lower = raw.to_lowercase();
+    let key = lower.find("verdict_supported")?;
+    let after = &lower[key..];
+    let value = after
+        .split(|c: char| !c.is_ascii_alphanumeric())
+        .find(|t| *t == "true" || *t == "false")?;
+    let supported = value == "true";
+    Some(CheckerVerdict {
+        verdict_supported: supported,
+        issues: if supported {
+            Vec::new()
+        } else {
+            vec!["checker verdict: not supported (detailed issues unparseable — see the cited sources)".to_string()]
+        },
+    })
+}
+
 /// Plan branches from a lead completion; falls back to the goal itself
 /// when the plan is unusable (the run must not die on a bad plan).
 fn branches_from_plan(raw: &str, goal: &str, max: usize) -> Vec<String> {
@@ -809,7 +883,7 @@ impl SubAgentOrchestrator {
             let mut verdict: Option<CheckerVerdict> = None;
             match tokio::time::timeout(timeout, fut).await {
                 Ok(Ok(raw)) => {
-                    verdict = parse_json_object::<CheckerVerdict>(&raw);
+                    verdict = parse_checker_verdict(&raw);
                     if verdict.is_none() {
                         receipt.status = "failed".to_string();
                         checker_note =
@@ -1084,6 +1158,30 @@ mod tests {
         // all, and no other text beyond draft + sources + goal is.
         assert!(!input.contains(rationale));
         assert!(!input.contains("SECRET"));
+    }
+
+    #[test]
+    fn checker_verdict_parsing_is_lenient() {
+        // Clean JSON, fenced JSON, prose-wrapped JSON, and a verdict
+        // boolean surviving a malformed issues list all parse.
+        let clean = parse_checker_verdict(
+            r#"{"verdict_supported": false, "issues": ["claim A unsupported"]}"#,
+        )
+        .expect("clean");
+        assert!(!clean.verdict_supported);
+        assert_eq!(clean.issues.len(), 1);
+        let fenced = parse_checker_verdict(
+            "Here it is:\n```json\n{\"verdict_supported\": true, \"issues\": []}\n```\nDone.",
+        )
+        .expect("fenced");
+        assert!(fenced.verdict_supported);
+        let broken = parse_checker_verdict(
+            "verdict_supported: false, issues: [unclosed, malformed",
+        )
+        .expect("broken still yields a verdict");
+        assert!(!broken.verdict_supported);
+        assert!(!broken.issues.is_empty());
+        assert!(parse_checker_verdict("no verdict here").is_none());
     }
 
     #[tokio::test]
