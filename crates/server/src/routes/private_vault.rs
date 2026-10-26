@@ -18,6 +18,7 @@ use crate::error::ApiError;
 use crate::private_vault::sha256_hex;
 use crate::routes::billing::settle;
 use crate::state::AppState;
+use zeroize::Zeroize;
 
 fn bad_request(msg: impl Into<String>) -> ApiError {
     ApiError(DomainError::BadRequest(msg.into()))
@@ -121,12 +122,17 @@ pub struct PrivateUpload {
     pub file_name: String,
     pub text: Option<String>,
     pub content_base64: Option<String>,
+    /// Password for a password-protected input file (PDFs), decrypted in
+    /// memory before extraction. Zeroized once decryption returns; never
+    /// stored, never logged — not even the fact that one was supplied is
+    /// logged, matching this module's no-filename/no-excerpt discipline.
+    pub file_password: Option<String>,
 }
 
 pub async fn upload_document(
     State(state): State<AppState>,
     AuthUser(user): AuthUser,
-    Json(body): Json<PrivateUpload>,
+    Json(mut body): Json<PrivateUpload>,
 ) -> Result<Json<Value>, ApiError> {
     if !state.private_vault.is_unlocked(&user.id) {
         return Err(locked());
@@ -152,14 +158,30 @@ pub async fn upload_document(
 
     // Parse + chunk + embed WITHOUT indexing: nothing enters the shared
     // corpus, the snapshots, or the knowledge graph.
+    //
+    // A password-protected PDF is decrypted in memory inside
+    // extract_chunks_with_password, before parsing — so a scanned
+    // encrypted PDF flows through the unchanged render → Surya OCR path.
+    // The password is taken out of the body and zeroized the moment the
+    // call returns, on success and on error alike; nothing here logs it
+    // or even whether one was supplied.
+    let mut file_password = body.file_password.take();
     let usage_scope = legal_rag_rag::usage::new_scope();
-    let chunks = legal_rag_rag::usage::scope_usage(
+    let chunks_result = legal_rag_rag::usage::scope_usage(
         usage_scope.clone(),
-        state
-            .rag
-            .extract_chunks_with(&body.file_name, &bytes, state.private_embeddings.clone()),
+        state.rag.extract_chunks_with_password(
+            &body.file_name,
+            &bytes,
+            state.private_embeddings.clone(),
+            file_password.as_deref(),
+        ),
     )
-    .await?;
+    .await;
+    if let Some(pw) = file_password.as_mut() {
+        pw.zeroize();
+    }
+    drop(file_password);
+    let chunks = chunks_result?;
     let pairs: Vec<(String, Vec<f32>)> =
         chunks.into_iter().map(|c| (c.text, c.vector)).collect();
     let chunk_count = pairs.len();

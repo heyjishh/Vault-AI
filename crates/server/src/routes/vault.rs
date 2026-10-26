@@ -9,6 +9,7 @@ use legal_rag_auth::AuthUser;
 use legal_rag_rag::filter_supported_files;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use zeroize::Zeroize;
 
 use crate::error::ApiError;
 use crate::state::AppState;
@@ -23,6 +24,11 @@ pub struct UploadRequest {
     pub content_base64: Option<String>,
     /// File the document under this matter (default matter when omitted).
     pub matter_id: Option<String>,
+    /// Password for a password-protected input file (PDFs). The file is
+    /// decrypted in memory before extraction; the password is zeroized
+    /// once decryption returns, and is never stored or logged. Ignored
+    /// for unprotected files; absent for unprotected uploads as before.
+    pub file_password: Option<String>,
     /// Legal-validity metadata (jurisdiction / in-force dates / what
     /// superseded this document) — all optional, dates as YYYY-MM-DD.
     pub jurisdiction: Option<String>,
@@ -87,13 +93,48 @@ pub struct IngestReport {
     /// The matter the document was filed under.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub matter_id: Option<String>,
+    /// S3 keys skipped because the object is an encrypted PDF (P2: a
+    /// per-file password map is a later phase, so encrypted objects are
+    /// skipped with a clear per-file record while the batch continues).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub skipped_encrypted: Vec<String>,
+    /// Per-file failures from the batch (including download failures).
+    /// Empty for single-document uploads.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub failed: Vec<FailedIngest>,
+}
+
+/// One file's batch failure, surfaced instead of swallowed.
+#[derive(Serialize)]
+pub struct FailedIngest {
+    pub file: String,
+    pub error: String,
+}
+
+/// Split downloaded S3 objects into (ingestible, encrypted-PDF skipped).
+/// Only `.pdf` objects are probed; anything else passes through.
+pub(crate) fn split_encrypted_s3(
+    items: Vec<(String, Vec<u8>)>,
+) -> (Vec<(String, Vec<u8>)>, Vec<String>) {
+    let mut kept = Vec::new();
+    let mut skipped = Vec::new();
+    for (key, bytes) in items {
+        if key.to_lowercase().ends_with(".pdf")
+            && legal_rag_ingest::pdf_password::is_encrypted_pdf(&bytes)
+        {
+            skipped.push(key);
+        } else {
+            kept.push((key, bytes));
+        }
+    }
+    (kept, skipped)
 }
 
 /// Upload a document directly (pasted text or base64 file bytes).
 pub async fn upload_document(
     State(state): State<AppState>,
     AuthUser(user): AuthUser,
-    Json(body): Json<UploadRequest>,
+    Json(mut body): Json<UploadRequest>,
 ) -> Result<Json<IngestReport>, ApiError> {
     use base64::Engine as _;
     crate::routes::billing::ensure_quota(&state, &user.id)?;
@@ -134,14 +175,29 @@ pub async fn upload_document(
         &body.effective_to,
         &body.superseded_by,
     )?;
+    // Take the file password out of the request body so it cannot leak
+    // through any later use of `body`; zeroize it the moment decryption
+    // has returned, on success and on error alike.
+    let mut file_password = body.file_password.take();
     let scope = legal_rag_rag::usage::new_scope();
-    let report = legal_rag_rag::usage::scope_usage(scope.clone(), async {
+    let report_result = legal_rag_rag::usage::scope_usage(scope.clone(), async {
         state
             .rag
-            .process_document_complete(&body.file_name, &bytes, Some(body.title), None)
+            .process_document_complete_with_password(
+                &body.file_name,
+                &bytes,
+                Some(body.title.clone()),
+                None,
+                file_password.as_deref(),
+            )
             .await
     })
-    .await?;
+    .await;
+    if let Some(pw) = file_password.as_mut() {
+        pw.zeroize();
+    }
+    drop(file_password);
+    let report = report_result?;
     if let Some(mid) = &target_matter {
         state.matters.add_document(mid, &report.doc_id);
     }
@@ -172,6 +228,8 @@ pub async fn upload_document(
         modal_processed: report.modal_processed,
         doc_id: Some(report.doc_id),
         matter_id: target_matter,
+        skipped_encrypted: Vec::new(),
+        failed: Vec::new(),
     }))
 }
 
@@ -230,13 +288,29 @@ pub async fn ingest_s3(
     }
     let keys = state.ingest.list_s3_keys(q.prefix.as_deref()).await?;
     let supported = state.rag.config().supported_file_extensions.clone();
-    let mut items = Vec::new();
+    let mut downloaded = Vec::new();
+    let mut failed: Vec<FailedIngest> = Vec::new();
     for key in filter_supported_files(&keys, &supported) {
         match state.ingest.download_s3_object(key).await {
-            Ok((_uri, bytes)) => items.push((key.clone(), bytes, None)),
-            Err(e) => tracing::warn!(key = %key, error = %e, "skipping object"),
+            Ok((_uri, bytes)) => downloaded.push((key.clone(), bytes)),
+            Err(e) => {
+                tracing::warn!(key = %key, error = %e, "skipping object");
+                failed.push(FailedIngest {
+                    file: key.clone(),
+                    error: e.to_string(),
+                });
+            }
         }
     }
+    // P2: encrypted PDFs are skipped with a per-file record while the
+    // batch continues — never batch-halting, never silent. (A per-file
+    // password map for S3 objects is a later phase, not v1.)
+    let (kept, skipped_encrypted) = split_encrypted_s3(downloaded);
+    for key in &skipped_encrypted {
+        tracing::warn!(key = %key, "skipping encrypted S3 object (no file password in v1)");
+    }
+    let items: Vec<(String, Vec<u8>, Option<String>)> =
+        kept.into_iter().map(|(k, b)| (k, b, None)).collect();
     let scope = legal_rag_rag::usage::new_scope();
     let results = legal_rag_rag::usage::scope_usage(scope.clone(), async {
         state.rag.process_documents_batch(items).await
@@ -250,6 +324,8 @@ pub async fn ingest_s3(
         modal_processed: 0,
         doc_id: None,
         matter_id: state.matters.default_id(),
+        skipped_encrypted,
+        failed,
     };
     for r in &results {
         if r.success {
@@ -260,6 +336,11 @@ pub async fn ingest_s3(
             if let (Some(mid), Some(doc_id)) = (&report.matter_id, &r.doc_id) {
                 state.matters.add_document(mid, doc_id);
             }
+        } else {
+            report.failed.push(FailedIngest {
+                file: r.file_name.clone(),
+                error: r.error.clone().unwrap_or_else(|| "batch item failed".to_string()),
+            });
         }
     }
     // Entities/relations counted at corpus level; sum per-doc would double-count merges.
@@ -466,4 +547,29 @@ pub async fn delete_document(
         state.matters.remove_document(&mid, &id);
     }
     Ok(Json(HashMap::from([("removed_chunks".to_string(), removed)])))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn fixture(name: &str) -> Vec<u8> {
+        let path = format!("{}/../ingest/tests/fixtures/{name}", env!("CARGO_MANIFEST_DIR"));
+        std::fs::read(&path).unwrap_or_else(|e| panic!("missing fixture {path}: {e}"))
+    }
+
+    #[test]
+    fn s3_split_skips_encrypted_pdfs_and_keeps_the_rest() {
+        let items = vec![
+            ("plain.pdf".to_string(), fixture("plain.pdf")),
+            ("enc-aes256.pdf".to_string(), fixture("enc-aes256.pdf")),
+            ("notes.txt".to_string(), b"plain text, never probed".to_vec()),
+        ];
+        let (kept, skipped) = split_encrypted_s3(items);
+        assert_eq!(
+            kept.iter().map(|(k, _)| k.as_str()).collect::<Vec<_>>(),
+            vec!["plain.pdf", "notes.txt"]
+        );
+        assert_eq!(skipped, vec!["enc-aes256.pdf".to_string()]);
+    }
 }
