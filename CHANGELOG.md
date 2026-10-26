@@ -56,14 +56,23 @@ live**, what is **built but unverified**, and what is **roadmap**.
     cards; treatment-note line in blocking and streaming answers
     (appended after the citation audit, so the quoted passage is
     never mistaken for a marker). Fixed workflows untouched.
-  - **Verified**: 14 new unit/integration tests incl. synthetic
+  - **Verified**: 17 new unit/integration tests incl. synthetic
     fixtures for every verb and every guard, a brief-boundary test
     (out-of-scope edge does not leak; in-scope edge does show), and
     a real-pair eval on genuine Puttaswamy judgment text (see
     Architecture §5). Live-verified on :3001: synthetic uploads,
-    backfill, brief-boundary Ask, and golden (below).
-  - **Golden**: 15/20 before and after on :3001 — no regression
-    (floor 14/20). Known honest limits: adjective `overruling`
+    backfill (2 corpus edges + 2 fixture edges, then 4→3 after the
+    self-edge prune), brief-boundary Ask (cited-only brief:
+    Unknown, no note; both-docs brief: Overruled + note; unscoped:
+    Overruled + note), streaming Ask (Sources event + Done note),
+    and golden (below). Full suite 129 → 146 green.
+  - **Golden**: 15/20 before, **16/20 after** on :3001 — no
+    regression (floor 14/20). The one flip (Kesavananda Bharati)
+    is live re-generation wording variance, NOT a citator effect:
+    the baseline run was cache-served in 79 ms, while the after-run
+    regenerated live after the fixture uploads changed the corpus
+    fingerprint; the passing answer contains no treatment note.
+    Remaining fails are the same wording-only fails. Known honest limits: adjective `overruling`
     uses are excluded by the `the`-guard but other noun-ish uses can
     still misfire; multi-verb sentences attach by nearest verb within
     the window; dates are not yet used to order conflicting edges
