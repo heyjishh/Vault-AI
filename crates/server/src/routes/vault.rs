@@ -35,6 +35,15 @@ pub struct UploadRequest {
     pub effective_from: Option<String>,
     pub effective_to: Option<String>,
     pub superseded_by: Option<String>,
+    /// Citator metadata overrides (FIX 1): deciding forum ("High Court",
+    /// "AAR", …), state code or name ("MH", "Maharashtra"), decision
+    /// date (YYYY-MM-DD), and — for AAR/AAAR rulings — the applicant.
+    /// Overrides win over ingest inference; unknown forum/state values
+    /// are rejected (400) rather than silently dropped.
+    pub forum: Option<String>,
+    pub state: Option<String>,
+    pub decided_on: Option<String>,
+    pub applicant: Option<String>,
 }
 
 /// A `YYYY-MM-DD` date string (shape check only).
@@ -47,12 +56,17 @@ fn valid_date(s: &str) -> bool {
 }
 
 /// Build a `DocMeta` from optional request fields, rejecting malformed
-/// dates. Returns `Ok(None)` when no field was supplied.
+/// dates and unknown forum/state values. Returns `Ok(None)` when no
+/// field was supplied.
 fn meta_from_fields(
     jurisdiction: &Option<String>,
     effective_from: &Option<String>,
     effective_to: &Option<String>,
     superseded_by: &Option<String>,
+    forum: &Option<String>,
+    state: &Option<String>,
+    decided_on: &Option<String>,
+    applicant: &Option<String>,
 ) -> Result<Option<legal_rag_rag::DocMeta>, ApiError> {
     let clean = |o: &Option<String>| o.as_ref().map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
     let (jurisdiction, effective_from, effective_to, superseded_by) = (
@@ -61,10 +75,24 @@ fn meta_from_fields(
         clean(effective_to),
         clean(superseded_by),
     );
-    if jurisdiction.is_none() && effective_from.is_none() && effective_to.is_none() && superseded_by.is_none() {
+    let (forum_raw, state_raw, decided_on, applicant) = (
+        clean(forum),
+        clean(state),
+        clean(decided_on),
+        clean(applicant),
+    );
+    if jurisdiction.is_none()
+        && effective_from.is_none()
+        && effective_to.is_none()
+        && superseded_by.is_none()
+        && forum_raw.is_none()
+        && state_raw.is_none()
+        && decided_on.is_none()
+        && applicant.is_none()
+    {
         return Ok(None);
     }
-    for d in [&effective_from, &effective_to].into_iter().flatten() {
+    for d in [&effective_from, &effective_to, &decided_on].into_iter().flatten() {
         if !valid_date(d) {
             return Err(legal_rag_common::Error::BadRequest(format!(
                 "dates must be YYYY-MM-DD, got '{d}'"
@@ -72,11 +100,39 @@ fn meta_from_fields(
             .into());
         }
     }
+    let forum = match forum_raw {
+        None => None,
+        Some(raw) => match legal_rag_rag::citator_v2::parse_forum(&raw) {
+            Some(f) => Some(legal_rag_rag::citator_v2::forum_to_stored(f).to_string()),
+            None => {
+                return Err(legal_rag_common::Error::BadRequest(format!(
+                    "unknown forum '{raw}'"
+                ))
+                .into())
+            }
+        },
+    };
+    let state = match state_raw {
+        None => None,
+        Some(raw) => match legal_rag_rag::citator_v2::normalize_request_state(&raw) {
+            Some(code) => Some(code),
+            None => {
+                return Err(legal_rag_common::Error::BadRequest(format!(
+                    "unknown state '{raw}'"
+                ))
+                .into())
+            }
+        },
+    };
     Ok(Some(legal_rag_rag::DocMeta {
         jurisdiction,
         effective_from,
         effective_to,
         superseded_by,
+        forum,
+        state,
+        decided_on,
+        applicant,
     }))
 }
 
@@ -174,6 +230,10 @@ pub async fn upload_document(
         &body.effective_from,
         &body.effective_to,
         &body.superseded_by,
+        &body.forum,
+        &body.state,
+        &body.decided_on,
+        &body.applicant,
     )?;
     // Take the file password out of the request body so it cannot leak
     // through any later use of `body`; zeroize it the moment decryption
@@ -202,9 +262,11 @@ pub async fn upload_document(
         state.matters.add_document(mid, &report.doc_id);
     }
     // Legal-validity metadata supplied with the upload, if any (already
-    // validated before ingest, above).
+    // validated before ingest, above). Merged, not replaced: an
+    // explicit override wins for its own field, while ingest-inferred
+    // fields the upload did not mention survive.
     if let Some(meta) = meta {
-        state.rag.set_document_meta(&report.doc_id, meta);
+        state.rag.merge_document_meta(&report.doc_id, meta);
     }
     crate::routes::billing::settle_matter(
         &state,
@@ -239,10 +301,15 @@ pub struct UpdateMetaRequest {
     pub effective_from: Option<String>,
     pub effective_to: Option<String>,
     pub superseded_by: Option<String>,
+    pub forum: Option<String>,
+    pub state: Option<String>,
+    pub decided_on: Option<String>,
+    pub applicant: Option<String>,
 }
 
 /// Replace a document's legal-validity metadata (jurisdiction, in-force
-/// dates, superseded-by). An all-empty body clears the metadata.
+/// dates, superseded-by, plus citator forum/state/decided_on/applicant).
+/// An all-empty body clears the metadata.
 pub async fn update_document_meta(
     State(state): State<AppState>,
     AuthUser(_user): AuthUser,
@@ -254,6 +321,10 @@ pub async fn update_document_meta(
         &body.effective_from,
         &body.effective_to,
         &body.superseded_by,
+        &body.forum,
+        &body.state,
+        &body.decided_on,
+        &body.applicant,
     )?
     .unwrap_or_default();
     if !state.rag.set_document_meta(&id, meta) {

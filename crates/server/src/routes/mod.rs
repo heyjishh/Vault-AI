@@ -113,6 +113,7 @@ pub fn router(state: AppState) -> Router {
         .route("/api/v1/billing/webhook/youpi", post(billing::youpi_webhook))
         // Command Center: user administration (admin role required).
         .route("/api/v1/admin/citator/backfill", post(admin::backfill_citator))
+        .route("/api/v1/admin/citator/v2/backfill", post(admin::backfill_citator_v2))
         .route("/api/v1/admin/users", get(admin::list_users))
         .route("/api/v1/admin/users/{id}/role", post(admin::set_role))
         .route("/api/v1/admin/users/{id}", delete(admin::delete_user))

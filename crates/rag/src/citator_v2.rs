@@ -17,11 +17,12 @@
 //!
 //! Honest limits of this adapter layer (the engine itself has none of
 //! these — they come from what Ask hands it):
-//! - Forum / state / date are inferred from citation titles only
-//!   (titles like "X — Allahabad High Court (2023)"); documents whose
-//!   titles carry no forum marker get `Unknown` forum and cannot govern
-//!   or extend a chain, though their statuses still resolve from edges.
-//!   Full forum metadata at ingest would remove this limit.
+//! - Forum / state / date come from stored document metadata first
+//!   (`DocMeta`: ingest inference from title + judgment header, or an
+//!   explicit upload override). Title inference is only the last-resort
+//!   fallback for documents whose metadata is still empty, so a title
+//!   with no forum marker no longer forces `Unknown` forum when the
+//!   header names the court.
 //! - Reversal detection runs on cited snippets (first 1500 chars of the
 //!   retrieved chunk), not full judgment texts; full-text detection stays
 //!   an ingest concern.
@@ -225,6 +226,455 @@ pub fn title_year(title: &str) -> Option<SimpleDate> {
     None
 }
 
+// ---------------------------------------------------------------------------
+// Stored forum / state / date metadata (FIX 1)
+// ---------------------------------------------------------------------------
+//
+// The engine compares state strings exactly, so every layer — ingest
+// inference, upload override, request context — normalizes to the same
+// two-letter code vocabulary. Forums serialize as their variant name
+// ("HighCourt", "Aar", …); dates serialize as YYYY-MM-DD.
+
+/// State name (or High Court seat name) → code. The seat names mirror
+/// `infer_state`'s table so inference and request normalization agree;
+/// the joint Punjab and Haryana High Court maps to PB by that same
+/// convention.
+const STATE_NAMES: &[(&str, &str)] = &[
+    ("andhra pradesh", "AP"),
+    ("arunachal pradesh", "AR"),
+    ("assam", "AS"),
+    ("bihar", "BR"),
+    ("chhattisgarh", "CG"),
+    ("goa", "GA"),
+    ("gujarat", "GJ"),
+    ("haryana", "HR"),
+    ("himachal pradesh", "HP"),
+    ("jammu and kashmir", "JK"),
+    ("jharkhand", "JH"),
+    ("karnataka", "KA"),
+    ("kerala", "KL"),
+    ("madhya pradesh", "MP"),
+    ("maharashtra", "MH"),
+    ("manipur", "MN"),
+    ("meghalaya", "ML"),
+    ("odisha", "OD"),
+    ("orissa", "OD"),
+    ("punjab", "PB"),
+    ("punjab and haryana", "PB"),
+    ("rajasthan", "RJ"),
+    ("sikkim", "SK"),
+    ("tamil nadu", "TN"),
+    ("telangana", "TS"),
+    ("tripura", "TR"),
+    ("uttar pradesh", "UP"),
+    ("uttarakhand", "UK"),
+    ("west bengal", "WB"),
+    ("delhi", "DL"),
+    ("national capital territory of delhi", "DL"),
+    ("allahabad", "UP"),
+    ("bombay", "MH"),
+    ("calcutta", "WB"),
+    ("madras", "TN"),
+    ("gauhati", "AS"),
+];
+
+/// Normalize a user-supplied state (request context or upload override)
+/// to a code. Accepts codes ("MH"), full names ("Maharashtra"), and
+/// dotted codes ("M.H."). Unknown input yields None: for request
+/// context that means "no state context" (never a crash); upload
+/// overrides reject unknown input separately, at the API layer.
+pub fn normalize_request_state(s: &str) -> Option<String> {
+    let squashed: String = s
+        .trim()
+        .to_lowercase()
+        .chars()
+        .filter(|c| *c != '.')
+        .collect();
+    let norm = squashed.split_whitespace().collect::<Vec<_>>().join(" ");
+    if norm.is_empty() || norm == "in" || norm == "india" {
+        return None;
+    }
+    if norm.len() == 2 && norm.chars().all(|c| c.is_ascii_alphabetic()) {
+        let code = norm.to_uppercase();
+        if STATE_NAMES.iter().any(|(_, c)| *c == code) {
+            return Some(code);
+        }
+        return None;
+    }
+    STATE_NAMES
+        .iter()
+        .find(|(name, _)| *name == norm)
+        .map(|(_, code)| code.to_string())
+}
+
+/// Parse a forum from an explicit override value. Accepts variant names
+/// ("HighCourt"), display names ("High Court"), and human forms
+/// ("Supreme Court of India", "High Court of Bombay") via the title
+/// inference fallback. Unknown input yields None.
+pub fn parse_forum(s: &str) -> Option<Forum> {
+    let squashed: String = s
+        .to_lowercase()
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric())
+        .collect();
+    let direct = match squashed.as_str() {
+        "supremecourt" | "supremecourtofindia" => Some(Forum::SupremeCourt),
+        "highcourt" => Some(Forum::HighCourt),
+        "itat" | "incometaxappellatetribunal" => Some(Forum::Itat),
+        "aar" | "authorityforadvanceruling" => Some(Forum::Aar),
+        "aaar" | "appellateauthorityforadvanceruling" => Some(Forum::Aaar),
+        "nclt" | "nationalcompanylawtribunal" => Some(Forum::Nclt),
+        "nclat" | "nationalcompanylawappellatetribunal" => Some(Forum::Nclat),
+        "cci" | "competitioncommissionofindia" => Some(Forum::Cci),
+        "sat" | "securitiesappellatetribunal" => Some(Forum::Sat),
+        "ncdrc" | "nationalconsumerdisputesredressalcommission" => Some(Forum::Ncdrc),
+        "statecommission" | "stateconsumerdisputesredressalcommission" => {
+            Some(Forum::StateCommission)
+        }
+        "districtcommission" | "districtconsumerdisputesredressalcommission" => {
+            Some(Forum::DistrictCommission)
+        }
+        "cat" | "centraladministrativetribunal" => Some(Forum::Cat),
+        "ngt" | "nationalgreentribunal" => Some(Forum::Ngt),
+        "districtcourt" | "districtjudge" => Some(Forum::DistrictCourt),
+        "sessionscourt" | "courtofsession" => Some(Forum::SessionsCourt),
+        "magistrate" | "judicialmagistrate" | "metropolitanmagistrate" => Some(Forum::Magistrate),
+        "foreigncourt" => Some(Forum::ForeignCourt),
+        "internationalcourt" | "internationalcourtofjustice" | "icj" => {
+            Some(Forum::InternationalCourt)
+        }
+        "arbitraltribunal" => Some(Forum::ArbitralTribunal),
+        _ => None,
+    };
+    if direct.is_some() {
+        return direct;
+    }
+    match infer_forum(s) {
+        Forum::Unknown => None,
+        f => Some(f),
+    }
+}
+
+/// Serialize a forum for storage in `DocMeta.forum`.
+pub fn forum_to_stored(f: Forum) -> &'static str {
+    match f {
+        Forum::DistrictCourt => "DistrictCourt",
+        Forum::Magistrate => "Magistrate",
+        Forum::SessionsCourt => "SessionsCourt",
+        Forum::HighCourt => "HighCourt",
+        Forum::SupremeCourt => "SupremeCourt",
+        Forum::Itat => "Itat",
+        Forum::Aar => "Aar",
+        Forum::Aaar => "Aaar",
+        Forum::Nclt => "Nclt",
+        Forum::Nclat => "Nclat",
+        Forum::Cci => "Cci",
+        Forum::Sat => "Sat",
+        Forum::DistrictCommission => "DistrictCommission",
+        Forum::StateCommission => "StateCommission",
+        Forum::Ncdrc => "Ncdrc",
+        Forum::Cat => "Cat",
+        Forum::Ngt => "Ngt",
+        Forum::ForeignCourt => "ForeignCourt",
+        Forum::InternationalCourt => "InternationalCourt",
+        Forum::ArbitralTribunal => "ArbitralTribunal",
+        Forum::Unknown => "Unknown",
+    }
+}
+
+/// Parse a stored forum back. "Unknown" and unrecognized values yield
+/// None so the caller falls back to title inference.
+pub fn forum_from_stored(s: &str) -> Option<Forum> {
+    match s {
+        "DistrictCourt" => Some(Forum::DistrictCourt),
+        "Magistrate" => Some(Forum::Magistrate),
+        "SessionsCourt" => Some(Forum::SessionsCourt),
+        "HighCourt" => Some(Forum::HighCourt),
+        "SupremeCourt" => Some(Forum::SupremeCourt),
+        "Itat" => Some(Forum::Itat),
+        "Aar" => Some(Forum::Aar),
+        "Aaar" => Some(Forum::Aaar),
+        "Nclt" => Some(Forum::Nclt),
+        "Nclat" => Some(Forum::Nclat),
+        "Cci" => Some(Forum::Cci),
+        "Sat" => Some(Forum::Sat),
+        "DistrictCommission" => Some(Forum::DistrictCommission),
+        "StateCommission" => Some(Forum::StateCommission),
+        "Ncdrc" => Some(Forum::Ncdrc),
+        "Cat" => Some(Forum::Cat),
+        "Ngt" => Some(Forum::Ngt),
+        "ForeignCourt" => Some(Forum::ForeignCourt),
+        "InternationalCourt" => Some(Forum::InternationalCourt),
+        "ArbitralTribunal" => Some(Forum::ArbitralTribunal),
+        _ => None,
+    }
+}
+
+/// Strict YYYY-MM-DD date (the `decided_on` storage shape).
+pub fn parse_decided_on(s: &str) -> Option<SimpleDate> {
+    let b = s.as_bytes();
+    if s.len() != 10 || b[4] != b'-' || b[7] != b'-' {
+        return None;
+    }
+    let y: u32 = s[0..4].parse().ok()?;
+    let m: u32 = s[5..7].parse().ok()?;
+    let d: u32 = s[8..10].parse().ok()?;
+    valid_date_parts(y, m, d)
+}
+
+fn valid_date_parts(y: u32, m: u32, d: u32) -> Option<SimpleDate> {
+    if !(1900..=2100).contains(&y) || !(1..=12).contains(&m) || d < 1 {
+        return None;
+    }
+    let max = match m {
+        1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
+        4 | 6 | 9 | 11 => 30,
+        _ => 29,
+    };
+    if d > max {
+        return None;
+    }
+    Some(SimpleDate::new(y, m, d))
+}
+
+/// Format a date for `decided_on` storage.
+pub fn format_decided_on(d: SimpleDate) -> String {
+    format!("{:04}-{:02}-{:02}", d.year, d.month, d.day)
+}
+
+const MONTH_WORDS: &[(&str, u32)] = &[
+    ("january", 1),
+    ("february", 2),
+    ("march", 3),
+    ("april", 4),
+    ("may", 5),
+    ("june", 6),
+    ("july", 7),
+    ("august", 8),
+    ("september", 9),
+    ("october", 10),
+    ("november", 11),
+    ("december", 12),
+    ("jan", 1),
+    ("feb", 2),
+    ("mar", 3),
+    ("apr", 4),
+    ("jun", 6),
+    ("jul", 7),
+    ("aug", 8),
+    ("sep", 9),
+    ("sept", 9),
+    ("oct", 10),
+    ("nov", 11),
+    ("dec", 12),
+];
+
+/// Find a date inside free text: "24 August 2017", "August 24, 2017",
+/// "24.08.2017", "24/08/2017", "2017-08-24". Returns the first
+/// plausible date, skipping dates that describe an impugned (lower)
+/// judgment rather than this one.
+fn parse_date_in_text(text: &str) -> Option<SimpleDate> {
+    let lower = text.to_lowercase();
+    // Numeric forms first (unambiguous): scan for d[d] sep d[d] sep yyyy
+    // and yyyy-mm-dd.
+    let chars: Vec<char> = lower.chars().collect();
+    let mut i = 0;
+    while i < chars.len() {
+        if chars[i].is_ascii_digit() {
+            let mut j = i;
+            while j < chars.len() && chars[j].is_ascii_digit() {
+                j += 1;
+            }
+            let num1: String = chars[i..j].iter().collect();
+            if j < chars.len() && matches!(chars[j], '.' | '/' | '-') {
+                let sep = chars[j];
+                let mut k = j + 1;
+                while k < chars.len() && chars[k].is_ascii_digit() {
+                    k += 1;
+                }
+                let num2: String = chars[j + 1..k].iter().collect();
+                if k < chars.len() && chars[k] == sep {
+                    let mut l = k + 1;
+                    while l < chars.len() && chars[l].is_ascii_digit() {
+                        l += 1;
+                    }
+                    let num3: String = chars[k + 1..l].iter().collect();
+                    if num1.len() == 4 {
+                        // YYYY-MM-DD (only with '-').
+                        if sep == '-' {
+                            if let (Ok(y), Ok(m), Ok(d)) =
+                                (num1.parse(), num2.parse(), num3.parse())
+                            {
+                                if let Some(date) = valid_date_parts(y, m, d) {
+                                    return Some(date);
+                                }
+                            }
+                        }
+                    } else if num3.len() == 4 {
+                        if let (Ok(d), Ok(m), Ok(y)) =
+                            (num1.parse(), num2.parse(), num3.parse())
+                        {
+                            if let Some(date) = valid_date_parts(y, m, d) {
+                                return Some(date);
+                            }
+                        }
+                    }
+                    i = l;
+                    continue;
+                }
+            }
+            i = j;
+        } else {
+            i += 1;
+        }
+    }
+    // Month-word forms: "24 August 2017" or "August 24, 2017".
+    let tokens: Vec<String> = lower
+        .split(|c: char| !c.is_alphanumeric())
+        .filter(|t| !t.is_empty())
+        .map(|t| t.to_string())
+        .collect();
+    for (idx, tok) in tokens.iter().enumerate() {
+        let Some((_, month)) = MONTH_WORDS.iter().find(|(w, _)| *w == tok.as_str()) else {
+            continue;
+        };
+        let day_before = idx
+            .checked_sub(1)
+            .and_then(|p| tokens[p].parse::<u32>().ok());
+        let day_after = tokens
+            .get(idx + 1)
+            .and_then(|t| t.parse::<u32>().ok());
+        let year_next = tokens.get(idx + 1).and_then(|t| {
+            if t.len() == 4 {
+                t.parse::<u32>().ok()
+            } else {
+                None
+            }
+        });
+        let year_after = tokens.get(idx + 2).and_then(|t| {
+            if t.len() == 4 {
+                t.parse::<u32>().ok()
+            } else {
+                None
+            }
+        });
+        // "24 August 2017": day before, year right after the month.
+        if let (Some(d), Some(y)) = (day_before, year_next) {
+            if let Some(date) = valid_date_parts(y, *month, d) {
+                return Some(date);
+            }
+        }
+        // "August 24, 2017": day after, year two after the month.
+        if let (Some(d), Some(y)) = (day_after, year_after) {
+            if let Some(date) = valid_date_parts(y, *month, d) {
+                return Some(date);
+            }
+        }
+        // "August 2017": no day — not a decision date, skip.
+    }
+    None
+}
+
+/// Scan a judgment header for a decision date. Prefers a date near
+/// "decided on" / "pronounced on" / "delivered on" wording (this
+/// judgment's date); falls back to the first plausible date in the
+/// header that is not an impugned judgment's date.
+fn scan_header_date(header: &str) -> Option<SimpleDate> {
+    let lower = header.to_lowercase();
+    for kw in ["decided on", "pronounced on", "delivered on", "date of judgment", "date of decision"] {
+        if let Some(pos) = lower.find(kw) {
+            let end = (pos + 80).min(lower.len());
+            if let Some(d) = parse_date_in_text(&lower[pos..end]) {
+                return Some(d);
+            }
+        }
+    }
+    // Fallback: first plausible date, skipping impugned references.
+    let mut search_from = 0usize;
+    while let Some(d) = parse_date_in_text(&lower[search_from..]) {
+        // Re-find the date's position to check its context. The numeric
+        // and month forms both contain the year; locate it.
+        let year_str = d.year.to_string();
+        if let Some(rel) = lower[search_from..].find(&year_str) {
+            let abs = search_from + rel;
+            let ctx_start = abs.saturating_sub(40);
+            if lower[ctx_start..abs].contains("impugned") {
+                search_from = abs + year_str.len();
+                continue;
+            }
+        }
+        return Some(d);
+    }
+    None
+}
+
+/// Court-name needles for header scanning, most specific first.
+/// Position in the header decides (the deciding court's name sits at
+/// the very top); order breaks ties between needles at one position.
+const HEADER_FORUMS: &[(&str, Forum)] = &[
+    ("appellate authority for advance ruling", Forum::Aaar),
+    ("authority for advance ruling", Forum::Aar),
+    ("national company law appellate tribunal", Forum::Nclat),
+    ("national company law tribunal", Forum::Nclt),
+    ("income tax appellate tribunal", Forum::Itat),
+    ("national consumer disputes redressal commission", Forum::Ncdrc),
+    ("state consumer disputes redressal commission", Forum::StateCommission),
+    ("district consumer disputes redressal commission", Forum::DistrictCommission),
+    ("competition commission of india", Forum::Cci),
+    ("securities appellate tribunal", Forum::Sat),
+    ("central administrative tribunal", Forum::Cat),
+    ("national green tribunal", Forum::Ngt),
+    ("supreme court of india", Forum::SupremeCourt),
+    ("supreme court", Forum::SupremeCourt),
+    ("high court", Forum::HighCourt),
+    ("court of session", Forum::SessionsCourt),
+    ("sessions court", Forum::SessionsCourt),
+    ("district court", Forum::DistrictCourt),
+    ("district judge", Forum::DistrictCourt),
+    ("judicial magistrate", Forum::Magistrate),
+    ("metropolitan magistrate", Forum::Magistrate),
+];
+
+/// Earliest court-name needle in a header, or None.
+fn scan_header_forum(header_lower: &str) -> Option<Forum> {
+    let mut best: Option<(usize, usize, Forum)> = None;
+    for (order, (needle, forum)) in HEADER_FORUMS.iter().enumerate() {
+        if let Some(pos) = header_lower.find(needle) {
+            let better = match best {
+                None => true,
+                Some((bp, bo, _)) => pos < bp || (pos == bp && order < bo),
+            };
+            if better {
+                best = Some((pos, order, *forum));
+            }
+        }
+    }
+    best.map(|(_, _, f)| f)
+}
+
+/// Deterministically inferred forum / state / decision date for one
+/// document, from its title first and its judgment header second.
+/// Title wins for forum (a citation title is explicit); for dates the
+/// header's exact date wins over the title's bare year.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InferredMeta {
+    pub forum: Forum,
+    pub state: Option<String>,
+    pub date: Option<SimpleDate>,
+}
+
+pub fn infer_doc_meta(title: &str, header_text: &str) -> InferredMeta {
+    let head: String = header_text.chars().take(4000).collect();
+    let head_lower = head.to_lowercase();
+    let forum = match infer_forum(title) {
+        Forum::Unknown => scan_header_forum(&head_lower).unwrap_or(Forum::Unknown),
+        f => f,
+    };
+    let state = infer_state(title).or_else(|| infer_state(&head));
+    let date = scan_header_date(&head).or_else(|| title_year(title));
+    InferredMeta { forum, state, date }
+}
+
 const ALL_DOMAINS: &[Domain] = &[
     Domain::GeneralCivil,
     Domain::Criminal,
@@ -335,10 +785,42 @@ fn resolve_below(
     }
 }
 
+/// Build a V2 judgment for one document: stored metadata wins, title
+/// inference is the last-resort fallback. `meta` maps doc id → DocMeta;
+/// a missing entry means "no metadata" (legacy document), not an error.
+fn judgment_from_meta(
+    doc_id: &str,
+    title: &str,
+    meta: &HashMap<String, crate::pipeline::DocMeta>,
+) -> Judgment {
+    let m = meta.get(doc_id);
+    let forum = m
+        .and_then(|m| m.forum.as_deref())
+        .and_then(forum_from_stored)
+        .unwrap_or_else(|| infer_forum(title));
+    let mut j = Judgment::new(doc_id, &match_name(title), forum);
+    j.state = m
+        .and_then(|m| m.state.clone())
+        .filter(|s| !s.trim().is_empty())
+        .or_else(|| infer_state(title));
+    j.date = m
+        .and_then(|m| m.decided_on.as_deref())
+        .and_then(parse_decided_on)
+        .or_else(|| title_year(title));
+    j.applicant = m
+        .and_then(|m| m.applicant.clone())
+        .filter(|s| !s.trim().is_empty());
+    j.statute_jurisdiction = m
+        .and_then(|m| m.jurisdiction.clone())
+        .filter(|s| !s.trim().is_empty());
+    j
+}
+
 pub fn resolve_v2(
     citations: &[Citation],
     v1_edges: &[V1Edge],
     scope: Option<&DocScope>,
+    meta: &HashMap<String, crate::pipeline::DocMeta>,
 ) -> V2Resolution {
     let empty = || V2Resolution {
         treatments: Vec::new(),
@@ -362,9 +844,7 @@ pub fn resolve_v2(
         let Some(title) = c.doc_title.as_deref().filter(|t| !t.trim().is_empty()) else {
             continue;
         };
-        let mut j = Judgment::new(&c.doc_id, &match_name(title), infer_forum(title));
-        j.state = infer_state(title);
-        j.date = title_year(title);
+        let j = judgment_from_meta(&c.doc_id, title, meta);
         display.insert(c.doc_id.clone(), title.to_string());
         judgments.push(j);
     }
@@ -384,9 +864,7 @@ pub fn resolve_v2(
     for e in &visible_edges {
         let source_title = e.source_title.clone().unwrap_or_default();
         if !judgments.iter().any(|j| j.id == e.source_doc_id) {
-            let mut sj = Judgment::new(&e.source_doc_id, &match_name(&source_title), infer_forum(&source_title));
-            sj.state = infer_state(&source_title);
-            sj.date = title_year(&source_title);
+            let sj = judgment_from_meta(&e.source_doc_id, &source_title, meta);
             judgments.push(sj);
             if !source_title.is_empty() {
                 display.insert(e.source_doc_id.clone(), source_title);
@@ -615,7 +1093,7 @@ mod tests {
             source_title: Some("Kumar v. State — Supreme Court (2025)".to_string()),
             passage: "We affirm Kumar v. State.".to_string(),
         }];
-        let res = resolve_v2(&citations, &v1_edges, None);
+        let res = resolve_v2(&citations, &v1_edges, None, &HashMap::new());
         let by_id: HashMap<&str, &CitationTreatment> = res
             .treatments
             .iter()
@@ -649,7 +1127,7 @@ mod tests {
                 "We affirm Kumar v. State. The Supreme Court held that the High Court correctly applied the standard of proof.",
             ),
         ];
-        let res = resolve_v2(&citations, &[], None);
+        let res = resolve_v2(&citations, &[], None, &HashMap::new());
         let by_id: HashMap<&str, &CitationTreatment> = res
             .treatments
             .iter()
@@ -666,5 +1144,184 @@ mod tests {
     fn v2_disabled_by_default_off_switch() {
         std::env::remove_var("LEGAL_RAG_CITATOR_V2");
         assert!(!citator_v2_enabled());
+    }
+
+    // -- FIX 1: stored metadata -------------------------------------------
+
+    #[test]
+    fn parse_forum_accepts_variant_display_and_human_forms() {
+        assert_eq!(parse_forum("HighCourt"), Some(Forum::HighCourt));
+        assert_eq!(parse_forum("High Court"), Some(Forum::HighCourt));
+        assert_eq!(parse_forum("High Court of Bombay"), Some(Forum::HighCourt));
+        assert_eq!(parse_forum("Supreme Court of India"), Some(Forum::SupremeCourt));
+        assert_eq!(parse_forum("UK Supreme Court"), Some(Forum::ForeignCourt));
+        assert_eq!(parse_forum("AAR"), Some(Forum::Aar));
+        assert_eq!(parse_forum("Appellate Authority for Advance Ruling"), Some(Forum::Aaar));
+        assert_eq!(parse_forum("ITAT"), Some(Forum::Itat));
+        assert_eq!(parse_forum("NCDRC"), Some(Forum::Ncdrc));
+        assert_eq!(parse_forum("Sessions Court"), Some(Forum::SessionsCourt));
+        assert_eq!(parse_forum("Section 86 IT Act"), None);
+        assert_eq!(parse_forum("Some Random Tribunal"), None);
+    }
+
+    #[test]
+    fn normalize_request_state_codes_names_unknown() {
+        assert_eq!(normalize_request_state("MH").as_deref(), Some("MH"));
+        assert_eq!(normalize_request_state("Maharashtra").as_deref(), Some("MH"));
+        assert_eq!(normalize_request_state("M.H.").as_deref(), Some("MH"));
+        assert_eq!(normalize_request_state("  up ").as_deref(), Some("UP"));
+        assert_eq!(normalize_request_state("Uttar Pradesh").as_deref(), Some("UP"));
+        assert_eq!(normalize_request_state("Punjab and Haryana").as_deref(), Some("PB"));
+        assert_eq!(normalize_request_state("Tamil Nadu").as_deref(), Some("TN"));
+        assert_eq!(normalize_request_state("XX"), None);
+        assert_eq!(normalize_request_state("IN"), None);
+        assert_eq!(normalize_request_state("India"), None);
+        assert_eq!(normalize_request_state(""), None);
+    }
+
+    #[test]
+    fn forum_stored_round_trip() {
+        for f in [
+            Forum::DistrictCourt,
+            Forum::Magistrate,
+            Forum::SessionsCourt,
+            Forum::HighCourt,
+            Forum::SupremeCourt,
+            Forum::Itat,
+            Forum::Aar,
+            Forum::Aaar,
+            Forum::Nclt,
+            Forum::Nclat,
+            Forum::Cci,
+            Forum::Sat,
+            Forum::DistrictCommission,
+            Forum::StateCommission,
+            Forum::Ncdrc,
+            Forum::Cat,
+            Forum::Ngt,
+            Forum::ForeignCourt,
+            Forum::InternationalCourt,
+            Forum::ArbitralTribunal,
+        ] {
+            assert_eq!(forum_from_stored(forum_to_stored(f)), Some(f), "{f:?}");
+        }
+        assert_eq!(forum_from_stored("Unknown"), None);
+        assert_eq!(forum_from_stored("Nope"), None);
+    }
+
+    #[test]
+    fn infer_doc_meta_title_and_header() {
+        // Title-only: forum + state + year.
+        let m = infer_doc_meta("X v. Y — Allahabad High Court (2023)", "");
+        assert_eq!(m.forum, Forum::HighCourt);
+        assert_eq!(m.state.as_deref(), Some("UP"));
+        assert_eq!(m.date, Some(SimpleDate::new(2023, 1, 1)));
+        // Header-only: court at the top + "Decided on" exact date.
+        let m = infer_doc_meta(
+            "Kumar v. State",
+            "IN THE SUPREME COURT OF INDIA\nCivil Appeal No. 12 of 2024\nDecided on 24 August 2017\nThe appeal is allowed.",
+        );
+        assert_eq!(m.forum, Forum::SupremeCourt);
+        assert_eq!(m.date, Some(SimpleDate::new(2017, 8, 24)));
+        // Header HC seat name yields forum + state.
+        let m = infer_doc_meta(
+            "Mehta v. Desai",
+            "IN THE HIGH COURT OF JUDICATURE AT BOMBAY\nWrit Petition No. 5 of 2022\nDecided on 15 March 2023",
+        );
+        assert_eq!(m.forum, Forum::HighCourt);
+        assert_eq!(m.state.as_deref(), Some("MH"));
+        assert_eq!(m.date, Some(SimpleDate::new(2023, 3, 15)));
+        // Title forum wins when both name a forum; header exact date
+        // wins over the title's bare year.
+        let m = infer_doc_meta(
+            "Mehta v. Desai — Supreme Court (2025)",
+            "IN THE HIGH COURT OF JUDICATURE AT BOMBAY\nDecided on 15 March 2023",
+        );
+        assert_eq!(m.forum, Forum::SupremeCourt);
+        assert_eq!(m.date, Some(SimpleDate::new(2023, 3, 15)));
+        // Numeric date forms.
+        let m = infer_doc_meta("X", "Decided on 12.01.2024");
+        assert_eq!(m.date, Some(SimpleDate::new(2024, 1, 12)));
+        let m = infer_doc_meta("X", "Decided on 2024-01-12");
+        assert_eq!(m.date, Some(SimpleDate::new(2024, 1, 12)));
+    }
+
+    #[test]
+    fn header_date_skips_impugned_dates() {
+        let m = infer_doc_meta(
+            "Kumar v. State",
+            "IN THE SUPREME COURT OF INDIA\nAppeal against the impugned judgment dated 12 January 2020.\nDecided on 15 March 2023.",
+        );
+        assert_eq!(m.date, Some(SimpleDate::new(2023, 3, 15)));
+    }
+
+    #[test]
+    fn judgment_from_meta_prefers_stored_over_title() {
+        let mut meta = HashMap::new();
+        meta.insert(
+            "doc:9".to_string(),
+            crate::pipeline::DocMeta {
+                forum: Some("HighCourt".to_string()),
+                state: Some("MH".to_string()),
+                decided_on: Some("2023-05-01".to_string()),
+                applicant: Some("Acme Ltd".to_string()),
+                jurisdiction: Some("IN".to_string()),
+                ..Default::default()
+            },
+        );
+        // Title claims SC 2025; stored metadata says HC/MH/2023-05-01.
+        let j = judgment_from_meta("doc:9", "Mehta v. Desai — Supreme Court (2025)", &meta);
+        assert_eq!(j.forum, Forum::HighCourt);
+        assert_eq!(j.state.as_deref(), Some("MH"));
+        assert_eq!(j.date, Some(SimpleDate::new(2023, 5, 1)));
+        assert_eq!(j.applicant.as_deref(), Some("Acme Ltd"));
+        assert_eq!(j.statute_jurisdiction.as_deref(), Some("IN"));
+        // No metadata entry: title inference, as before.
+        let j = judgment_from_meta("doc:8", "X — Allahabad High Court (2023)", &meta);
+        assert_eq!(j.forum, Forum::HighCourt);
+        assert_eq!(j.state.as_deref(), Some("UP"));
+        assert_eq!(j.date, Some(SimpleDate::new(2023, 1, 1)));
+        assert_eq!(j.applicant, None);
+    }
+
+    #[test]
+    fn stored_meta_lets_bare_title_join_chain() {
+        // The HC citation carries NO forum marker in its title; only
+        // stored metadata names it HighCourt/MH. It must still reverse
+        // the district judgment and sit in the SC-governed chain.
+        let citations = vec![
+            cit("doc:0", "Mehta v. Desai — District Court (2021)", "The accused was convicted."),
+            cit(
+                "doc:1",
+                "Mehta v. Desai",
+                "In Mehta v. Desai, the appeal is allowed and the impugned judgment is set aside.",
+            ),
+            cit(
+                "doc:2",
+                "Mehta v. Desai — Supreme Court (2025)",
+                "We affirm Mehta v. Desai.",
+            ),
+        ];
+        let mut meta = HashMap::new();
+        meta.insert(
+            "doc:1".to_string(),
+            crate::pipeline::DocMeta {
+                forum: Some("HighCourt".to_string()),
+                state: Some("MH".to_string()),
+                decided_on: Some("2023-05-01".to_string()),
+                ..Default::default()
+            },
+        );
+        let res = resolve_v2(&citations, &[], None, &meta);
+        let by_id: HashMap<&str, &CitationTreatment> = res
+            .treatments
+            .iter()
+            .map(|(id, t)| (id.as_str(), t))
+            .collect();
+        assert_eq!(by_id["doc:0"].status, V1Status::Reversed, "district reversed by metadata-HC");
+        assert_eq!(by_id["doc:1"].status, V1Status::GoodLaw, "HC affirmed by SC");
+        let line = res.governing_line.expect("governing line");
+        assert!(line.contains("Supreme Court"), "{line}");
+        assert_eq!(res.ranked_corpus_ids.last().unwrap(), "doc:0");
     }
 }

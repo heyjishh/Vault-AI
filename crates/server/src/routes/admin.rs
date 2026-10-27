@@ -70,6 +70,21 @@ pub async fn backfill_citator(
     })))
 }
 
+/// Backfill citator V2 document metadata for the existing corpus: a
+/// pure deterministic scan over stored parent chunks — no re-embedding,
+/// no LLM calls. Only fills fields still empty (explicit overrides are
+/// never overwritten), so re-running is a no-op. Returns documents
+/// changed.
+pub async fn backfill_citator_v2(
+    State(state): State<AppState>,
+    AdminUser(_admin): AdminUser,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    let meta_updated = state.rag.backfill_doc_meta().await?;
+    Ok(Json(serde_json::json!({
+        "meta_updated": meta_updated,
+    })))
+}
+
 /// Delete a user. Admins cannot delete themselves (prevents lockout).
 pub async fn delete_user(
     State(state): State<AppState>,

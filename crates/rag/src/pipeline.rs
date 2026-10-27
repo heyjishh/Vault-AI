@@ -80,6 +80,21 @@ pub struct DocMeta {
     /// What replaced this document (title / citation note), when known.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub superseded_by: Option<String>,
+    /// Deciding forum, as a variant name ("HighCourt", "Aar", …) —
+    /// ingest inference from title + judgment header, or an explicit
+    /// upload override. Empty for legacy documents (title inference at
+    /// Ask time is the fallback).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub forum: Option<String>,
+    /// State code (two letters, e.g. "MH") for state forums.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub state: Option<String>,
+    /// Decision date, YYYY-MM-DD.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub decided_on: Option<String>,
+    /// For AAR / AAAR rulings: the applicant the ruling binds.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub applicant: Option<String>,
 }
 
 impl DocMeta {
@@ -310,6 +325,68 @@ impl RagAnything {
             .collect();
         self.treatments.prune_self_edges(&titles);
         Ok(added)
+    }
+
+    /// Backfill forum/state/date metadata for the existing corpus
+    /// WITHOUT re-embedding anything: deterministic inference from each
+    /// document's title + first parent chunk's head (the judgment
+    /// header). Only fills fields that are still empty — explicit
+    /// overrides are never overwritten — so re-running is a no-op.
+    /// Returns documents changed.
+    pub async fn backfill_doc_meta(&self) -> Result<usize> {
+        let chunks = self.store.all_chunks().await?;
+        // First parent chunk per document (lowest ordinal) = header source.
+        let mut first_parent: std::collections::HashMap<String, (usize, String)> =
+            std::collections::HashMap::new();
+        for chunk in chunks.iter().filter(|c| {
+            matches!(
+                c.metadata.get("pc").map(|s| s.as_str()),
+                None | Some("parent")
+            )
+        }) {
+            let entry = first_parent
+                .entry(chunk.doc_id.clone())
+                .or_insert((chunk.ordinal, chunk.text.clone()));
+            if chunk.ordinal < entry.0 {
+                *entry = (chunk.ordinal, chunk.text.clone());
+            }
+        }
+        let mut changed = 0usize;
+        let mut docs = self.documents.write().expect("lock poisoned");
+        for (doc_id, info) in docs.iter_mut() {
+            if info.meta.forum.is_some()
+                && info.meta.state.is_some()
+                && info.meta.decided_on.is_some()
+            {
+                continue;
+            }
+            let header = first_parent
+                .get(doc_id)
+                .map(|(_, text)| text.as_str())
+                .unwrap_or("");
+            let inferred = crate::citator_v2::infer_doc_meta(&info.title, header);
+            let mut touched = false;
+            if info.meta.forum.is_none()
+                && inferred.forum != citator_v2::Forum::Unknown
+            {
+                info.meta.forum = Some(
+                    crate::citator_v2::forum_to_stored(inferred.forum).to_string(),
+                );
+                touched = true;
+            }
+            if info.meta.state.is_none() && inferred.state.is_some() {
+                info.meta.state = inferred.state;
+                touched = true;
+            }
+            if info.meta.decided_on.is_none() && inferred.date.is_some() {
+                info.meta.decided_on = inferred.date.map(crate::citator_v2::format_decided_on);
+                touched = true;
+            }
+            if touched {
+                changed += 1;
+            }
+        }
+        Ok(changed)
     }
 
     /// Snapshot the document registry (documents + statuses) for disk persistence.
@@ -548,6 +625,17 @@ impl RagAnything {
 
         // Step 2: separate text and multimodal content.
         let (text_content, modal_items, _page_intervals) = separate_content(&blocks);
+
+        // FIX 1: deterministic forum/state/date inference from the
+        // display title + judgment header. Explicit upload overrides
+        // merge on top later (upload handler) and win; the registry
+        // insert below stores the inferred values.
+        let display_title_early = title
+            .as_deref()
+            .filter(|t| !t.trim().is_empty())
+            .unwrap_or(file_ref);
+        let inferred_meta =
+            crate::citator_v2::infer_doc_meta(display_title_early, &text_content);
 
         let mut entities_total = 0usize;
         let mut relations_total = 0usize;
@@ -824,6 +912,16 @@ impl RagAnything {
 
         let chars = text_content.len();
         let display_title = title.filter(|t| !t.trim().is_empty()).unwrap_or_else(|| file_ref.to_string());
+        let mut doc_meta = DocMeta::default();
+        if inferred_meta.forum != citator_v2::Forum::Unknown {
+            doc_meta.forum = Some(
+                crate::citator_v2::forum_to_stored(inferred_meta.forum).to_string(),
+            );
+        }
+        doc_meta.state = inferred_meta.state.clone();
+        doc_meta.decided_on = inferred_meta
+            .date
+            .map(crate::citator_v2::format_decided_on);
         self.documents.write().expect("lock poisoned").insert(
             doc_id.to_string(),
             DocumentInfo {
@@ -834,7 +932,7 @@ impl RagAnything {
                 chunks: chunk_count,
                 chunk_ids: chunk_ids.clone(),
                 ingested_at: Utc::now(),
-                meta: DocMeta::default(),
+                meta: doc_meta,
             },
         );
 
@@ -855,6 +953,45 @@ impl RagAnything {
         match docs.get_mut(doc_id) {
             Some(info) => {
                 info.meta = meta;
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// Merge metadata into a document's record: only `Some` fields
+    /// overwrite. Upload overrides use this so an explicit forum (say)
+    /// does not wipe ingest-inferred state/date the upload did not
+    /// mention. Returns false when the document is unknown.
+    pub fn merge_document_meta(&self, doc_id: &str, meta: DocMeta) -> bool {
+        let mut docs = self.documents.write().expect("lock poisoned");
+        match docs.get_mut(doc_id) {
+            Some(info) => {
+                let m = &mut info.meta;
+                if meta.jurisdiction.is_some() {
+                    m.jurisdiction = meta.jurisdiction;
+                }
+                if meta.effective_from.is_some() {
+                    m.effective_from = meta.effective_from;
+                }
+                if meta.effective_to.is_some() {
+                    m.effective_to = meta.effective_to;
+                }
+                if meta.superseded_by.is_some() {
+                    m.superseded_by = meta.superseded_by;
+                }
+                if meta.forum.is_some() {
+                    m.forum = meta.forum;
+                }
+                if meta.state.is_some() {
+                    m.state = meta.state;
+                }
+                if meta.decided_on.is_some() {
+                    m.decided_on = meta.decided_on;
+                }
+                if meta.applicant.is_some() {
+                    m.applicant = meta.applicant;
+                }
                 true
             }
             None => false,
@@ -1391,6 +1528,75 @@ mod tests {
         assert!(m.eligible(None, None), "no filters, no exclusion");
         m.superseded_by = Some("the 2023 Amendment Act".to_string());
         assert_eq!(m.stale_note().as_deref(), Some("Superseded by the 2023 Amendment Act"));
+    }
+
+    #[test]
+    fn doc_meta_serde_backward_compat() {
+        // Old snapshots without the FIX 1 fields must load as None.
+        let old = r#"{"jurisdiction":"IN","effective_from":"1961-04-01"}"#;
+        let m: DocMeta = serde_json::from_str(old).unwrap();
+        assert_eq!(m.jurisdiction.as_deref(), Some("IN"));
+        assert_eq!(m.forum, None);
+        assert_eq!(m.state, None);
+        assert_eq!(m.decided_on, None);
+        assert_eq!(m.applicant, None);
+        let round: DocMeta = serde_json::from_value(serde_json::to_value(&m).unwrap()).unwrap();
+        assert_eq!(round.forum, None);
+    }
+
+    #[tokio::test]
+    async fn ingest_infers_forum_state_date() {
+        let rag = rag();
+        let text = "IN THE HIGH COURT OF JUDICATURE AT BOMBAY\nWrit Petition No. 5 of 2022\n\
+            Decided on 15 March 2023.\nThe petition challenges the assessment order. The court held that \
+            the assessment was valid and dismissed the petition with costs.";
+        let report = rag
+            .process_document_complete("mehta.md", text.as_bytes(), Some("Mehta v. Desai".into()), None)
+            .await
+            .unwrap();
+        let meta = rag.document_meta(&report.doc_id).expect("meta present");
+        assert_eq!(meta.forum.as_deref(), Some("HighCourt"));
+        assert_eq!(meta.state.as_deref(), Some("MH"));
+        assert_eq!(meta.decided_on.as_deref(), Some("2023-03-15"));
+    }
+
+    #[tokio::test]
+    async fn merge_document_meta_overwrites_only_some_fields() {
+        let rag = rag();
+        let report = rag
+            .process_document_complete("mehta.md", b"IN THE HIGH COURT OF JUDICATURE AT BOMBAY\nDecided on 15 March 2023.\nText.", Some("Mehta v. Desai".into()), None)
+            .await
+            .unwrap();
+        // Override only the forum: inferred state/date must survive.
+        let mut partial = DocMeta::default();
+        partial.forum = Some("SupremeCourt".to_string());
+        assert!(rag.merge_document_meta(&report.doc_id, partial));
+        let meta = rag.document_meta(&report.doc_id).unwrap();
+        assert_eq!(meta.forum.as_deref(), Some("SupremeCourt"));
+        assert_eq!(meta.state.as_deref(), Some("MH"));
+        assert_eq!(meta.decided_on.as_deref(), Some("2023-03-15"));
+        assert!(!rag.merge_document_meta("no-such-doc", DocMeta::default()));
+    }
+
+    #[tokio::test]
+    async fn backfill_doc_meta_fills_only_empty_and_idempotent() {
+        let rag = rag();
+        let text = "IN THE HIGH COURT OF JUDICATURE AT BOMBAY\nDecided on 15 March 2023.\n\
+            The petition challenges the assessment order. The court held that \
+            the assessment was valid and dismissed the petition with costs.";
+        let report = rag
+            .process_document_complete("mehta.md", text.as_bytes(), Some("Mehta v. Desai".into()), None)
+            .await
+            .unwrap();
+        // Wipe the inferred metadata, then backfill must restore it
+        // from title + first parent chunk — and a second run changes 0.
+        assert!(rag.set_document_meta(&report.doc_id, DocMeta::default()));
+        assert_eq!(rag.backfill_doc_meta().await.unwrap(), 1);
+        let meta = rag.document_meta(&report.doc_id).unwrap();
+        assert_eq!(meta.forum.as_deref(), Some("HighCourt"));
+        assert_eq!(meta.state.as_deref(), Some("MH"));
+        assert_eq!(meta.decided_on.as_deref(), Some("2023-03-15"));
+        assert_eq!(rag.backfill_doc_meta().await.unwrap(), 0);
     }
 
     #[test]

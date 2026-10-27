@@ -791,7 +791,13 @@ impl QueryService {
         // already fixed the order.
         if crate::citator_v2::citator_v2_enabled() {
             let edges = self.treatments.read().expect("lock poisoned").all();
-            let res = crate::citator_v2::resolve_v2(&answer.citations, &edges, effective.as_ref());
+            // Cached citations lost their real document ids when they
+            // were built (positional "doc:N" only), so refresh falls
+            // back to title inference; fresh queries use stored
+            // metadata via prepare_context.
+            let meta_empty: std::collections::HashMap<String, crate::pipeline::DocMeta> =
+                std::collections::HashMap::new();
+            let res = crate::citator_v2::resolve_v2(&answer.citations, &edges, effective.as_ref(), &meta_empty);
             let by_id: std::collections::HashMap<&str, crate::citator::CitationTreatment> = res
                 .treatments
                 .iter()
@@ -1345,6 +1351,10 @@ impl QueryService {
         }
         let user_prompt = format!("Question: {question}\n\n{}", context_parts.join("\n\n"));
 
+        // Positional "doc:N" ids discard the real document id; keep the
+        // mapping so V2 resolution can look up stored metadata by real id.
+        let real_doc_ids: Vec<String> =
+            hits.iter().map(|h| h.record.doc_id.clone()).collect();
         let mut citations: Vec<Citation> = hits
             .into_iter()
             .enumerate()
@@ -1423,7 +1433,26 @@ impl QueryService {
         if crate::citator_v2::citator_v2_enabled() {
             let effective_scope: Option<DocScope> = if fell_back { None } else { scope.clone() };
             let edges = self.treatments.read().expect("lock poisoned").all();
-            let res = crate::citator_v2::resolve_v2(&citations, &edges, effective_scope.as_ref());
+            // Stored metadata, keyed by BOTH the positional citation id
+            // (for cited judgments) and the real document id (for V1
+            // edge sources, which carry real ids).
+            let mut meta_map: std::collections::HashMap<String, crate::pipeline::DocMeta> =
+                std::collections::HashMap::new();
+            for c in citations.iter().filter(|c| c.doc_id.starts_with("doc:")) {
+                if let Some(idx) = c
+                    .doc_id
+                    .strip_prefix("doc:")
+                    .and_then(|s| s.parse::<usize>().ok())
+                {
+                    if let Some(real) = real_doc_ids.get(idx) {
+                        if let Some(m) = self.meta_of(real) {
+                            meta_map.insert(c.doc_id.clone(), m.clone());
+                            meta_map.insert(real.clone(), m);
+                        }
+                    }
+                }
+            }
+            let res = crate::citator_v2::resolve_v2(&citations, &edges, effective_scope.as_ref(), &meta_map);
             if !res.treatments.is_empty() {
                 let by_id: std::collections::HashMap<&str, crate::citator::CitationTreatment> = res
                     .treatments
