@@ -7,6 +7,7 @@ license.workspace = true
 [dependencies]
 legal-rag-common = { workspace = true }
 legal-rag-ingest = { workspace = true }
+citator-v2 = { path = "../../../citator-v2" }
 tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

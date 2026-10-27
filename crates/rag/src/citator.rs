@@ -83,10 +83,16 @@ pub enum TreatmentKind {
 #[serde(rename_all = "snake_case")]
 pub enum TreatmentStatus {
     Overruled,
+    /// V2 only: appellate reversal (appeal allowed / impugned judgment set
+    /// aside). Never produced when the V2 switch is off.
+    Reversed,
     Followed,
     Distinguished,
     Applied,
     GoodLaw,
+    /// V2 only: persuasive authority (foreign / international / arbitral).
+    /// Never produced when the V2 switch is off.
+    Persuasive,
     Unknown,
 }
 
@@ -104,14 +110,16 @@ impl From<TreatmentKind> for TreatmentStatus {
 
 impl TreatmentStatus {
     /// Rank for precedence: lower wins when several edges match.
+    /// Reversed shares Overruled's top tier (both mean dead law).
     fn rank(self) -> usize {
         match self {
-            TreatmentStatus::Overruled => 0,
+            TreatmentStatus::Overruled | TreatmentStatus::Reversed => 0,
             TreatmentStatus::Distinguished => 1,
             TreatmentStatus::GoodLaw => 2,
             TreatmentStatus::Followed => 3,
             TreatmentStatus::Applied => 4,
-            TreatmentStatus::Unknown => 5,
+            TreatmentStatus::Persuasive => 5,
+            TreatmentStatus::Unknown => 6,
         }
     }
 
@@ -119,6 +127,7 @@ impl TreatmentStatus {
     fn participle(self) -> &'static str {
         match self {
             TreatmentStatus::Overruled => "overruled",
+            TreatmentStatus::Reversed => "reversed",
             TreatmentStatus::Distinguished => "distinguished",
             _ => "treated",
         }
@@ -285,13 +294,16 @@ pub fn resolve_treatment(
 }
 
 /// Deterministic treatment-note lines for an answer's citations —
-/// one line per Overruled / Distinguished authority, never dropping
-/// the citation itself. Returns `None` when nothing qualifies.
+/// one line per Overruled / Reversed / Distinguished authority, never
+/// dropping the citation itself. Returns `None` when nothing qualifies.
 pub fn treatment_note(citations: &[Citation]) -> Option<String> {
     let mut lines = Vec::new();
     for c in citations {
         let Some(t) = &c.treatment else { continue };
-        if !matches!(t.status, TreatmentStatus::Overruled | TreatmentStatus::Distinguished) {
+        if !matches!(
+            t.status,
+            TreatmentStatus::Overruled | TreatmentStatus::Reversed | TreatmentStatus::Distinguished
+        ) {
             continue;
         }
         let title = c.doc_title.clone().unwrap_or_else(|| c.doc_id.clone());

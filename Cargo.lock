@@ -861,6 +861,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "citator-v2"
+version = "0.1.0"
+
+[[package]]
 name = "cmake"
 version = "0.1.58"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2257,6 +2261,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "chrono",
+ "citator-v2",
  "futures",
  "legal-rag-common",
  "legal-rag-ingest",

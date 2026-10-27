@@ -786,6 +786,23 @@ impl QueryService {
                 c.treatment = Some(crate::citator::CitationTreatment::unknown());
             }
         }
+        // V2 status refresh only (cache path): statuses may change, but
+        // citation order never moves — the cached text's [doc:N] markers
+        // already fixed the order.
+        if crate::citator_v2::citator_v2_enabled() {
+            let edges = self.treatments.read().expect("lock poisoned").all();
+            let res = crate::citator_v2::resolve_v2(&answer.citations, &edges, effective.as_ref());
+            let by_id: std::collections::HashMap<&str, crate::citator::CitationTreatment> = res
+                .treatments
+                .iter()
+                .map(|(id, t)| (id.as_str(), t.clone()))
+                .collect();
+            for c in answer.citations.iter_mut() {
+                if let Some(t) = by_id.get(c.doc_id.as_str()) {
+                    c.treatment = Some(t.clone());
+                }
+            }
+        }
     }
 
     /// Staleness note for one document, when it is known superseded.
@@ -1193,7 +1210,7 @@ impl QueryService {
         scope: Option<DocScope>,
         extra: &[ExtraSource],
         strict: bool,
-    ) -> Result<(String, String, Vec<Citation>, Option<String>, Vec<String>)> {
+    ) -> Result<(String, String, Vec<Citation>, Option<String>, Vec<String>, Option<String>)> {
         let top_k = top_k.clamp(1, 50);
 
         if mode == QueryMode::Bypass {
@@ -1203,6 +1220,7 @@ impl QueryService {
                 Vec::new(),
                 None,
                 Vec::new(),
+                None,
             ));
         }
 
@@ -1395,13 +1413,62 @@ impl QueryService {
                 });
             }
         }
+        // Citator V2 (kill switch LEGAL_RAG_CITATOR_V2=1, default OFF):
+        // overrides corpus treatments with chain-aware resolution, ranks
+        // citations live-first, and yields a governing-authority line.
+        // Ranking happens pre-generation and keeps each citation's doc_id,
+        // so [doc:N] markers keep resolving by id. Nothing is dropped.
+        let mut governing_line: Option<String> = None;
+        let mut system_hint: Option<String> = None;
+        if crate::citator_v2::citator_v2_enabled() {
+            let effective_scope: Option<DocScope> = if fell_back { None } else { scope.clone() };
+            let edges = self.treatments.read().expect("lock poisoned").all();
+            let res = crate::citator_v2::resolve_v2(&citations, &edges, effective_scope.as_ref());
+            if !res.treatments.is_empty() {
+                let by_id: std::collections::HashMap<&str, crate::citator::CitationTreatment> = res
+                    .treatments
+                    .iter()
+                    .map(|(id, t)| (id.as_str(), t.clone()))
+                    .collect();
+                for c in citations.iter_mut() {
+                    if let Some(t) = by_id.get(c.doc_id.as_str()) {
+                        c.treatment = Some(t.clone());
+                    }
+                }
+                let mut ranked: Vec<Citation> = Vec::with_capacity(citations.len());
+                for id in &res.ranked_corpus_ids {
+                    if let Some(pos) = citations.iter().position(|c| &c.doc_id == id) {
+                        ranked.push(citations[pos].clone());
+                    }
+                }
+                for c in citations.iter() {
+                    if !c.doc_id.starts_with("doc:") {
+                        ranked.push(c.clone());
+                    }
+                }
+                // Corpus citations V2 did not rank (no title) keep their
+                // place at the end of the corpus block.
+                for c in citations.iter() {
+                    if c.doc_id.starts_with("doc:") && !res.ranked_corpus_ids.contains(&c.doc_id) {
+                        ranked.push(c.clone());
+                    }
+                }
+                citations = ranked;
+            }
+            governing_line = res.governing_line;
+            system_hint = res.system_hint;
+        }
         let mut system = self.answer_system();
+        if let Some(hint) = &system_hint {
+            system.push_str("\n\n");
+            system.push_str(hint);
+        }
         if !web_pages.is_empty() {
             system.push_str(WEB_FORMAT_ADDENDUM);
         } else {
             system.push_str(CORPUS_FORMAT_ADDENDUM);
         }
-        Ok((system, user_prompt, citations, scope_note, expansions))
+        Ok((system, user_prompt, citations, scope_note, expansions, governing_line))
     }
 
     async fn query_inner(
@@ -1447,7 +1514,7 @@ impl QueryService {
                 }
             }
         }
-        let (system, user_prompt, citations, scope_note, expansions) =
+        let (system, user_prompt, citations, scope_note, expansions, governing_line) =
             self.prepare_context(question, mode, top_k, web_pages, scope, extra, strict).await?;
         // Only this final call ever sees confidential (extra) source
         // text, so only it honors the private-LLM override.
@@ -1466,6 +1533,11 @@ impl QueryService {
         // Treatment flag, never a silent drop: an overruled or
         // distinguished cited authority gets a line in the answer.
         let answer = crate::citator::append_treatment_note(answer, &citations);
+        // V2 governing authority, when determined, rides along as a line.
+        let answer = match &governing_line {
+            Some(line) => format!("{answer}\n\n{line}"),
+            None => answer,
+        };
         info!(mode = ?mode, citations = citations.len(), web_pages = web_pages.len(), "answered query");
         let out = QueryAnswer {
             answer,
@@ -1603,7 +1675,7 @@ impl QueryService {
             "Weighing the evidence…",
         ];
         let mut beat_no = 0usize;
-        let (system, user_prompt, citations, scope_note, expansions) = loop {
+        let (system, user_prompt, citations, scope_note, expansions, governing_line) = loop {
             tokio::select! {
                 done = &mut prep => break done?,
                 _ = beat.tick() => {
@@ -1648,6 +1720,10 @@ impl QueryService {
         // event carries the noted answer, which is what the client
         // persists and re-renders.
         let answer = crate::citator::append_treatment_note(answer, &citations);
+        let answer = match &governing_line {
+            Some(line) => format!("{answer}\n\n{line}"),
+            None => answer,
+        };
         if let Some((qvec, key)) = cache_slot {
             if !citations.is_empty() {
                 self.answer_cache.store(
@@ -3035,7 +3111,7 @@ mod tests {
     #[tokio::test]
     async fn verdict_first_format_for_corpus_and_web() {
         let (svc, _) = seeded().await;
-        let (system, _, _, _, _) = svc
+        let (system, _, _, _, _, _) = svc
             .prepare_context("What did Acme agree to?", QueryMode::Mix, 3, &[], None, &[], false)
             .await
             .unwrap();
@@ -3048,13 +3124,13 @@ mod tests {
             text: "Acme agrees to confidentiality.".into(),
             date: None,
         };
-        let (web_system, _, _, _, _) = svc
+        let (web_system, _, _, _, _, _) = svc
             .prepare_context("What did Acme agree to?", QueryMode::Mix, 3, &[page], None, &[], false)
             .await
             .unwrap();
         assert!(web_system.contains("## Verdict"), "web answers keep the verdict-first format");
         assert!(web_system.contains("WEB-AUGMENTED ANSWER FORMAT"));
-        let (bypass_system, _, _, _, _) = svc
+        let (bypass_system, _, _, _, _, _) = svc
             .prepare_context("What is a contract?", QueryMode::Bypass, 3, &[], None, &[], false)
             .await
             .unwrap();

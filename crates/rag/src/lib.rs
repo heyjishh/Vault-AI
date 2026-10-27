@@ -9,6 +9,7 @@
 
 pub mod agent;
 pub mod citator;
+pub mod citator_v2;
 pub mod orchestrator;
 pub mod subagents;
 pub mod audit;

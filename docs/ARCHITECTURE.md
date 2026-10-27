@@ -420,6 +420,67 @@ citation audit, in both blocking and streaming paths).
   for authorities with no corpus evidence is deferred follow-up
   (same provenance + scope rules to be verified, not assumed).
 
+### 5.y Citator V2 — appellate chains, ladders, governing authority (27 Oct 2026)
+
+V2 is built as a **standalone crate** (`~/workspace/citator-v2/`, own git
+repo, zero dependencies, deterministic only) and wired into the RAG as a
+path dependency behind a kill switch that **defaults to V1 behavior**
+(`LEGAL_RAG_CITATOR_V2=1` enables; unset means V1 exactly). V1's
+detection, store, and resolution are untouched when the switch is off.
+
+- **New treatment kind: Reversed.** Appellate-reversal detection over
+  judgment text: "appeal allowed", "impugned judgment set aside",
+  "reversed", "quashed" — linked to the impugned judgment by appeal
+  number, CNR, party-name match (including the appellant/respondent
+  swap on appeal), or "impugned judgment dated X". Negation ("appeal
+  dismissed", "declined to set aside") creates no edge; ambiguous
+  linkage creates no edge — never a guess.
+- **Ladder registry as data tables** (`citator-v2/src/ladders.rs`):
+  general civil District → HC → SC; criminal Magistrate → Sessions →
+  HC → SC; tax ITAT → HC → SC and AAR → AAAR → HC → SC; company
+  NCLT → NCLAT → SC; competition CCI → NCLAT → SC; securities SAT →
+  SC; consumer District → State → NCDRC → SC; service CAT → HC
+  (writ) → SC; environment NGT → SC. Adding a domain is a table row,
+  not a code branch. Persuasive forums (foreign courts, ICJ, SIAC/ICC)
+  appear in no ladder and can never outrank a domestic forum.
+- **Jurisdiction model.** Every judgment carries forum + state +
+  statute jurisdiction. A chain never crosses known-different states
+  (a Maharashtra HC cannot reverse a UP district judgment); the
+  Supreme Court binds all states; a High Court ruling binds only its
+  own state and is persuasive elsewhere; state Acts/amendments match
+  within their state only.
+- **Conclusion policy (user directive).** Never drop any citation.
+  Within one case's chain the conclusion follows the LATEST judgment,
+  whatever the forum. Across different cases on the same proposition
+  the HIGHEST binding forum within the applicable jurisdiction
+  governs — an older Supreme Court ruling still binds over a newer
+  High Court ruling. Persuasive authorities never govern (marked,
+  excluded from governing selection, still shown). AAR/AAAR rulings
+  bind only their own applicant. An SLP dismissed without reasons is
+  NOT affirmance on the merits (only explicit endorsement counts).
+- **Ask surface (switch on).** `crates/rag/src/citator_v2.rs` adapts
+  V1 edges (converted, with a nearest-below tie-break for repeated
+  captions) plus reversal detection over cited snippets into the V2
+  engine; `prepare_context` then overrides corpus treatments, ranks
+  citations live-first (pre-generation, doc_ids unchanged so `[doc:N]`
+  markers keep resolving), appends a "Governing authority (V2)" line
+  to the answer and a governing hint to the system prompt, in both
+  blocking and streaming paths. Cache-hit refresh updates statuses
+  only — never order. V1 gained two additive status variants for this
+  (`Reversed`, `Persuasive`); they are never produced with the switch
+  off.
+- **Adapter limits (honest).** Forum/state/date are inferred from
+  citation titles only — documents without forum markers get Unknown
+  forum and cannot govern or extend a chain (statuses still resolve).
+  Reversal detection runs on cited snippets, not full texts. No
+  per-request state/applicant context exists in the query API, so
+  governing runs with state None (only national authority governs
+  outright) and applicant None (AAR/AAAR never govern). The engine's
+  `good_law_only` flag exists and is tested but has no HTTP parameter
+  yet — threading it through the query entry points is deferred to the
+  next API change rather than churned in here. Full forum metadata at
+  ingest would remove the title-inference limit.
+
 ## 6. Frontend architecture
 
 Two independent Vite SPAs served as static files by C1 (no server restart

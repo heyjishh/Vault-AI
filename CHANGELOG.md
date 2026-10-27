@@ -15,6 +15,37 @@ live**, what is **built but unverified**, and what is **roadmap**.
 ## [Unreleased]
 
 ### Added
+- **Citator V2 — appellate chains, ladders, governing authority**
+  (27 Oct 2026, standalone crate + integration, kill switch defaults to
+  V1). New crate `~/workspace/citator-v2/` (own git repo, zero deps,
+  deterministic only): Reversed kind with appellate-reversal detection
+  (appeal allowed / impugned judgment set aside / reversed / quashed,
+  linked by appeal number, CNR, party match incl. appeal swap, or
+  impugned date); ladder registry as data tables (civil, criminal,
+  tax ITAT + AAR→AAAR tracks, company, competition, securities,
+  consumer, service, environment); jurisdiction model (chains never
+  cross known-different states; SC binds all; HC binds its own state
+  only); conclusion policy — never drop, latest-in-chain governs the
+  case, highest binding forum governs across cases, persuasive
+  authorities never govern, AAR/AAAR applicant-only, SLP dismissal
+  without reasons is not affirmance. Wired into the RAG as a path
+  dependency behind `LEGAL_RAG_CITATOR_V2=1` (default OFF — V1 behavior
+  untouched when off); when on, V2 feeds Ask citation statuses
+  (incl. Reversed/Persuasive), rank-down ordering, the verdict's
+  governing-authority line + system hint, and treatment notes, in
+  blocking and streaming paths. Standalone suite 44 green; workspace
+  151 green (was 146). Verified on test :3001 only (see below);
+  production untouched. NO version bump, NO push.
+  - **Live verification on :3001 (pending at changelog time — see
+    verification notes):** fixture chain District → Allahabad HC → SC
+    with V2 on, asserting Reversed status + treatment note on the
+    district citation and a governing-authority line naming the SC.
+  - **Deferred with reasons:** HTTP `good_law_only` parameter (engine
+    flag exists and is tested; threading it through the query entry
+    points is a bigger API change than this integration warrants);
+    forum metadata at ingest (adapter infers forum/state/date from
+    titles today); full-text reversal detection at ingest (adapter
+    runs on cited snippets); web verification + public corpus (as V1).
 - **Citator — "is this case still good law?"** (V1, 26 Oct 2026).
   Every cited authority in an Ask answer now carries a treatment status
   with provenance — Overruled / Followed / Distinguished / Applied /
