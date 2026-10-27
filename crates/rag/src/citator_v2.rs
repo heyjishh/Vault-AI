@@ -5,9 +5,11 @@
 //! and this module is never called.
 //!
 //! What V2 adds over V1 when on:
-//! - Reversed statuses from appellate-reversal language detected in the
-//!   cited snippets ("appeal allowed", "impugned judgment set aside"),
-//!   linked by party match / appeal number / CNR / impugned date.
+//! - Reversed statuses from appellate-reversal language detected over
+//!   full parent texts at ingest ("appeal allowed", "impugned judgment
+//!   set aside"), linked by party match / appeal number / CNR / impugned
+//!   date, and stored for Ask resolution (snippet detection is only a
+//!   fallback for pre-change documents).
 //! - Appellate chains and a governing authority for the conclusion
 //!   (latest in chain, else highest binding forum), surfaced as a line in
 //!   the answer and a hint in the system prompt.
@@ -28,9 +30,12 @@
 //!   persisted as `citator_v2.json`). Ask resolution uses those stored
 //!   edges; snippet detection remains only as a fallback for documents
 //!   ingested before this change (no stored edges yet).
-//! - No per-request state or applicant context exists in the query API,
-//!   so governing selection runs with state None (only national authority
-//!   governs outright) and applicant None (AAR/AAAR never govern).
+//! - Per-request state / applicant context (`CitatorContext`) threads
+//!   from the Ask API into governing selection: the request state lets
+//!   that state's High Court govern within it, and the applicant gates
+//!   the AAR/AAAR applicant-only rule. Absent context behaves as
+//!   before (state None, applicant None); unknown state codes
+//!   normalize to None at the API boundary, never a crash.
 //! - V1 edges are converted to V2 edges, but their sources are real
 //!   document ids while citations carry positional `doc:N` ids, so source
 //!   judgments are synthesized from edge source titles for chain walking.

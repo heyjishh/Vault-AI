@@ -460,33 +460,64 @@ detection, store, and resolution are untouched when the switch is off.
   NOT affirmance on the merits (only explicit endorsement counts).
 - **Ask surface (switch on).** `crates/rag/src/citator_v2.rs` adapts
   V1 edges (converted, with a nearest-below tie-break for repeated
-  captions) plus reversal detection over cited snippets into the V2
-  engine; `prepare_context` then overrides corpus treatments, ranks
+  captions) plus stored V2 edges into the V2 engine; snippet detection
+  remains only as fallback for documents ingested before stored edges
+  existed. `prepare_context` then overrides corpus treatments, ranks
   citations live-first (pre-generation, doc_ids unchanged so `[doc:N]`
-  markers keep resolving), appends a "Governing authority (V2)" line
+  markers keep resolving), appends a \"Governing authority (V2)\" line
   to the answer and a governing hint to the system prompt, in both
   blocking and streaming paths. Cache-hit refresh updates statuses
   only — never order. V1 gained two additive status variants for this
   (`Reversed`, `Persuasive`); they are never produced with the switch
   off.
-- **Adapter limits (honest).** Forum/state/date are inferred from
-  citation titles only — documents without forum markers get Unknown
-  forum and cannot govern or extend a chain (statuses still resolve).
-  Treatment + reversal detection runs over cited snippets, not full
-  texts. The snippet path is what rescues same-caption affirmances
-  that V1's name-based self-guard drops at ingest (an SC judgment
-  titled "Kumar v. State" affirming "Kumar v. State" looks like
-  self-treatment to V1); snippet edges resolve by document id to the
-  nearest forum below the source, so the affirmance lands on the HC
-  step, never on the source itself, and a tie at the highest rank
-  still resolves to nothing (never a guess). No per-request
-  state/applicant context exists in the query API, so governing runs
-  with state None (only national authority governs outright) and
-  applicant None (AAR/AAAR never govern). The engine's
+- **Adapter limits — FIXED 27 Oct 2026 (FIX 1\u20134, live-verified on
+  :3001).** (1) Documents now carry stored forum + state +
+  decision-date + applicant: deterministic inference from title +
+  judgment header at ingest, explicit upload fields win on merge, an
+  admin meta endpoint edits them, and `POST
+  /api/v1/admin/citator/v2/backfill` fills empty fields for legacy
+  docs (idempotent, no re-embedding, no LLM); the adapter prefers
+  stored metadata, title inference is last-resort only. (2) V2
+  detection runs over full parent texts at ingest into a separate
+  `V2EdgeStore` (never V1's store — zero V1 regression risk),
+  persisted in `citator_v2.json`, shared with the query service, and
+  removed with its source document; the adapter converts stored edges
+  first (JudgmentId targets direct, CaseName targets via
+  nearest-below, V1 duplicates skipped) and drops self-only CaseName
+  edges, so same-caption affirmances land on the step below by
+  document id and can never self-affirm. (3) The Ask API accepts
+  optional `state` + `applicant` (`CitatorContext`, threaded through
+  every public query method; unknown state codes normalize to None,
+  never a crash); the semantic answer cache key includes the context,
+  so one request's governing line never replays to another. (4) Live
+  multi-step verification on :3001: civil chain District → HC → SC
+  fully green — district Reversed, HC GoodLaw (the round-1
+  same-caption Unknown gap is closed), SC governs as latest in
+  chain, reversed step ranked last, nothing dropped; tax chain
+  AAR → AAAR → HC → SC green on narrative, SC governing, and
+  no-drop, with step statuses below. Backfill is idempotent
+  (second run 0/0, total 12 edges).
+- **Remaining honest limits.** (a) Engine detection recall (not the
+  adapter): name extraction truncates multi-party company names
+  (\"Nexa Traders Pvt Ltd v. Union of India\" fragments) and misses
+  \"In re:\" forms, and reversal outcomes cover \"appeal is allowed\"
+  / \"set aside\" + an impugned/judgment/order/decision object but not
+  writ-petition constructions (\"writ petition is allowed … ruling
+  set aside\"). Live consequence: the tax chain's HC/AAAR/AAR steps
+  stayed Unknown (no evidence, honestly Unknown — never asserted
+  without a passage). Fixing this is engine work in `citator-v2/`
+  (detection vocabulary + name extraction), separate scope from the
+  adapter fixes. (b) Cache-refresh still falls back to title
+  inference (cached citations lost their real ids at build time);
+  fresh queries use stored metadata. (c) The engine's
   `good_law_only` flag exists and is tested but has no HTTP parameter
-  yet — threading it through the query entry points is deferred to the
-  next API change rather than churned in here. Full forum metadata at
-  ingest would remove the title-inference limit.
+  yet — deferred to the next API change. (d) Backfill surfaces some
+  noisy extractions on legacy prose (\"followed A\", \"overruled
+  Parliament\"); they are inert at Ask time (no judgment match, or
+  the self-only guard drops them) but engine precision work would
+  clean them. (e) The governing line shows the winning candidate's
+  chain (HC → SC for the civil chain), not necessarily from the
+  lowest step — the verdict text itself narrates all steps.
 
 ## 6. Frontend architecture
 

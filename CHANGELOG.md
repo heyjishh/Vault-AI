@@ -48,12 +48,42 @@ live**, what is **built but unverified**, and what is **roadmap**.
     nearest-below resolution (adapter only, V1 untouched); round 2
     confirms the fix. `citator.json` held no V1 Kumar edge, so the
     HC status came purely from the snippet path.
+  - **Adapter limits fixed (27 Oct, FIX 1–4, workspace 173 green,
+    standalone still 44):** (1) Stored forum/state/date/applicant at
+    ingest — deterministic inference from title + judgment header,
+    explicit upload fields win on merge, admin meta endpoint, and a
+    V2 backfill endpoint filling empty legacy fields (idempotent, no
+    re-embedding, no LLM); the adapter prefers stored metadata, title
+    inference is last-resort only. (2) Full-text V2 detection at
+    ingest into a separate `V2EdgeStore` (never V1's store — zero V1
+    regression risk), persisted as `citator_v2.json`, with a self-only
+    guard so same-caption affirmances land on the step below and can
+    never self-affirm; snippet detection is now fallback only.
+    (3) Per-request `state` + `applicant` on the Ask API, threaded
+    into governing selection (unknown state codes → None, never a
+    crash); the semantic answer cache key includes the context.
+    (4) Live multi-step verification on :3001 (V2 on): civil chain
+    District → Allahabad HC → SC fully green — district Reversed,
+    HC GoodLaw (the round-1 same-caption Unknown gap is closed for
+    good), SC governs as latest in chain, reversed step ranked last,
+    nothing dropped. Tax chain AAR → AAAR → HC → SC green on
+    verdict narrative, SC governing, and no-drop, but its
+    intermediate steps stayed Unknown — engine recall gaps, not
+    adapter bugs (see Deferred). Backfill reproduced across a VM
+    restart: first run {meta_updated 8, v2_edges_added 8, v2_total
+    12}, second run {0, 0, 12}; the 8 added edges all came from
+    legacy corpus docs, none from the new fixtures (ingest already
+    covered those). NO version bump, NO push.
   - **Deferred with reasons:** HTTP `good_law_only` parameter (engine
     flag exists and is tested; threading it through the query entry
     points is a bigger API change than this integration warrants);
-    forum metadata at ingest (adapter infers forum/state/date from
-    titles today); full-text reversal detection at ingest (adapter
-    runs on cited snippets); web verification + public corpus (as V1).
+    web verification + public corpus (as V1); engine detection-recall
+    follow-up — name extraction truncates multi-party company names
+    and misses "In re:" forms, and reversal outcomes miss
+    writ-petition constructions ("writ petition is allowed … ruling
+    set aside"), which is why the live tax chain's HC/AAAR/AAR steps
+    stayed Unknown (honestly Unknown — never asserted without a
+    passage).
 - **Citator — "is this case still good law?"** (V1, 26 Oct 2026).
   Every cited authority in an Ask answer now carries a treatment status
   with provenance — Overruled / Followed / Distinguished / Applied /
