@@ -1107,6 +1107,46 @@ pub fn resolve_v2(
         }
     }
 
+    // Duplicate judgments of one document share one canonical judgment
+    // for resolution. Duplicates arise two ways: research cites per
+    // hypothesis and Ask can return two chunks of one doc (same doc,
+    // two positional ids), and a stored edge's synthesized source
+    // duplicates its cited judgment (same doc, real id vs positional
+    // id). Without this, resolve_below sees two same-forum matches for
+    // one document and reads it as ambiguity, leaving the treatment
+    // Unknown — which is exactly what research showed for a twice-cited
+    // HC doc, and why the stored path stayed silent whenever the
+    // treating document was itself cited. Identity = caption + forum +
+    // date + state: two different documents sharing all four are
+    // indistinguishable to the engine anyway. Cited judgments come
+    // first, so the canonical id is a cited positional id whenever the
+    // document is cited. Aliases expand back after resolution.
+    let mut canonical_of: HashMap<String, String> = HashMap::new();
+    let mut seen: HashMap<(String, Forum, Option<SimpleDate>, Option<String>), String> =
+        HashMap::new();
+    let mut deduped: Vec<Judgment> = Vec::new();
+    for j in judgments {
+        let key = (j.case_name.clone(), j.forum, j.date, j.state.clone());
+        if let Some(canon) = seen.get(&key) {
+            canonical_of.insert(j.id.clone(), canon.clone());
+        } else {
+            seen.insert(key, j.id.clone());
+            deduped.push(j);
+        }
+    }
+    let judgments = deduped;
+
+    // Real id -> positional id -> canonical id (identity for uncited
+    // documents). Edge sources and targets are canonicalized through
+    // this so the engine always sees one judgment per document.
+    let canonicalize = |id: &str| -> String {
+        let pos = real_to_positional
+            .get(id)
+            .cloned()
+            .unwrap_or_else(|| id.to_string());
+        canonical_of.get(&pos).cloned().unwrap_or(pos)
+    };
+
     let domain = best_fit_domain(&judgments.iter().map(|j| j.forum).collect::<Vec<_>>());
 
     // Forum of an edge's source, from its (metadata-aware) judgment
@@ -1120,16 +1160,19 @@ pub fn resolve_v2(
     };
 
     // Convert V1 edges, resolving name targets against the judgment set
-    // with the nearest-below rule (see `resolve_below`).
+    // with the nearest-below rule (see `resolve_below`). Sources are
+    // canonicalized so a cited source is found by its canonical id
+    // (source exclusion and the self-only guard both key on it).
     let mut edges: Vec<V2Edge> = Vec::new();
     for e in &visible_edges {
         let source_title = e.source_title.clone().unwrap_or_default();
-        let source_forum = source_forum_of(&e.source_doc_id, &source_title);
-        let target = resolve_below(&e.target, source_forum, domain, &judgments, &e.source_doc_id);
+        let source_id = canonicalize(&e.source_doc_id);
+        let source_forum = source_forum_of(&source_id, &source_title);
+        let target = resolve_below(&e.target, source_forum, domain, &judgments, &source_id);
         edges.push(V2Edge {
             target,
             kind: map_kind(e.kind),
-            source_doc_id: e.source_doc_id.clone(),
+            source_doc_id: source_id,
             source_title: e.source_title.clone().unwrap_or_default(),
             passage: e.passage.clone(),
             linkage: Some("v1-edge".to_string()),
@@ -1145,23 +1188,21 @@ pub fn resolve_v2(
     // this answer), exactly as before.
     for e in &visible_stored {
         let source_title = e.source_title.clone().unwrap_or_default();
-        let source_forum = source_forum_of(&e.source_doc_id, &source_title);
+        let source_id = canonicalize(&e.source_doc_id);
+        let source_forum = source_forum_of(&source_id, &source_title);
         let target = match &e.target_doc_id {
-            Some(id) => match real_to_positional.get(id) {
-                Some(pos) => EdgeTarget::JudgmentId(pos.clone()),
-                None => EdgeTarget::JudgmentId(id.clone()),
-            },
-            None => resolve_below(&e.target_name, source_forum, domain, &judgments, &e.source_doc_id),
+            Some(id) => EdgeTarget::JudgmentId(canonicalize(id)),
+            None => resolve_below(&e.target_name, source_forum, domain, &judgments, &source_id),
         };
         let kind = stored_kind_to_engine(e.kind);
         let dup = edges.iter().any(|x| {
-            x.source_doc_id == e.source_doc_id && x.kind == kind && x.target == target
+            x.source_doc_id == source_id && x.kind == kind && x.target == target
         });
         if !dup {
             edges.push(V2Edge {
                 target,
                 kind,
-                source_doc_id: e.source_doc_id.clone(),
+                source_doc_id: source_id,
                 source_title: source_title.clone(),
                 passage: e.passage.clone(),
                 linkage: e.linkage.clone(),
@@ -1247,14 +1288,10 @@ pub fn resolve_v2(
                 evidence_source_title: Some(ev.source_title.clone()),
                 evidence_passage: Some(ev.passage.clone()),
                 // Evidence attribution follows the same mapping: a
-                // cited source is identified by its positional id,
-                // an uncited source keeps its real id (as before).
-                evidence_doc_id: Some(
-                    real_to_positional
-                        .get(&ev.source_doc_id)
-                        .cloned()
-                        .unwrap_or_else(|| ev.source_doc_id.clone()),
-                ),
+                // cited source is identified by its canonical
+                // positional id, an uncited source keeps its real id
+                // (as before).
+                evidence_doc_id: Some(canonicalize(&ev.source_doc_id)),
             },
             None => CitationTreatment {
                 status: map_status(cited.status),
@@ -1271,7 +1308,31 @@ pub fn resolve_v2(
         };
         treatments.push((cited.judgment.id.clone(), t));
     }
-    let ranked_corpus_ids: Vec<String> = out.citations.iter().map(|c| c.judgment.id.clone()).collect();
+    // Expand outputs back to duplicate citations: a treatment is a
+    // property of the document, not the chunk, so every copy carries
+    // its canonical's treatment, and ranked order keeps each copy
+    // adjacent to its canonical (copies of dead law rank together at
+    // the end instead of splitting across tiers).
+    let mut extra: Vec<(String, CitationTreatment)> = Vec::new();
+    for (alias, canon) in &canonical_of {
+        if citations.iter().any(|c| &c.doc_id == alias)
+            && !treatments.iter().any(|(id, _)| id == alias)
+        {
+            if let Some((_, t)) = treatments.iter().find(|(id, _)| id == canon) {
+                extra.push((alias.clone(), t.clone()));
+            }
+        }
+    }
+    treatments.extend(extra);
+    let mut ranked_corpus_ids: Vec<String> = Vec::new();
+    for c in &out.citations {
+        ranked_corpus_ids.push(c.judgment.id.clone());
+        for cit in citations.iter().filter(|c| c.doc_id.starts_with("doc:")) {
+            if canonical_of.get(&cit.doc_id).map_or(false, |canon| canon == &c.judgment.id) {
+                ranked_corpus_ids.push(cit.doc_id.clone());
+            }
+        }
+    }
 
     let (governing_line, system_hint) = match &out.governing {
         Some(gov) => {
@@ -1707,6 +1768,74 @@ mod tests {
             .map(|(id, t)| (id.as_str(), t))
             .collect();
         assert_eq!(by_id_nomap["doc:0"].status, V1Status::Unknown);
+    }
+
+    #[test]
+    fn duplicate_citations_share_treatment_and_rank() {
+        // REGRESSION (found in Phase 2 live research): one document
+        // cited twice (research retrieves per hypothesis; Ask can
+        // return two chunks of one doc) must not read as ambiguity.
+        // Before the dedup, resolve_below saw two same-forum matches
+        // and kept the CaseName, leaving BOTH copies Unknown.
+        let citations = vec![
+            cit("doc:0", "Mehta v. Desai — Allahabad High Court (2023)", "The court heard the appeal."),
+            cit("doc:1", "Mehta v. Desai — Allahabad High Court (2023)", "The court heard the appeal."),
+            cit("doc:2", "Mehta v. Desai — Supreme Court (2025)", "The court heard the matter."),
+        ];
+        let stored = vec![stored(
+            "Mehta v. Desai",
+            None,
+            StoredV2Kind::Affirmed,
+            "real-sc",
+            "Mehta v. Desai — Supreme Court (2025)",
+        )];
+        let mut map = HashMap::new();
+        map.insert("doc-hc-real".to_string(), "doc:0".to_string());
+        let res = resolve_v2(&citations, &[], &stored, None, &HashMap::new(), &CitatorContext::default(), &map);
+        let by_id: HashMap<&str, &CitationTreatment> = res
+            .treatments
+            .iter()
+            .map(|(id, t)| (id.as_str(), t))
+            .collect();
+        assert_eq!(by_id["doc:0"].status, V1Status::GoodLaw);
+        assert_eq!(by_id["doc:1"].status, V1Status::GoodLaw, "duplicate copy shares the treatment");
+        let p0 = res.ranked_corpus_ids.iter().position(|id| id == "doc:0").unwrap();
+        let p1 = res.ranked_corpus_ids.iter().position(|id| id == "doc:1").unwrap();
+        assert_eq!(p1, p0 + 1, "duplicate ranks adjacent to its canonical");
+    }
+
+    #[test]
+    fn synthesized_source_collapses_to_cited() {
+        // REGRESSION (stored-path companion): a stored edge whose
+        // source is itself cited must fire. Before the dedup, the
+        // synthesized source judgment duplicated the cited judgment,
+        // so a CaseName edge from SC tied between HC(doc:1) and
+        // HC(real) and went inert — HC stayed Unknown even though the
+        // stored affirmance existed.
+        let citations = vec![
+            cit("doc:0", "Mehta v. Desai — District Court (2021)", "The accused was convicted."),
+            cit("doc:1", "Mehta v. Desai — Allahabad High Court (2023)", "The court heard the appeal."),
+            cit("doc:2", "Mehta v. Desai — Supreme Court (2025)", "The court heard the matter."),
+        ];
+        let stored = vec![
+            stored("Mehta v. Desai", Some("real-dist"), StoredV2Kind::Reversed, "real-hc", "Mehta v. Desai — Allahabad High Court (2023)"),
+            stored("Mehta v. Desai", None, StoredV2Kind::Affirmed, "real-sc", "Mehta v. Desai — Supreme Court (2025)"),
+        ];
+        let mut map = HashMap::new();
+        map.insert("real-dist".to_string(), "doc:0".to_string());
+        map.insert("real-hc".to_string(), "doc:1".to_string());
+        map.insert("real-sc".to_string(), "doc:2".to_string());
+        let res = resolve_v2(&citations, &[], &stored, None, &HashMap::new(), &CitatorContext::default(), &map);
+        let by_id: HashMap<&str, &CitationTreatment> = res
+            .treatments
+            .iter()
+            .map(|(id, t)| (id.as_str(), t))
+            .collect();
+        assert_eq!(by_id["doc:0"].status, V1Status::Reversed);
+        assert_eq!(by_id["doc:0"].evidence_doc_id.as_deref(), Some("doc:1"));
+        assert_eq!(by_id["doc:1"].status, V1Status::GoodLaw, "stored affirmance fires via collapsed source");
+        assert_eq!(by_id["doc:1"].evidence_doc_id.as_deref(), Some("doc:2"));
+        assert_eq!(res.ranked_corpus_ids.last().unwrap(), "doc:0");
     }
 
     #[test]
