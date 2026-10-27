@@ -173,6 +173,10 @@ pub struct DraftRequest {
     pub use_corpus: Option<bool>,
     /// When set, ground the draft in this matter's documents first.
     pub matter_id: Option<String>,
+    /// Citator V2 context for the grounding query, as on Ask: asker
+    /// state (unknown codes behave as absent) and AAR/AAAR applicant.
+    pub state: Option<String>,
+    pub applicant: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -204,14 +208,15 @@ pub async fn draft(
                 ),
                 _ => None,
             };
+            let ctx = crate::routes::citator_context(body.state.as_deref(), body.applicant.as_deref());
             let answer = match &scoped {
                 Some(docs) => {
                     state
                         .query
-                        .query_scoped(&body.instructions, QueryMode::Mix, 5, docs.clone(), legal_rag_rag::CitatorContext::default())
+                        .query_scoped(&body.instructions, QueryMode::Mix, 5, docs.clone(), ctx)
                         .await
                 }
-                None => state.query.query(&body.instructions, QueryMode::Mix, 5, legal_rag_rag::CitatorContext::default()).await,
+                None => state.query.query(&body.instructions, QueryMode::Mix, 5, ctx).await,
             };
             if let Ok(answer) = answer {
                 for (i, c) in answer.citations.iter().enumerate() {
