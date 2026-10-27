@@ -3088,6 +3088,37 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn answer_scope_key_separates_citator_context() {
+        // FIX 3: a cached answer bakes in its request's governing line,
+        // so state/applicant must partition the cache — same context
+        // replays, different context never does.
+        let (svc, _) = seeded().await;
+        let base = svc.answer_scope_key(QueryMode::Mix, 3, None, "fp", &CitatorContext::default());
+        let same = svc.answer_scope_key(QueryMode::Mix, 3, None, "fp", &CitatorContext::default());
+        assert_eq!(base, same);
+        let mh = svc.answer_scope_key(
+            QueryMode::Mix,
+            3,
+            None,
+            "fp",
+            &CitatorContext { state: Some("MH".to_string()), applicant: None },
+        );
+        assert_ne!(base, mh);
+        let app = svc.answer_scope_key(
+            QueryMode::Mix,
+            3,
+            None,
+            "fp",
+            &CitatorContext {
+                state: None,
+                applicant: Some("Nexa Traders Pvt Ltd".to_string()),
+            },
+        );
+        assert_ne!(base, app);
+        assert_ne!(mh, app);
+    }
+
+    #[tokio::test]
     async fn all_modes_answer() {
         let (svc, _) = seeded().await;
         for mode in [
