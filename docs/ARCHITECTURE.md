@@ -435,6 +435,20 @@ detection, store, and resolution are untouched when the switch is off.
   swap on appeal), or "impugned judgment dated X". Negation ("appeal
   dismissed", "declined to set aside") creates no edge; ambiguous
   linkage creates no edge — never a guess.
+- **Reversal linkage guard (misattribution fix, 27 Oct 2026).** The
+  weakest linkage signal — a bare "impugned" sentence with exactly one
+  cited candidate below the source forum ("sole-candidate-impugned") —
+  fires ONLY when the sentence names no case at all. When the sentence
+  names a case, the impugned judgment is the named case: an unmatched
+  sole candidate must not inherit the reversal. Without this guard a
+  live orchestrated run labeled an unrelated tax section "reversed"
+  with Mehta evidence, because that section happened to be the only
+  cited judgment below the HC source forum (Unknown-forum documents
+  rank below every known forum in the adapter's candidate filter).
+  The merge was ruled out as the cause (`incorporate_branch` clones
+  treatments, never resolves them) and is pinned by tests, as is the
+  adapter-level live shape. Residual: a sentence naming NO case + a
+  single candidate still links, by design for single-case answers.
 - **Ladder registry as data tables** (`citator-v2/src/ladders.rs`):
   general civil District → HC → SC; criminal Magistrate → Sessions →
   HC → SC; tax ITAT → HC → SC and AAR → AAAR → HC → SC; company

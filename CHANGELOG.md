@@ -288,6 +288,42 @@ live**, what is **built but unverified**, and what is **roadmap**.
   no-password 400, private AES-128 200) and the full rag suite is
   96/96.
 
+### Fixed
+- **Citator misattribution — a named reversal no longer lands on an
+  unmatched sole candidate (27 Oct 2026, engine fix + tests).** A live
+  orchestrated run showed "Section 86 IT Act" as **reversed** with Mehta
+  evidence. Root cause was NOT the merge (ruled out: `incorporate_branch`
+  clones treatments, it never resolves them) but the engine's
+  `detect_reversals` signal 1 ("sole-candidate-impugned"): a bare
+  "impugned" sentence linked the reversal to the only cited judgment
+  below the source forum, even when the sentence NAMED a different case
+  — researcher-2's answer cited only the HC judgment + the tax section,
+  so the tax section inherited the Mehta reversal. Signal 1 now fires
+  only when the sentence names no case at all; when it names a case, the
+  impugned judgment is the named case and only the name-based fallback
+  (CaseName, resolved on a real match) may link it. The unnamed-sentence
+  cases keep working (existing appeal-number, CNR, party-swap tests
+  green). Regression tests at engine level, adapter level (exact live
+  shape: stored HC→district edge inert, district not cited, s.86 must
+  stay Unknown), and merge level (overlapping positional ids never
+  cross-wire; shared chunk dedupes to one treatment). Standalone suite
+  41 green (was 40); workspace 181 green (was 177). V1 untouched when
+  the switch is off. **Live-verified on :3001 after the fix (V2 on):**
+  Ask "current status of Mehta v. Desai?" (mix, top_k 10) — governing
+  line present, HC good_law, district reversed ranked LAST, and
+  Section 86 IT Act **unknown** (was reversed pre-fix); fresh
+  orchestrated run on the same goal — stopped finished, HC good_law,
+  verbatim V2 governing line, verdict follows the chain (SC affirmed
+  the HC set-aside), district correctly reversed, and no unrelated
+  citation carrying a chain treatment (s.86 absent from that run's
+  citations, so the direct s.86 live proof is the Ask run above).
+  No push, no version bump. Residual known
+  weakness, by design: a sentence naming NO case + a single candidate
+  still links (existing tests endorse it for single-case answers); a
+  multi-topic answer with a bare "impugned" sentence could still
+  mislink — the mitigation is that real chains carry party-match or
+  stored edges, which outrank signal 1.
+
 ## [1.8.0] — 2026-10-25
 
 ### Added
