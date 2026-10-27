@@ -472,10 +472,17 @@ detection, store, and resolution are untouched when the switch is off.
 - **Adapter limits (honest).** Forum/state/date are inferred from
   citation titles only — documents without forum markers get Unknown
   forum and cannot govern or extend a chain (statuses still resolve).
-  Reversal detection runs on cited snippets, not full texts. No
-  per-request state/applicant context exists in the query API, so
-  governing runs with state None (only national authority governs
-  outright) and applicant None (AAR/AAAR never govern). The engine's
+  Treatment + reversal detection runs over cited snippets, not full
+  texts. The snippet path is what rescues same-caption affirmances
+  that V1's name-based self-guard drops at ingest (an SC judgment
+  titled "Kumar v. State" affirming "Kumar v. State" looks like
+  self-treatment to V1); snippet edges resolve by document id to the
+  nearest forum below the source, so the affirmance lands on the HC
+  step, never on the source itself, and a tie at the highest rank
+  still resolves to nothing (never a guess). No per-request
+  state/applicant context exists in the query API, so governing runs
+  with state None (only national authority governs outright) and
+  applicant None (AAR/AAAR never govern). The engine's
   `good_law_only` flag exists and is tested but has no HTTP parameter
   yet — threading it through the query entry points is deferred to the
   next API change rather than churned in here. Full forum metadata at

@@ -34,12 +34,20 @@ live**, what is **built but unverified**, and what is **roadmap**.
   (incl. Reversed/Persuasive), rank-down ordering, the verdict's
   governing-authority line + system hint, and treatment notes, in
   blocking and streaming paths. Standalone suite 44 green; workspace
-  151 green (was 146). Verified on test :3001 only (see below);
+  152 green (was 146). Verified on test :3001 only (see below);
   production untouched. NO version bump, NO push.
-  - **Live verification on :3001 (pending at changelog time — see
-    verification notes):** fixture chain District → Allahabad HC → SC
-    with V2 on, asserting Reversed status + treatment note on the
-    district citation and a governing-authority line naming the SC.
+  - **Live verification on :3001 (27 Oct, V2 on):** fixture chain
+    District → Allahabad HC → SC, Ask "current status of Kumar v.
+    State": district Reversed (evidence: the HC reversal sentence),
+    HC GoodLaw (evidence: "We affirm Kumar v. State."), governing
+    line naming the SC with the full 3-step chain ("latest in
+    chain"), treatment note present, dead district ranked last,
+    nothing dropped; fixtures deleted afterwards. Round 1 showed HC
+    Unknown — V1's name-based self-guard drops same-caption
+    affirmances at ingest — fixed by snippet treatment detection +
+    nearest-below resolution (adapter only, V1 untouched); round 2
+    confirms the fix. `citator.json` held no V1 Kumar edge, so the
+    HC status came purely from the snippet path.
   - **Deferred with reasons:** HTTP `good_law_only` parameter (engine
     flag exists and is tested; threading it through the query entry
     points is a bigger API change than this integration warrants);

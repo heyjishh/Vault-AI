@@ -44,8 +44,9 @@ use crate::citator::{
 };
 use crate::query::{Citation, DocScope};
 use citator_v2::{
-    detect_reversals, resolve_ask, AskInput, Domain, EdgeTarget, Forum, Judgment, SimpleDate,
-    TreatmentEdge as V2Edge, TreatmentKind as V2Kind, TreatmentStatus as V2Status,
+    detect_reversals, detect_treatments, resolve_ask, AskInput, Domain, EdgeTarget, Forum,
+    Judgment, SimpleDate, TreatmentEdge as V2Edge, TreatmentKind as V2Kind,
+    TreatmentStatus as V2Status,
 };
 
 /// Kill switch: `LEGAL_RAG_CITATOR_V2=1` (or `true`) enables V2 resolution.
@@ -289,6 +290,51 @@ pub struct V2Resolution {
     pub system_hint: Option<String>,
 }
 
+/// Resolve a case-name target to the nearest judgment BELOW the source
+/// forum (the decision under review). With several below-source matches
+/// the highest forum wins; a tie at the highest rank keeps the CaseName
+/// and the engine's strict rule drops it (never a guess between
+/// same-rank candidates). The source document is excluded by id, not by
+/// name — which is what makes same-caption appellate affirmances
+/// attach: an SC judgment titled "Kumar v. State" affirming
+/// "Kumar v. State" resolves to the HC step, not to the district step
+/// and not to itself (V1's name-based self-guard cannot make that
+/// distinction, so it drops the ingest edge entirely).
+fn resolve_below(
+    target: &str,
+    source_forum: Forum,
+    domain: Domain,
+    judgments: &[Judgment],
+    source_id: &str,
+) -> EdgeTarget {
+    let source_rank = citator_v2::ladders::rank_in_domain(source_forum, domain);
+    let mut matches: Vec<&Judgment> = judgments
+        .iter()
+        .filter(|j| j.id != source_id)
+        .filter(|j| citator_v2::normalize::same_matter(&j.case_name, target))
+        .filter(|j| match (source_rank, citator_v2::ladders::rank_in_domain(j.forum, domain)) {
+            (Some(sr), Some(cr)) => cr < sr,
+            _ => true,
+        })
+        .collect();
+    matches.sort_by(|a, b| {
+        let ra = citator_v2::ladders::rank_in_domain(a.forum, domain).unwrap_or(0);
+        let rb = citator_v2::ladders::rank_in_domain(b.forum, domain).unwrap_or(0);
+        rb.cmp(&ra).then_with(|| a.id.cmp(&b.id))
+    });
+    if matches.len() >= 2 {
+        let top = citator_v2::ladders::rank_in_domain(matches[0].forum, domain).unwrap_or(0);
+        let second = citator_v2::ladders::rank_in_domain(matches[1].forum, domain).unwrap_or(0);
+        if top == second {
+            return EdgeTarget::CaseName(target.to_string());
+        }
+    }
+    match matches.first() {
+        Some(m) => EdgeTarget::JudgmentId(m.id.clone()),
+        None => EdgeTarget::CaseName(target.to_string()),
+    }
+}
+
 pub fn resolve_v2(
     citations: &[Citation],
     v1_edges: &[V1Edge],
@@ -350,34 +396,13 @@ pub fn resolve_v2(
 
     let domain = best_fit_domain(&judgments.iter().map(|j| j.forum).collect::<Vec<_>>());
 
-    // Convert V1 edges, resolving name targets against the judgment set.
-    // A treatment flows downward, so candidates are name matches BELOW the
-    // source forum; with several, the highest (nearest appellate step)
-    // wins. No below-source match keeps the CaseName target and lets the
-    // engine's strict rule decide (ambiguous names resolve to nothing).
+    // Convert V1 edges, resolving name targets against the judgment set
+    // with the nearest-below rule (see `resolve_below`).
     let mut edges: Vec<V2Edge> = Vec::new();
     for e in &visible_edges {
         let source_title = e.source_title.clone().unwrap_or_default();
         let source_forum = infer_forum(&source_title);
-        let source_rank = citator_v2::ladders::rank_in_domain(source_forum, domain);
-        let mut matches: Vec<&Judgment> = judgments
-            .iter()
-            .filter(|j| j.id != e.source_doc_id)
-            .filter(|j| citator_v2::normalize::same_matter(&j.case_name, &e.target))
-            .collect();
-        matches.retain(|j| match (source_rank, citator_v2::ladders::rank_in_domain(j.forum, domain)) {
-            (Some(sr), Some(cr)) => cr < sr,
-            _ => true,
-        });
-        matches.sort_by(|a, b| {
-            let ra = citator_v2::ladders::rank_in_domain(a.forum, domain).unwrap_or(0);
-            let rb = citator_v2::ladders::rank_in_domain(b.forum, domain).unwrap_or(0);
-            rb.cmp(&ra).then_with(|| a.id.cmp(&b.id))
-        });
-        let target = match matches.first() {
-            Some(m) => EdgeTarget::JudgmentId(m.id.clone()),
-            None => EdgeTarget::CaseName(e.target.clone()),
-        };
+        let target = resolve_below(&e.target, source_forum, domain, &judgments, &e.source_doc_id);
         edges.push(V2Edge {
             target,
             kind: map_kind(e.kind),
@@ -388,10 +413,16 @@ pub fn resolve_v2(
         });
     }
 
-    // V2 reversal detection over cited snippets, candidates restricted to
-    // judgments below the source forum (an appellate judgment reverses a
-    // lower one, never a higher one). Unknown source rank keeps all
-    // candidates except the source itself.
+    // V2 detection over cited snippets, candidates restricted to
+    // judgments below the source forum (an appellate judgment reverses
+    // or treats a lower one, never a higher one). Unknown source rank
+    // keeps all candidates except the source itself.
+    // Both reversal detection and full treatment detection run here:
+    // V1 ingest edges miss same-caption affirmances (V1's name-based
+    // self-guard drops an SC judgment affirming "Kumar v. State" when
+    // the SC judgment is itself titled "Kumar v. State"), while the
+    // snippet path resolves by document id, so the affirmance lands
+    // on the HC step below, never on the source itself.
     let cited_judgments: Vec<Judgment> = judgments
         .iter()
         .filter(|j| j.id.starts_with("doc:"))
@@ -411,7 +442,22 @@ pub fn resolve_v2(
             })
             .cloned()
             .collect();
-        edges.extend(detect_reversals(&c.snippet, src, &candidates));
+        let mut snippet_edges = detect_reversals(&c.snippet, src, &candidates);
+        snippet_edges.extend(detect_treatments(&c.snippet, src));
+        for mut e in snippet_edges {
+            if let EdgeTarget::CaseName(name) = &e.target {
+                e.target = resolve_below(name, src.forum, domain, &cited_judgments, &src.id);
+            }
+            // Don't duplicate an edge the V1 conversion already
+            // produced (same source, kind, and target); the V1
+            // passage (from ingest) wins over the snippet passage.
+            let dup = edges.iter().any(|x| {
+                x.source_doc_id == e.source_doc_id && x.kind == e.kind && x.target == e.target
+            });
+            if !dup {
+                edges.push(e);
+            }
+        }
     }
 
     let cited_ids: Vec<String> = cited_judgments.iter().map(|j| j.id.clone()).collect();
@@ -580,6 +626,39 @@ mod tests {
         let line = res.governing_line.expect("governing line");
         assert!(line.contains("Supreme Court"), "{line}");
         // Rank-down: live SC/HC before dead district.
+        assert_eq!(res.ranked_corpus_ids.last().unwrap(), "doc:0");
+    }
+
+    #[test]
+    fn snippet_affirmance_resolves_to_nearest_below() {
+        // Same-caption appellate case with NO V1 edge (V1's name-based
+        // self-guard drops an SC judgment affirming "Kumar v. State"
+        // when the SC judgment is itself titled "Kumar v. State").
+        // The snippet path resolves by document id, so the affirmance
+        // lands on the HC step below, never on the source itself.
+        let citations = vec![
+            cit("doc:0", "State v. Kumar — District Court (2021)", "The accused was convicted."),
+            cit(
+                "doc:1",
+                "Kumar v. State — Allahabad High Court (2023)",
+                "In State v. Kumar, the appeal is allowed and the impugned judgment is set aside.",
+            ),
+            cit(
+                "doc:2",
+                "Kumar v. State — Supreme Court (2025)",
+                "We affirm Kumar v. State. The Supreme Court held that the High Court correctly applied the standard of proof.",
+            ),
+        ];
+        let res = resolve_v2(&citations, &[], None);
+        let by_id: HashMap<&str, &CitationTreatment> = res
+            .treatments
+            .iter()
+            .map(|(id, t)| (id.as_str(), t))
+            .collect();
+        assert_eq!(by_id["doc:0"].status, V1Status::Reversed, "district reversed by HC snippet");
+        assert_eq!(by_id["doc:1"].status, V1Status::GoodLaw, "HC affirmed by SC snippet");
+        let line = res.governing_line.expect("governing line");
+        assert!(line.contains("Supreme Court"), "{line}");
         assert_eq!(res.ranked_corpus_ids.last().unwrap(), "doc:0");
     }
 
