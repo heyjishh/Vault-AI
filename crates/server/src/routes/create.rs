@@ -208,10 +208,10 @@ pub async fn draft(
                 Some(docs) => {
                     state
                         .query
-                        .query_scoped(&body.instructions, QueryMode::Mix, 5, docs.clone())
+                        .query_scoped(&body.instructions, QueryMode::Mix, 5, docs.clone(), legal_rag_rag::CitatorContext::default())
                         .await
                 }
-                None => state.query.query(&body.instructions, QueryMode::Mix, 5).await,
+                None => state.query.query(&body.instructions, QueryMode::Mix, 5, legal_rag_rag::CitatorContext::default()).await,
             };
             if let Ok(answer) = answer {
                 for (i, c) in answer.citations.iter().enumerate() {

@@ -192,7 +192,7 @@ async fn call_tool(
             let top_k = args.get("top_k").and_then(|v| v.as_u64()).unwrap_or(5) as usize;
             let answer = state
                 .query
-                .query(question.trim(), QueryMode::Mix, top_k.clamp(1, 20))
+                .query(question.trim(), QueryMode::Mix, top_k.clamp(1, 20), legal_rag_rag::CitatorContext::default())
                 .await
                 .map_err(|e| e.to_string())?;
             Ok(serde_json::to_value(&answer).unwrap_or(json!({})))

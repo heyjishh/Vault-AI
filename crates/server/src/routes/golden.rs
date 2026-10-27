@@ -158,7 +158,7 @@ pub async fn run_rules(
     let mut passed = 0usize;
     for rule in &rules {
         let answer = scope_usage(scope.clone(), async {
-            state.query.query(&rule.question, QueryMode::Mix, state.config.default_top_k).await
+            state.query.query(&rule.question, QueryMode::Mix, state.config.default_top_k, legal_rag_rag::CitatorContext::default()).await
         })
         .await;
         let result = match answer {

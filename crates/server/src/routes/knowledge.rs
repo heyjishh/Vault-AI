@@ -28,6 +28,31 @@ pub struct QueryRequest {
     /// Legal-validity filter: only cite documents of this jurisdiction
     /// (documents with no jurisdiction set stay eligible).
     pub jurisdiction: Option<String>,
+    /// Citator V2 context: the asker's state code (e.g. "MH", full
+    /// name, or dotted form — unknown codes behave as absent) so that
+    /// state's High Court can govern within it.
+    pub state: Option<String>,
+    /// Citator V2 context: the applicant name for the AAR/AAAR rule
+    /// (an AAR/AAAR ruling governs only for its own applicant).
+    pub applicant: Option<String>,
+}
+
+/// Build the per-request citator context: state normalized through
+/// the shared vocabulary (unknown → None, never a crash), applicant
+/// trimmed with empty → None.
+fn citator_ctx(body: &QueryRequest) -> legal_rag_rag::CitatorContext {
+    legal_rag_rag::CitatorContext {
+        state: body
+            .state
+            .as_deref()
+            .and_then(legal_rag_rag::citator_v2::normalize_request_state),
+        applicant: body
+            .applicant
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(str::to_string),
+    }
 }
 
 /// Apply the legal-validity filters (as-of date / jurisdiction) to a base
@@ -130,6 +155,7 @@ pub async fn query(
     crate::routes::billing::ensure_quota(&state, &user.id)?;
     let mode = body.mode.unwrap_or_else(|| settings_mode(&state));
     let top_k = body.top_k.unwrap_or(state.config.default_top_k);
+    let ctx = citator_ctx(&body);
     let docs = doc_scope(&state, &body.matter_id, &user)?;
     let (docs, strict) = filtered_scope(&state, docs, &body);
     let want_private = body.private.unwrap_or(false);
@@ -140,7 +166,7 @@ pub async fn query(
             // Confidential sources take precedence over web blending.
             state
                 .query
-                .query_full(&body.query, mode, top_k, docs.clone(), extra, strict, state.private_llm.clone())
+                .query_full(&body.query, mode, top_k, docs.clone(), extra, strict, state.private_llm.clone(), ctx.clone())
                 .await
         } else if body.web.unwrap_or(false) {
             state
@@ -152,16 +178,17 @@ pub async fn query(
                     body.web_results.unwrap_or(3).clamp(1, 5),
                     docs.clone(),
                     strict,
+                    ctx.clone(),
                 )
                 .await
         } else if let Some(docs) = &docs {
             if strict {
-                state.query.query_scoped_strict(&body.query, mode, top_k, docs.clone()).await
+                state.query.query_scoped_strict(&body.query, mode, top_k, docs.clone(), ctx.clone()).await
             } else {
-                state.query.query_scoped(&body.query, mode, top_k, docs.clone()).await
+                state.query.query_scoped(&body.query, mode, top_k, docs.clone(), ctx.clone()).await
             }
         } else {
-            state.query.query(&body.query, mode, top_k).await
+            state.query.query(&body.query, mode, top_k, ctx.clone()).await
         }
     })
     .await?;
@@ -290,6 +317,7 @@ pub async fn query_stream(
     crate::routes::billing::ensure_quota(&state, &user.id)?;
     let mode = body.mode.unwrap_or_else(|| settings_mode(&state));
     let top_k = body.top_k.unwrap_or(state.config.default_top_k);
+    let ctx = citator_ctx(&body);
     let web = body.web.unwrap_or(false);
     let web_results = body.web_results.unwrap_or(3).clamp(1, 5);
     let docs = doc_scope(&state, &body.matter_id, &user)?;
@@ -322,7 +350,7 @@ pub async fn query_stream(
         let run = tokio::spawn(async move {
             legal_rag_rag::usage::scope_usage(scope_in, async move {
                 svc2.query_stream_scoped(
-                    &question2, mode, top_k, web, web_results, docs2, &extra2, strict, private_llm, inner_tx,
+                    &question2, mode, top_k, web, web_results, docs2, &extra2, strict, private_llm, ctx, inner_tx,
                 )
                 .await
             })

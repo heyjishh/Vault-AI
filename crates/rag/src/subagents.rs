@@ -436,12 +436,12 @@ impl SubAgentOrchestrator {
         match scope_docs {
             Some(docs) => {
                 self.query
-                    .query_with_web(branch, QueryMode::Mix, 4, 2, Some(docs.clone()), true)
+                    .query_with_web(branch, QueryMode::Mix, 4, 2, Some(docs.clone()), true, crate::query::CitatorContext::default())
                     .await
             }
             None => {
                 self.query
-                    .query_with_web(branch, QueryMode::Mix, 4, 2, None, false)
+                    .query_with_web(branch, QueryMode::Mix, 4, 2, None, false, crate::query::CitatorContext::default())
                     .await
             }
         }
@@ -559,12 +559,19 @@ impl SubAgentOrchestrator {
                                     2,
                                     Some(docs.clone()),
                                     true,
+                                    crate::query::CitatorContext::default(),
                                 )
                                 .await
                             }
                             None => {
                                 svc.query_with_web(
-                                    &branch_owned, QueryMode::Mix, 4, 2, None, false,
+                                    &branch_owned,
+                                    QueryMode::Mix,
+                                    4,
+                                    2,
+                                    None,
+                                    false,
+                                    crate::query::CitatorContext::default(),
                                 )
                                 .await
                             }

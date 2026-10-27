@@ -140,14 +140,14 @@ impl AutonomousAgent {
                     };
                     let answer = if plan.action == "search_web" {
                         self.query
-                            .query_with_web(&q, QueryMode::Mix, 4, 3, scope_docs.clone(), false)
+                            .query_with_web(&q, QueryMode::Mix, 4, 3, scope_docs.clone(), false, crate::query::CitatorContext::default())
                             .await?
                     } else if let Some(docs) = &scope_docs {
                         self.query
-                            .query_scoped(&q, QueryMode::Mix, 4, docs.clone())
+                            .query_scoped(&q, QueryMode::Mix, 4, docs.clone(), crate::query::CitatorContext::default())
                             .await?
                     } else {
-                        self.query.query(&q, QueryMode::Mix, 4).await?
+                        self.query.query(&q, QueryMode::Mix, 4, crate::query::CitatorContext::default()).await?
                     };
                     steps.push(AgentStepTrace {
                         n,

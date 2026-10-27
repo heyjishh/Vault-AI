@@ -45,7 +45,7 @@ use crate::citator::{
     CitationTreatment, TreatmentEdge as V1Edge, TreatmentKind as V1Kind,
     TreatmentStatus as V1Status,
 };
-use crate::query::{Citation, DocScope};
+use crate::query::{CitatorContext, Citation, DocScope};
 use citator_v2::{
     detect_reversals, detect_treatments, resolve_ask, AskInput, Domain, EdgeTarget, Forum,
     Judgment, SimpleDate, TreatmentEdge as V2Edge, TreatmentKind as V2Kind,
@@ -1024,6 +1024,7 @@ pub fn resolve_v2(
     stored_v2: &[StoredV2Edge],
     scope: Option<&DocScope>,
     meta: &HashMap<String, crate::pipeline::DocMeta>,
+    ctx: &CitatorContext,
 ) -> V2Resolution {
     let empty = || V2Resolution {
         treatments: Vec::new(),
@@ -1206,10 +1207,13 @@ pub fn resolve_v2(
     });
 
     let cited_ids: Vec<String> = cited_judgments.iter().map(|j| j.id.clone()).collect();
+    // Per-request context (already normalized at the API boundary):
+    // the request state lets that state's High Court govern within it,
+    // and the applicant gates the AAR/AAAR applicant-only rule.
     let input = AskInput {
-        state: None,
+        state: ctx.state.clone(),
         domain,
-        applicant: None,
+        applicant: ctx.applicant.clone(),
         good_law_only: false,
     };
     let out = resolve_ask(&judgments, &edges, &cited_ids, &input);
@@ -1360,7 +1364,7 @@ mod tests {
             source_title: Some("Kumar v. State — Supreme Court (2025)".to_string()),
             passage: "We affirm Kumar v. State.".to_string(),
         }];
-        let res = resolve_v2(&citations, &v1_edges, &[], None, &HashMap::new());
+        let res = resolve_v2(&citations, &v1_edges, &[], None, &HashMap::new(), &CitatorContext::default());
         let by_id: HashMap<&str, &CitationTreatment> = res
             .treatments
             .iter()
@@ -1394,7 +1398,7 @@ mod tests {
                 "We affirm Kumar v. State. The Supreme Court held that the High Court correctly applied the standard of proof.",
             ),
         ];
-        let res = resolve_v2(&citations, &[], &[], None, &HashMap::new());
+        let res = resolve_v2(&citations, &[], &[], None, &HashMap::new(), &CitatorContext::default());
         let by_id: HashMap<&str, &CitationTreatment> = res
             .treatments
             .iter()
@@ -1618,7 +1622,7 @@ mod tests {
             stored("Mehta v. Desai", Some("doc:0"), StoredV2Kind::Reversed, "real-hc", "Mehta v. Desai — Allahabad High Court (2023)"),
             stored("Mehta v. Desai", Some("doc:1"), StoredV2Kind::Affirmed, "real-sc", "Mehta v. Desai — Supreme Court (2025)"),
         ];
-        let res = resolve_v2(&citations, &[], &stored, None, &HashMap::new());
+        let res = resolve_v2(&citations, &[], &stored, None, &HashMap::new(), &CitatorContext::default());
         let by_id: HashMap<&str, &CitationTreatment> = res
             .treatments
             .iter()
@@ -1648,7 +1652,7 @@ mod tests {
             "doc:2",
             "Kumar v. State — Supreme Court (2025)",
         )];
-        let res = resolve_v2(&citations, &[], &stored, None, &HashMap::new());
+        let res = resolve_v2(&citations, &[], &stored, None, &HashMap::new(), &CitatorContext::default());
         let by_id: HashMap<&str, &CitationTreatment> = res
             .treatments
             .iter()
@@ -1675,13 +1679,110 @@ mod tests {
             "doc:2",
             "Kumar v. State — Supreme Court (2025)",
         )];
-        let res = resolve_v2(&citations, &[], &stored, None, &HashMap::new());
+        let res = resolve_v2(&citations, &[], &stored, None, &HashMap::new(), &CitatorContext::default());
         let by_id: HashMap<&str, &CitationTreatment> = res
             .treatments
             .iter()
             .map(|(id, t)| (id.as_str(), t))
             .collect();
         assert_eq!(by_id["doc:2"].status, V1Status::Unknown);
+    }
+
+    // -- FIX 3: per-request state/applicant context ------------------------
+
+    fn ctx(state: Option<&str>, applicant: Option<&str>) -> CitatorContext {
+        CitatorContext {
+            state: state.map(|s| s.to_string()),
+            applicant: applicant.map(|s| s.to_string()),
+        }
+    }
+
+    fn state_chain_citations() -> Vec<Citation> {
+        vec![
+            cit("doc:0", "Sharma v. State — District Court (2021)", "The accused was convicted."),
+            cit("doc:1", "Sharma v. State — High Court of Bombay (2023)", "The court heard the appeal."),
+            cit("doc:2", "Sharma v. State — High Court of Delhi (2023)", "The court heard the appeal."),
+        ]
+    }
+
+    #[test]
+    fn state_scoped_governing_same_state_hc_governs() {
+        // Bombay HC reverses the district step; with state MH the
+        // same-state HC governs, and with no state context no
+        // state-track authority binds at all (backward compatible).
+        let citations = state_chain_citations();
+        let stored = vec![stored(
+            "Sharma v. State",
+            Some("doc:0"),
+            StoredV2Kind::Reversed,
+            "real-bom",
+            "Sharma v. State — High Court of Bombay (2023)",
+        )];
+        let res = resolve_v2(&citations, &[], &stored, None, &HashMap::new(), &ctx(Some("MH"), None));
+        let line = res.governing_line.expect("MH governing line");
+        assert!(line.contains("Bombay"), "{line}");
+        let res_none = resolve_v2(&citations, &[], &stored, None, &HashMap::new(), &CitatorContext::default());
+        assert!(res_none.governing_line.is_none(), "no state context binds no state authority");
+    }
+
+    #[test]
+    fn national_governs_when_state_matches_nothing() {
+        // Same chain plus the Supreme Court: with an unmatched state
+        // (KA) both HCs are inapplicable and national authority
+        // governs outright; with MH the SC still wins on forum rank
+        // (hierarchy beats state, per the V2 conclusion policy).
+        let mut citations = state_chain_citations();
+        citations.push(cit(
+            "doc:3",
+            "Sharma v. State — Supreme Court (2025)",
+            "The court heard the matter.",
+        ));
+        let stored = vec![stored(
+            "Sharma v. State",
+            Some("doc:0"),
+            StoredV2Kind::Reversed,
+            "real-bom",
+            "Sharma v. State — High Court of Bombay (2023)",
+        )];
+        for state in ["KA", "MH"] {
+            let res = resolve_v2(&citations, &[], &stored, None, &HashMap::new(), &ctx(Some(state), None));
+            let line = res.governing_line.expect("governing line");
+            assert!(line.contains("Supreme Court"), "state {state}: {line}");
+        }
+    }
+
+    #[test]
+    fn applicant_scoped_aar_rule() {
+        // An AAR ruling governs only for its own applicant: match →
+        // governs, mismatch or absent applicant → nothing governs.
+        let citations = vec![cit(
+            "doc:0",
+            "In re: Nexa Traders Pvt Ltd — Authority for Advance Ruling (2023)",
+            "The authority ruled on the classification.",
+        )];
+        let mut meta = HashMap::new();
+        meta.insert(
+            "doc:0".to_string(),
+            crate::pipeline::DocMeta {
+                forum: Some("Aar".to_string()),
+                applicant: Some("Nexa Traders Pvt Ltd".to_string()),
+                ..Default::default()
+            },
+        );
+        let res = resolve_v2(
+            &citations,
+            &[],
+            &[],
+            None,
+            &meta,
+            &ctx(None, Some("Nexa Traders Pvt Ltd")),
+        );
+        let line = res.governing_line.expect("applicant-match governing line");
+        assert!(line.contains("Advance Ruling"), "{line}");
+        let res_other = resolve_v2(&citations, &[], &[], None, &meta, &ctx(None, Some("Other Corp")));
+        assert!(res_other.governing_line.is_none(), "other applicant: AAR must not govern");
+        let res_none = resolve_v2(&citations, &[], &[], None, &meta, &CitatorContext::default());
+        assert!(res_none.governing_line.is_none(), "absent applicant: AAR must not govern");
     }
 
     #[test]
@@ -1712,7 +1813,7 @@ mod tests {
                 ..Default::default()
             },
         );
-        let res = resolve_v2(&citations, &[], &[], None, &meta);
+        let res = resolve_v2(&citations, &[], &[], None, &meta, &CitatorContext::default());
         let by_id: HashMap<&str, &CitationTreatment> = res
             .treatments
             .iter()

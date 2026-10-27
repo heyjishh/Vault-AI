@@ -270,9 +270,9 @@ impl WorkflowEngine {
                 format!("{question}\n\nFocus: {}", step.focus)
             };
             let answer = if step.use_web {
-                self.query.query_with_web(&focused, step.mode, step.top_k, 2, None, false).await?
+                self.query.query_with_web(&focused, step.mode, step.top_k, 2, None, false, crate::query::CitatorContext::default()).await?
             } else {
-                self.query.query(&focused, step.mode, step.top_k).await?
+                self.query.query(&focused, step.mode, step.top_k, crate::query::CitatorContext::default()).await?
             };
             // Feed a compact summary forward so later steps build on earlier ones.
             let summary: String = answer.answer.chars().take(800).collect();

@@ -313,6 +313,19 @@ e.g. [doc:3]. If the sources do not contain the answer, say so explicitly and do
 const BYPASS_SYSTEM: &str = "You are a precise legal research assistant. Answer the user's question \
 from your own knowledge. Be clear about what you know and what you are unsure of.";
 
+/// Per-request citator context, threaded from the Ask API into V2
+/// resolution only. Never stored on the shared QueryService (an Arc
+/// serving many requests — that would race); every public query
+/// method takes one, and non-HTTP callers pass `default()` (state
+/// None, applicant None = today's behavior). `state` is a normalized
+/// code ("MH") or None (unknown codes normalize to None at the API
+/// boundary, never a crash); `applicant` is trimmed, empty = None.
+#[derive(Debug, Clone, Default)]
+pub struct CitatorContext {
+    pub state: Option<String>,
+    pub applicant: Option<String>,
+}
+
 pub struct QueryService {
     embeddings: Arc<dyn Embeddings>,
     store: Arc<dyn VectorStore>,
@@ -660,6 +673,7 @@ impl QueryService {
         top_k: usize,
         scope: Option<&DocScope>,
         corpus_fp: &str,
+        ctx: &CitatorContext,
     ) -> String {
         let scope_part = match scope {
             Some(docs) => {
@@ -669,7 +683,17 @@ impl QueryService {
             }
             None => "all".to_string(),
         };
-        hash_key(&[&format!("{mode:?}"), &top_k.to_string(), &scope_part, corpus_fp])
+        // Context is part of the key: the cached answer text already
+        // bakes in the first request's governing line, so a different
+        // state/applicant must never replay it.
+        hash_key(&[
+            &format!("{mode:?}"),
+            &top_k.to_string(),
+            &scope_part,
+            corpus_fp,
+            ctx.state.as_deref().unwrap_or(""),
+            ctx.applicant.as_deref().unwrap_or(""),
+        ])
     }
 
     /// The current BM25 index, rebuilt when the corpus has changed.
@@ -777,7 +801,7 @@ impl QueryService {
     /// current edge set. Used for cache hits (edges may have landed
     /// after the answer was cached, e.g. via backfill) — verified
     /// annotations are never rewritten.
-    fn refresh_treatments(&self, answer: &mut QueryAnswer, scope: Option<&DocScope>) {
+    fn refresh_treatments(&self, answer: &mut QueryAnswer, scope: Option<&DocScope>, ctx: &CitatorContext) {
         if answer.verified {
             return;
         }
@@ -809,7 +833,7 @@ impl QueryService {
             // metadata via prepare_context.
             let meta_empty: std::collections::HashMap<String, crate::pipeline::DocMeta> =
                 std::collections::HashMap::new();
-            let res = crate::citator_v2::resolve_v2(&answer.citations, &edges, &stored_v2, effective.as_ref(), &meta_empty);
+            let res = crate::citator_v2::resolve_v2(&answer.citations, &edges, &stored_v2, effective.as_ref(), &meta_empty, ctx);
             let by_id: std::collections::HashMap<&str, crate::citator::CitationTreatment> = res
                 .treatments
                 .iter()
@@ -951,8 +975,8 @@ impl QueryService {
     }
 
     /// Run one query end to end — like `aquery`.
-    pub async fn query(&self, question: &str, mode: QueryMode, top_k: usize) -> Result<QueryAnswer> {
-        self.query_inner(question, mode, top_k, &[], None, &[], false, None).await
+    pub async fn query(&self, question: &str, mode: QueryMode, top_k: usize, ctx: CitatorContext) -> Result<QueryAnswer> {
+        self.query_inner(question, mode, top_k, &[], None, &[], false, None, &ctx).await
     }
 
     /// Full query: optional brief scope plus the owner's confidential
@@ -967,9 +991,10 @@ impl QueryService {
         extra: Vec<ExtraSource>,
         strict: bool,
         llm_override: Option<Arc<dyn LlmClient>>,
+        ctx: CitatorContext,
     ) -> Result<QueryAnswer> {
         let scope: Option<DocScope> = scope_docs.map(|docs| docs.into_iter().collect());
-        self.query_inner(question, mode, top_k, &[], scope, &extra, strict, llm_override).await
+        self.query_inner(question, mode, top_k, &[], scope, &extra, strict, llm_override, &ctx).await
     }
 
     /// Query scoped to a set of documents (a matter). Retrieval and graph
@@ -981,9 +1006,10 @@ impl QueryService {
         mode: QueryMode,
         top_k: usize,
         scope_docs: Vec<String>,
+        ctx: CitatorContext,
     ) -> Result<QueryAnswer> {
         let scope: DocScope = scope_docs.into_iter().collect();
-        self.query_inner(question, mode, top_k, &[], Some(scope), &[], false, None).await
+        self.query_inner(question, mode, top_k, &[], Some(scope), &[], false, None, &ctx).await
     }
 
     /// Strictly scoped query for legal-validity filters (as-of date /
@@ -996,9 +1022,10 @@ impl QueryService {
         mode: QueryMode,
         top_k: usize,
         scope_docs: Vec<String>,
+        ctx: CitatorContext,
     ) -> Result<QueryAnswer> {
         let scope: DocScope = scope_docs.into_iter().collect();
-        self.query_inner(question, mode, top_k, &[], Some(scope), &[], true, None).await
+        self.query_inner(question, mode, top_k, &[], Some(scope), &[], true, None, &ctx).await
     }
 
     /// Query with live web augmentation: local retrieval plus stealth-fetched
@@ -1011,10 +1038,11 @@ impl QueryService {
         web_results: usize,
         scope_docs: Option<Vec<String>>,
         strict: bool,
+        ctx: CitatorContext,
     ) -> Result<QueryAnswer> {
         let pages = self.gather_web(question, web_results).await;
         let scope: Option<DocScope> = scope_docs.map(|docs| docs.into_iter().collect());
-        self.query_inner(question, mode, top_k, &pages, scope, &[], strict, None).await
+        self.query_inner(question, mode, top_k, &pages, scope, &[], strict, None, &ctx).await
     }
 
     /// Fetch + extract top web pages for a question (best-effort; failures
@@ -1228,6 +1256,7 @@ impl QueryService {
         scope: Option<DocScope>,
         extra: &[ExtraSource],
         strict: bool,
+        ctx: &CitatorContext,
     ) -> Result<(String, String, Vec<Citation>, Option<String>, Vec<String>, Option<String>)> {
         let top_k = top_k.clamp(1, 50);
 
@@ -1467,7 +1496,7 @@ impl QueryService {
                     }
                 }
             }
-            let res = crate::citator_v2::resolve_v2(&citations, &edges, &stored_v2, effective_scope.as_ref(), &meta_map);
+            let res = crate::citator_v2::resolve_v2(&citations, &edges, &stored_v2, effective_scope.as_ref(), &meta_map, ctx);
             if !res.treatments.is_empty() {
                 let by_id: std::collections::HashMap<&str, crate::citator::CitationTreatment> = res
                     .treatments
@@ -1525,6 +1554,7 @@ impl QueryService {
         extra: &[ExtraSource],
         strict: bool,
         llm_override: Option<Arc<dyn LlmClient>>,
+        ctx: &CitatorContext,
     ) -> Result<QueryAnswer> {
         // Verified annotations + semantic answer cache — corpus-only,
         // grounded work only. Web answers go stale and private answers
@@ -1546,12 +1576,12 @@ impl QueryService {
                     return Ok(hit);
                 }
                 if self.answer_cache_enabled {
-                    let key = self.answer_scope_key(mode, top_k, scope.as_ref(), &fp);
+                    let key = self.answer_scope_key(mode, top_k, scope.as_ref(), &fp, ctx);
                     if let Some(mut hit) = self.answer_cache.lookup(&qvec, &key) {
                         info!("semantic answer cache hit (zero LLM cost)");
                         // Edges may have landed since this answer was
                         // cached (ingest / backfill): refresh statuses.
-                        self.refresh_treatments(&mut hit, scope.as_ref());
+                        self.refresh_treatments(&mut hit, scope.as_ref(), ctx);
                         return Ok(hit);
                     }
                     cache_slot = Some((qvec, key));
@@ -1559,7 +1589,7 @@ impl QueryService {
             }
         }
         let (system, user_prompt, citations, scope_note, expansions, governing_line) =
-            self.prepare_context(question, mode, top_k, web_pages, scope, extra, strict).await?;
+            self.prepare_context(question, mode, top_k, web_pages, scope, extra, strict, ctx).await?;
         // Only this final call ever sees confidential (extra) source
         // text, so only it honors the private-LLM override.
         let gen_llm = llm_override.as_ref().unwrap_or(&self.llm);
@@ -1612,7 +1642,7 @@ impl QueryService {
         web_results: usize,
         tx: tokio::sync::mpsc::UnboundedSender<QueryEvent>,
     ) -> Result<()> {
-        self.query_stream_scoped(question, mode, top_k, web, web_results, None, &[], false, None, tx)
+        self.query_stream_scoped(question, mode, top_k, web, web_results, None, &[], false, None, CitatorContext::default(), tx)
             .await
     }
 
@@ -1630,6 +1660,7 @@ impl QueryService {
         extra: &[ExtraSource],
         strict: bool,
         llm_override: Option<Arc<dyn LlmClient>>,
+        ctx: CitatorContext,
         tx: tokio::sync::mpsc::UnboundedSender<QueryEvent>,
     ) -> Result<()> {
         let _ = tx.send(QueryEvent::Status {
@@ -1676,14 +1707,14 @@ impl QueryService {
                     return Ok(());
                 }
                 if self.answer_cache_enabled {
-                    let key = self.answer_scope_key(mode, top_k, scope.as_ref(), &fp);
+                    let key = self.answer_scope_key(mode, top_k, scope.as_ref(), &fp, &ctx);
                     if let Some(mut hit) = self.answer_cache.lookup(&qvec, &key) {
                         let _ = tx.send(QueryEvent::Status {
                             message: "Matched an earlier answer — serving it instantly.".to_string(),
                         });
                         // Same refresh as the blocking path: statuses
                         // track the current edge set, not cache time.
-                        self.refresh_treatments(&mut hit, scope.as_ref());
+                        self.refresh_treatments(&mut hit, scope.as_ref(), &ctx);
                         let _ = tx.send(QueryEvent::Sources {
                             citations: hit.citations.clone(),
                             mode,
@@ -1709,7 +1740,7 @@ impl QueryService {
         // Retrieval + rerank can take seconds on a loaded box; keep the
         // status line moving while it runs so the wait never reads as a
         // frozen "connecting" — the user sees work happening throughout.
-        let prep = self.prepare_context(question, mode, top_k, &pages, scope, extra, strict);
+        let prep = self.prepare_context(question, mode, top_k, &pages, scope, extra, strict, &ctx);
         tokio::pin!(prep);
         let mut beat = tokio::time::interval(std::time::Duration::from_millis(1600));
         beat.tick().await; // consume the immediate first tick
@@ -3066,7 +3097,7 @@ mod tests {
             QueryMode::Hybrid,
             QueryMode::Mix,
         ] {
-            let ans = svc.query("What did Acme agree to?", mode, 3).await.unwrap();
+            let ans = svc.query("What did Acme agree to?", mode, 3, CitatorContext::default()).await.unwrap();
             assert!(!ans.answer.is_empty(), "mode {mode:?} gave empty answer");
             assert_eq!(ans.mode, mode);
         }
@@ -3085,7 +3116,7 @@ mod tests {
             passage: "We overrule Nda.".into(),
         }]);
         svc.set_treatment_store(store);
-        let ans = svc.query("What did Acme agree to?", QueryMode::Mix, 3).await.unwrap();
+        let ans = svc.query("What did Acme agree to?", QueryMode::Mix, 3, CitatorContext::default()).await.unwrap();
         assert!(!ans.citations.is_empty());
         let t = ans.citations[0].treatment.as_ref().expect("treatment attached");
         assert_eq!(t.status, crate::citator::TreatmentStatus::Overruled);
@@ -3112,7 +3143,7 @@ mod tests {
         }]);
         svc.set_treatment_store(store);
         let ans = svc
-            .query_scoped("What did Acme agree to?", QueryMode::Mix, 3, vec![cited.clone()])
+            .query_scoped("What did Acme agree to?", QueryMode::Mix, 3, vec![cited.clone()], CitatorContext::default())
             .await
             .unwrap();
         assert!(!ans.citations.is_empty(), "in-scope hits expected");
@@ -3134,7 +3165,7 @@ mod tests {
         }]);
         svc2.set_treatment_store(store2);
         let ans2 = svc2
-            .query_scoped("What did Acme agree to?", QueryMode::Mix, 3, vec![cited2])
+            .query_scoped("What did Acme agree to?", QueryMode::Mix, 3, vec![cited2], CitatorContext::default())
             .await
             .unwrap();
         assert!(!ans2.citations.is_empty());
@@ -3147,7 +3178,7 @@ mod tests {
     #[tokio::test]
     async fn bypass_has_no_citations() {
         let (svc, _) = seeded().await;
-        let ans = svc.query("What is a contract?", QueryMode::Bypass, 3).await.unwrap();
+        let ans = svc.query("What is a contract?", QueryMode::Bypass, 3, CitatorContext::default()).await.unwrap();
         assert!(ans.citations.is_empty());
         assert!(!ans.answer.is_empty());
     }
@@ -3156,7 +3187,7 @@ mod tests {
     async fn verdict_first_format_for_corpus_and_web() {
         let (svc, _) = seeded().await;
         let (system, _, _, _, _, _) = svc
-            .prepare_context("What did Acme agree to?", QueryMode::Mix, 3, &[], None, &[], false)
+            .prepare_context("What did Acme agree to?", QueryMode::Mix, 3, &[], None, &[], false, &CitatorContext::default())
             .await
             .unwrap();
         assert!(system.contains("## Verdict"), "corpus answers must carry the verdict-first format");
@@ -3169,13 +3200,13 @@ mod tests {
             date: None,
         };
         let (web_system, _, _, _, _, _) = svc
-            .prepare_context("What did Acme agree to?", QueryMode::Mix, 3, &[page], None, &[], false)
+            .prepare_context("What did Acme agree to?", QueryMode::Mix, 3, &[page], None, &[], false, &CitatorContext::default())
             .await
             .unwrap();
         assert!(web_system.contains("## Verdict"), "web answers keep the verdict-first format");
         assert!(web_system.contains("WEB-AUGMENTED ANSWER FORMAT"));
         let (bypass_system, _, _, _, _, _) = svc
-            .prepare_context("What is a contract?", QueryMode::Bypass, 3, &[], None, &[], false)
+            .prepare_context("What is a contract?", QueryMode::Bypass, 3, &[], None, &[], false, &CitatorContext::default())
             .await
             .unwrap();
         assert!(!bypass_system.contains("## Verdict"), "bypass answers get no format contract");
@@ -3219,9 +3250,9 @@ mod tests {
             Arc::new(crate::web::NoopWebSearch),
             None,
         );
-        let a = svc.query("What did Acme agree to?", QueryMode::Naive, 3).await.unwrap();
+        let a = svc.query("What did Acme agree to?", QueryMode::Naive, 3, CitatorContext::default()).await.unwrap();
         // Different wording, same embedding → semantic hit, no new LLM call.
-        let b = svc.query("Tell me Acme's commitments", QueryMode::Naive, 3).await.unwrap();
+        let b = svc.query("Tell me Acme's commitments", QueryMode::Naive, 3, CitatorContext::default()).await.unwrap();
         // Call accounting: the 5-word question triggers HyDE expansion
         // (call 1, whose non-JSON mock reply yields no expansions), so
         // generation is call 2. The paraphrase is served from cache
@@ -3233,7 +3264,7 @@ mod tests {
         // A different brief scope is a different cache key → fresh call.
         let doc_id = svc.store.all_chunks().await.unwrap()[0].doc_id.clone();
         let c = svc
-            .query_scoped("What did Acme agree to?", QueryMode::Naive, 3, vec![doc_id])
+            .query_scoped("What did Acme agree to?", QueryMode::Naive, 3, vec![doc_id], CitatorContext::default())
             .await
             .unwrap();
         assert_eq!(c.answer, "Acme agrees to confidentiality (call 4) [doc:0]");
@@ -3264,7 +3295,7 @@ mod tests {
             corpus_fp: fp.clone(),
             enabled: true,
         }]);
-        let a = svc.query("What did Acme agree to?", QueryMode::Naive, 3).await.unwrap();
+        let a = svc.query("What did Acme agree to?", QueryMode::Naive, 3, CitatorContext::default()).await.unwrap();
         assert!(a.verified);
         assert_eq!(a.answer, "VERIFIED: Acme agreed to confidentiality.");
         // Corpus drift retires the annotation: it must stop serving.
@@ -3278,7 +3309,7 @@ mod tests {
             corpus_fp: "some-other-corpus".into(),
             enabled: true,
         }]);
-        let b = svc.query("What did Acme agree to?", QueryMode::Naive, 3).await.unwrap();
+        let b = svc.query("What did Acme agree to?", QueryMode::Naive, 3, CitatorContext::default()).await.unwrap();
         assert!(!b.verified);
         // Generation is call 2: the short question first spends call 1
         // on the HyDE expansion attempt (mock reply is not JSON, so no
