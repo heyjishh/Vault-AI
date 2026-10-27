@@ -1201,6 +1201,142 @@ mod tests {
     }
 
     #[test]
+    fn incorporate_branch_renumbers_overlapping_positional_ids_without_cross_wire() {
+        // GUARD (live autonomous misattribution investigation, 2026-10-27):
+        // two researchers' answers share positional doc ids; the merge
+        // must carry each citation's OWN treatment through its real chunk
+        // id, never let one answer's chain edge bleed into the other's
+        // doc. The merge clones treatments (it does not resolve them),
+        // so this documents that the merge is not the contamination site.
+        let t = |status| crate::citator::CitationTreatment {
+            status,
+            evidence_source_title: Some("Mehta v. Desai".to_string()),
+            evidence_passage: Some("In Mehta v. Desai, the appeal is allowed and the impugned judgment is set aside.".to_string()),
+            evidence_doc_id: Some("doc:1".to_string()),
+        };
+        let ans1 = crate::query::QueryAnswer {
+            answer: "Held [doc:0].".to_string(),
+            citations: vec![Citation {
+                doc_id: "doc:0".to_string(),
+                doc_title: Some("Mehta v. Desai — District Court (2021)".to_string()),
+                chunk_id: "chunk-dist".to_string(),
+                ordinal: 0,
+                score: 1.0,
+                snippet: "The accused was convicted.".to_string(),
+                sentence: None,
+                stale: None,
+                source_url: None,
+                source_date: None,
+                treatment: Some(t(crate::citator::TreatmentStatus::Reversed)),
+            }],
+            mode: crate::query::QueryMode::Mix,
+            scope_note: None,
+            verified: false,
+            citation_audit: None,
+            expansions: vec![],
+        };
+        let ans2 = crate::query::QueryAnswer {
+            answer: "See [doc:0].".to_string(),
+            citations: vec![Citation {
+                doc_id: "doc:0".to_string(),
+                doc_title: Some("Section 86 IT Act".to_string()),
+                chunk_id: "chunk-s86".to_string(),
+                ordinal: 0,
+                score: 1.0,
+                snippet: "Section 86 substituted by the Finance Act, 1964.".to_string(),
+                sentence: None,
+                stale: None,
+                source_url: None,
+                source_date: None,
+                treatment: Some(crate::citator::CitationTreatment::unknown()),
+            }],
+            mode: crate::query::QueryMode::Mix,
+            scope_note: None,
+            verified: false,
+            citation_audit: None,
+            expansions: vec![],
+        };
+        let mut global = Vec::new();
+        let mut by_chunk = HashMap::new();
+        let mut docs = 0usize;
+        let mut webs = 0usize;
+        let (b1, _) = incorporate_branch(&ans1, &mut global, &mut by_chunk, &mut docs, &mut webs);
+        let (b2, remapped) = incorporate_branch(&ans2, &mut global, &mut by_chunk, &mut docs, &mut webs);
+        assert_eq!(b1.len(), 1);
+        assert_eq!(b2.len(), 1);
+        assert_eq!(b1[0].doc_id, "doc:0");
+        assert_eq!(b2[0].doc_id, "doc:1");
+        assert_eq!(remapped, "See [doc:1].");
+        assert_eq!(global.len(), 2);
+        assert_eq!(
+            global[0].treatment.as_ref().unwrap().status,
+            crate::citator::TreatmentStatus::Reversed
+        );
+        assert_eq!(
+            global[1].treatment.as_ref().unwrap().status,
+            crate::citator::TreatmentStatus::Unknown,
+            "researcher-2's unrelated doc must not inherit researcher-1's edge"
+        );
+    }
+
+    #[test]
+    fn incorporate_branch_dedupes_shared_chunk_to_one_treatment() {
+        // Variant: both researchers cite the SAME real document (same
+        // chunk). The merged list must hold it once, with one consistent
+        // treatment — not duplicated, not cross-wired.
+        let mk = |status| Citation {
+            doc_id: "doc:0".to_string(),
+            doc_title: Some("Mehta v. Desai — Supreme Court (2025)".to_string()),
+            chunk_id: "chunk-sc".to_string(),
+            ordinal: 0,
+            score: 1.0,
+            snippet: "We affirm Mehta v. Desai.".to_string(),
+            sentence: None,
+            stale: None,
+            source_url: None,
+            source_date: None,
+            treatment: Some(crate::citator::CitationTreatment {
+                status,
+                evidence_source_title: None,
+                evidence_passage: None,
+                evidence_doc_id: None,
+            }),
+        };
+        let ans1 = crate::query::QueryAnswer {
+            answer: "Held [doc:0].".to_string(),
+            citations: vec![mk(crate::citator::TreatmentStatus::GoodLaw)],
+            mode: crate::query::QueryMode::Mix,
+            scope_note: None,
+            verified: false,
+            citation_audit: None,
+            expansions: vec![],
+        };
+        let ans2 = crate::query::QueryAnswer {
+            answer: "Also [doc:0].".to_string(),
+            citations: vec![mk(crate::citator::TreatmentStatus::Unknown)],
+            mode: crate::query::QueryMode::Mix,
+            scope_note: None,
+            verified: false,
+            citation_audit: None,
+            expansions: vec![],
+        };
+        let mut global = Vec::new();
+        let mut by_chunk = HashMap::new();
+        let mut docs = 0usize;
+        let mut webs = 0usize;
+        let (_, _) = incorporate_branch(&ans1, &mut global, &mut by_chunk, &mut docs, &mut webs);
+        let (b2, remapped) = incorporate_branch(&ans2, &mut global, &mut by_chunk, &mut docs, &mut webs);
+        assert!(b2.is_empty(), "shared chunk contributes no second citation");
+        assert_eq!(remapped, "Also [doc:0].");
+        assert_eq!(global.len(), 1);
+        assert_eq!(
+            global[0].treatment.as_ref().unwrap().status,
+            crate::citator::TreatmentStatus::GoodLaw,
+            "first treatment wins; the doc appears once with one status"
+        );
+    }
+
+    #[test]
     fn checker_verdict_parsing_is_lenient() {
         // Clean JSON, fenced JSON, prose-wrapped JSON, and a verdict
         // boolean surviving a malformed issues list all parse.

@@ -1771,6 +1771,74 @@ mod tests {
     }
 
     #[test]
+    fn snippet_reversal_never_links_sole_unrelated_candidate() {
+        // REGRESSION (live autonomous misattribution, 2026-10-27):
+        // researcher-2 cited only the HC judgment and an unrelated tax
+        // section; the HC snippet's "impugned judgment is set aside"
+        // linked the reversal to the sole below-forum candidate — the tax
+        // section — with Mehta evidence. The stored HC→district edge is
+        // inert here (district not cited), so only the snippet fallback
+        // could produce the status. The tax section must stay Unknown.
+        let citations = vec![
+            cit("doc:0", "Mehta v. Desai — Allahabad High Court (2023)", "In Mehta v. Desai, the appeal is allowed and the impugned judgment is set aside."),
+            cit("doc:1", "Section 86 IT Act", "Section 86 substituted by the Finance Act, 1964, with effect from 1st April, 1964."),
+        ];
+        let stored = vec![stored(
+            "Mehta v. Desai",
+            Some("doc-dist-real"),
+            StoredV2Kind::Reversed,
+            "doc-hc-real",
+            "Mehta v. Desai — Allahabad High Court (2023)",
+        )];
+        let mut map = HashMap::new();
+        map.insert("doc-hc-real".to_string(), "doc:0".to_string());
+        let res = resolve_v2(&citations, &[], &stored, None, &HashMap::new(), &CitatorContext::default(), &map);
+        let by_id: HashMap<&str, &CitationTreatment> = res
+            .treatments
+            .iter()
+            .map(|(id, t)| (id.as_str(), t))
+            .collect();
+        assert_eq!(by_id["doc:0"].status, V1Status::Unknown);
+        assert_eq!(
+            by_id["doc:1"].status,
+            V1Status::Unknown,
+            "s.86 must never inherit the Mehta reversal: {:?}",
+            by_id["doc:1"]
+        );
+        assert!(res.governing_line.is_none(), "no governing authority invented");
+    }
+
+    #[test]
+    fn snippet_reversal_still_links_named_district_when_cited() {
+        // Positive control for the regression above: when the impugned
+        // district judgment IS cited, the same HC snippet must still
+        // reverse it (party-match), and the unrelated section stays clean.
+        let citations = vec![
+            cit("doc:0", "Mehta v. Desai — Allahabad High Court (2023)", "In Mehta v. Desai, the appeal is allowed and the impugned judgment is set aside."),
+            cit("doc:1", "Section 86 IT Act", "Section 86 substituted by the Finance Act, 1964, with effect from 1st April, 1964."),
+            cit("doc:2", "Mehta v. Desai — District Court (2021)", "The accused was convicted and sentenced."),
+        ];
+        let stored = vec![stored(
+            "Mehta v. Desai",
+            Some("doc-dist-real"),
+            StoredV2Kind::Reversed,
+            "doc-hc-real",
+            "Mehta v. Desai — Allahabad High Court (2023)",
+        )];
+        let mut map = HashMap::new();
+        map.insert("doc-hc-real".to_string(), "doc:0".to_string());
+        map.insert("doc-dist-real".to_string(), "doc:2".to_string());
+        let res = resolve_v2(&citations, &[], &stored, None, &HashMap::new(), &CitatorContext::default(), &map);
+        let by_id: HashMap<&str, &CitationTreatment> = res
+            .treatments
+            .iter()
+            .map(|(id, t)| (id.as_str(), t))
+            .collect();
+        assert_eq!(by_id["doc:2"].status, V1Status::Reversed);
+        assert_eq!(by_id["doc:1"].status, V1Status::Unknown);
+    }
+
+    #[test]
     fn duplicate_citations_share_treatment_and_rank() {
         // REGRESSION (found in Phase 2 live research): one document
         // cited twice (research retrieves per hypothesis; Ask can
