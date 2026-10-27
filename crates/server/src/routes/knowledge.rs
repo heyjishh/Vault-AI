@@ -41,18 +41,7 @@ pub struct QueryRequest {
 /// the shared vocabulary (unknown → None, never a crash), applicant
 /// trimmed with empty → None.
 fn citator_ctx(body: &QueryRequest) -> legal_rag_rag::CitatorContext {
-    legal_rag_rag::CitatorContext {
-        state: body
-            .state
-            .as_deref()
-            .and_then(legal_rag_rag::citator_v2::normalize_request_state),
-        applicant: body
-            .applicant
-            .as_deref()
-            .map(str::trim)
-            .filter(|s| !s.is_empty())
-            .map(str::to_string),
-    }
+    crate::routes::citator_context(body.state.as_deref(), body.applicant.as_deref())
 }
 
 /// Apply the legal-validity filters (as-of date / jurisdiction) to a base
@@ -437,6 +426,10 @@ pub struct ResearchRequest {
     pub query: String,
     /// When true, each hypothesis also gathers live web evidence.
     pub web: Option<bool>,
+    /// Citator V2 context, as on Ask: asker state (unknown codes
+    /// behave as absent) and AAR/AAAR applicant.
+    pub state: Option<String>,
+    pub applicant: Option<String>,
 }
 
 /// Deep research: epistemic loop (frame → evidence → adjudicate → report).
@@ -450,8 +443,9 @@ pub async fn research(
     }
     crate::routes::billing::ensure_quota(&state, &user.id)?;
     let scope = legal_rag_rag::usage::new_scope();
+    let ctx = crate::routes::citator_context(body.state.as_deref(), body.applicant.as_deref());
     let report = legal_rag_rag::usage::scope_usage(scope.clone(), async {
-        state.query.research(&body.query, body.web.unwrap_or(false)).await
+        state.query.research(&body.query, body.web.unwrap_or(false), ctx).await
     })
     .await?;
     crate::routes::billing::settle_with_payload(

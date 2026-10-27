@@ -797,6 +797,74 @@ impl QueryService {
         *self.v2_treatments.write().expect("lock poisoned") = store;
     }
 
+    /// V2 resolution over an already-built citation list (research,
+    /// orchestrated runs). `real_doc_ids` aligns with `citations` by
+    /// index (None for web citations). Does NOT check the kill switch
+    /// — callers gate on `citator_v2_enabled()` first, so this core is
+    /// unit-testable without env manipulation. Returns the full
+    /// resolution (treatments, ranked corpus order, governing line).
+    pub(crate) fn v2_resolution_for(
+        &self,
+        citations: &[Citation],
+        real_doc_ids: &[Option<String>],
+        scope: Option<&DocScope>,
+        ctx: &CitatorContext,
+    ) -> crate::citator_v2::V2Resolution {
+        let v1 = self.treatments.read().expect("lock poisoned").all();
+        let stored = self.v2_treatments.read().expect("lock poisoned").all();
+        let mut meta_map: std::collections::HashMap<String, crate::pipeline::DocMeta> =
+            std::collections::HashMap::new();
+        let mut real_to_positional: std::collections::HashMap<String, String> =
+            std::collections::HashMap::new();
+        for (c, real) in citations.iter().zip(real_doc_ids.iter()) {
+            if let Some(real) = real {
+                real_to_positional.insert(real.clone(), c.doc_id.clone());
+                if let Some(m) = self.meta_of(real) {
+                    meta_map.insert(c.doc_id.clone(), m.clone());
+                    meta_map.insert(real.clone(), m);
+                }
+            }
+        }
+        crate::citator_v2::resolve_v2(citations, &v1, &stored, scope, &meta_map, ctx, &real_to_positional)
+    }
+
+    /// Governing line over citations whose real ids were remapped away
+    /// (orchestrated runs: global doc:N ids). Recovers real doc ids
+    /// via chunk lookup, then resolves. None when the switch is off or
+    /// no authority governs — never invented.
+    pub(crate) async fn governing_line_for_citations(
+        &self,
+        citations: &[Citation],
+        scope: Option<&DocScope>,
+        ctx: &CitatorContext,
+    ) -> Option<String> {
+        if !crate::citator_v2::citator_v2_enabled() {
+            return None;
+        }
+        let chunk_ids: Vec<String> = citations
+            .iter()
+            .filter(|c| c.doc_id.starts_with("doc:"))
+            .map(|c| c.chunk_id.clone())
+            .collect();
+        let records = self.store.get_by_ids(&chunk_ids).await.unwrap_or_default();
+        let by_chunk: std::collections::HashMap<&str, &str> = records
+            .iter()
+            .map(|r| (r.id.as_str(), r.doc_id.as_str()))
+            .collect();
+        let real_doc_ids: Vec<Option<String>> = citations
+            .iter()
+            .map(|c| {
+                if c.doc_id.starts_with("doc:") {
+                    by_chunk.get(c.chunk_id.as_str()).map(|d| d.to_string())
+                } else {
+                    None
+                }
+            })
+            .collect();
+        let res = self.v2_resolution_for(citations, &real_doc_ids, scope, ctx);
+        res.governing_line
+    }
+
     /// Re-resolve every corpus citation's treatment against the
     /// current edge set. Used for cache hits (edges may have landed
     /// after the answer was cached, e.g. via backfill) — verified
@@ -833,7 +901,9 @@ impl QueryService {
             // metadata via prepare_context.
             let meta_empty: std::collections::HashMap<String, crate::pipeline::DocMeta> =
                 std::collections::HashMap::new();
-            let res = crate::citator_v2::resolve_v2(&answer.citations, &edges, &stored_v2, effective.as_ref(), &meta_empty, ctx);
+            let map_empty: std::collections::HashMap<String, String> =
+                std::collections::HashMap::new();
+            let res = crate::citator_v2::resolve_v2(&answer.citations, &edges, &stored_v2, effective.as_ref(), &meta_empty, ctx, &map_empty);
             let by_id: std::collections::HashMap<&str, crate::citator::CitationTreatment> = res
                 .treatments
                 .iter()
@@ -1496,7 +1566,12 @@ impl QueryService {
                     }
                 }
             }
-            let res = crate::citator_v2::resolve_v2(&citations, &edges, &stored_v2, effective_scope.as_ref(), &meta_map, ctx);
+            let mut real_to_positional: std::collections::HashMap<String, String> =
+                std::collections::HashMap::new();
+            for (i, real) in real_doc_ids.iter().enumerate() {
+                real_to_positional.insert(real.clone(), format!("doc:{i}"));
+            }
+            let res = crate::citator_v2::resolve_v2(&citations, &edges, &stored_v2, effective_scope.as_ref(), &meta_map, ctx, &real_to_positional);
             if !res.treatments.is_empty() {
                 let by_id: std::collections::HashMap<&str, crate::citator::CitationTreatment> = res
                     .treatments
@@ -3116,6 +3191,103 @@ mod tests {
         );
         assert_ne!(base, app);
         assert_ne!(mh, app);
+    }
+
+    /// Phase 2A helper: district + reversing-HC docs indexed through
+    /// the pipeline, so stored V2 edges + registry metadata exist, and
+    /// the QueryService bound to those stores (as main.rs binds them).
+    async fn v2_fixture() -> (QueryService, String, String) {
+        let rag = Arc::new(RagAnything::new(
+            RagAnythingConfig::default(),
+            Arc::new(MockEmbeddings::new(16)),
+            Arc::new(InMemoryVectorStore::new()),
+            Arc::new(InMemoryGraphStore::new()),
+            Arc::new(MockLlm::new("[]")),
+            500,
+            50,
+        ));
+        let dist = rag
+            .process_document_complete(
+                "district.md",
+                b"IN THE COURT OF THE DISTRICT JUDGE, LUCKNOW\nCivil Suit No. 12 of 2020\nDecided on 10 May 2021.\nThe plaintiff Mehta sued Desai for recovery of Rs. 5,00,000. The court decreed the suit.",
+                Some("Mehta v. Desai — District Court (2021)".to_string()),
+                None,
+            )
+            .await
+            .unwrap();
+        let hc = rag
+            .process_document_complete(
+                "hc.md",
+                b"IN THE HIGH COURT OF JUDICATURE AT ALLAHABAD\nFirst Appeal No. 45 of 2021\nDecided on 20 June 2023.\nIn Mehta v. Desai, the appeal is allowed and the impugned judgment is set aside.",
+                Some("Mehta v. Desai — Allahabad High Court (2023)".to_string()),
+                None,
+            )
+            .await
+            .unwrap();
+        let rag2 = rag.clone();
+        let svc = QueryService::new(
+            rag2.backends().0,
+            rag2.backends().1,
+            rag2.backends().2,
+            Arc::new(MockLlm::new("The answer is grounded [doc:0].")),
+            Arc::new(move |id: &str| rag2.doc_title(id)),
+            Arc::new(crate::web::NoopWebSearch),
+            None,
+        );
+        svc.set_treatment_store(rag.treatments());
+        svc.set_v2_edge_store(rag.v2_treatments());
+        let rag3 = rag.clone();
+        svc.set_doc_meta_source(Arc::new(move |id: &str| rag3.document_meta(id)));
+        (svc, dist.doc_id, hc.doc_id)
+    }
+
+    fn v2cit(id: &str, title: &str) -> Citation {
+        Citation {
+            doc_title: Some(title.to_string()),
+            stale: None,
+            sentence: None,
+            snippet: "neutral text".to_string(),
+            doc_id: id.to_string(),
+            chunk_id: format!("chunk-{id}"),
+            ordinal: 0,
+            score: 1.0,
+            source_url: None,
+            source_date: None,
+            treatment: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn v2_resolution_for_applies_stored_real_id_edges() {
+        // The research/orchestrator helper over REAL stored edges
+        // (ingest ids) + positional citations: the stored HC reversal
+        // must land on the cited district doc, with positional
+        // evidence attribution, and UP context must govern the HC.
+        let (svc, dist, hc) = v2_fixture().await;
+        let citations = vec![
+            v2cit("doc:0", "Mehta v. Desai — District Court (2021)"),
+            v2cit("doc:1", "Mehta v. Desai — Allahabad High Court (2023)"),
+        ];
+        let real = vec![Some(dist), Some(hc)];
+        let res = svc.v2_resolution_for(
+            &citations,
+            &real,
+            None,
+            &CitatorContext { state: Some("UP".to_string()), applicant: None },
+        );
+        let by_id: std::collections::HashMap<&str, &crate::citator::CitationTreatment> = res
+            .treatments
+            .iter()
+            .map(|(id, t)| (id.as_str(), t))
+            .collect();
+        assert_eq!(by_id["doc:0"].status, crate::citator::TreatmentStatus::Reversed);
+        assert_eq!(by_id["doc:0"].evidence_doc_id.as_deref(), Some("doc:1"));
+        assert_eq!(res.ranked_corpus_ids.first().unwrap(), "doc:1");
+        assert_eq!(res.ranked_corpus_ids.last().unwrap(), "doc:0");
+        let line = res.governing_line.expect("UP governing line");
+        assert!(line.contains("Allahabad"), "{line}");
+        let res_none = svc.v2_resolution_for(&citations, &real, None, &CitatorContext::default());
+        assert!(res_none.governing_line.is_none(), "no context: state law must not govern");
     }
 
     #[tokio::test]

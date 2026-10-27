@@ -22,7 +22,7 @@ use serde::{Deserialize, Serialize};
 use legal_rag_common::Result;
 
 use crate::graph::{parse_llm_json, repair_escapes};
-use crate::query::{Citation, QueryMode, QueryService};
+use crate::query::{CitatorContext, Citation, QueryMode, QueryService};
 use crate::web::FetchedPage;
 
 #[derive(Debug, Clone, Serialize)]
@@ -54,6 +54,10 @@ pub struct ResearchReport {
     pub conflicts: Vec<Conflict>,
     pub open_points: Vec<String>,
     pub citations: Vec<Citation>,
+    /// V2 governing authority for the cited evidence, when the switch
+    /// is on and one governs (None otherwise — never invented).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub governing_line: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -124,8 +128,15 @@ JSON object: {\"conclusion\":\"...\",\"assessments\":[{\"index\":0,\"status\":\"
 \"position_b\":\"...\"}],\"open_points\":[\"...\"]}. Never assert as fact anything without cited evidence.";
 
 impl QueryService {
-    /// Run the epistemic loop over a research question.
-    pub async fn research(&self, question: &str, use_web: bool) -> Result<ResearchReport> {
+    /// Run the epistemic loop over a research question. `ctx` carries
+    /// the request's state/applicant for V2 governing selection (the
+    /// Ask route's normalization applies at the API boundary).
+    pub async fn research(
+        &self,
+        question: &str,
+        use_web: bool,
+        ctx: CitatorContext,
+    ) -> Result<ResearchReport> {
         // 1. Frame.
         let frame_raw = self
             .llm()
@@ -150,6 +161,9 @@ impl QueryService {
 
         // 2. Evidence — each candidate through retrieval (+ web).
         let mut all_citations: Vec<Citation> = Vec::new();
+        // Real doc ids aligned with all_citations by index (None for
+        // web citations) — the citator needs them for stored metadata.
+        let mut real_doc_ids: Vec<Option<String>> = Vec::new();
         let mut evidence_blocks: Vec<String> = Vec::new();
         // Per-hypothesis doc/web id offsets so citations stay unique.
         let mut doc_offset = 0usize;
@@ -168,6 +182,7 @@ impl QueryService {
                 let text: String = hit.record.text.chars().take(1200).collect();
                 parts.push(format!("[doc:{id}]:\n{text}"));
                 ev.push((text.chars().take(200).collect(), format!("[doc:{id}]"), String::new()));
+                real_doc_ids.push(Some(hit.record.doc_id.clone()));
                 all_citations.push(Citation {
                     doc_title: (self.doc_titles())(&hit.record.doc_id),
                     stale: self.stale_of(&hit.record.doc_id),
@@ -195,6 +210,7 @@ impl QueryService {
                         format!("[web:{id}]"),
                         page.title.clone(),
                     ));
+                    real_doc_ids.push(None);
                     all_citations.push(Citation {
                         doc_title: Some(page.title.clone()),
                         stale: None,
@@ -247,6 +263,46 @@ impl QueryService {
                 open_points: vec!["Adjudication output could not be parsed.".into()],
             });
 
+        // Citator V2 over the cited evidence (switch on only; when off
+        // the report is exactly as before — treatments None, original
+        // order, no governing line). Citation doc_ids are unchanged by
+        // rank-down, so the adjudicator's [doc:N] markers keep
+        // resolving; web citations keep treatment None and hold their
+        // relative order after the ranked corpus evidence. Note the
+        // adjudicator above weighed unannotated evidence — treatments
+        // surface on the report, they do not rewrite the adjudication.
+        let mut all_citations = all_citations;
+        let mut governing_line: Option<String> = None;
+        if crate::citator_v2::citator_v2_enabled() {
+            let res = self.v2_resolution_for(&all_citations, &real_doc_ids, None, &ctx);
+            let by_id: std::collections::HashMap<&str, &crate::citator::CitationTreatment> = res
+                .treatments
+                .iter()
+                .map(|(id, t)| (id.as_str(), t))
+                .collect();
+            for c in all_citations.iter_mut() {
+                if let Some(t) = by_id.get(c.doc_id.as_str()) {
+                    c.treatment = Some((*t).clone());
+                }
+            }
+            let rank: std::collections::HashMap<&str, usize> = res
+                .ranked_corpus_ids
+                .iter()
+                .enumerate()
+                .map(|(i, id)| (id.as_str(), i))
+                .collect();
+            all_citations.sort_by(|a, b| {
+                let ga = if a.doc_id.starts_with("doc:") { 0 } else { 1 };
+                let gb = if b.doc_id.starts_with("doc:") { 0 } else { 1 };
+                ga.cmp(&gb).then_with(|| {
+                    let ra = rank.get(a.doc_id.as_str()).copied().unwrap_or(usize::MAX);
+                    let rb = rank.get(b.doc_id.as_str()).copied().unwrap_or(usize::MAX);
+                    ra.cmp(&rb)
+                })
+            });
+            governing_line = res.governing_line;
+        }
+
         // 4. Report.
         let hypotheses = hyps
             .into_iter()
@@ -298,6 +354,7 @@ impl QueryService {
                 .collect(),
             open_points: adj.open_points,
             citations: all_citations,
+            governing_line,
         })
     }
 }

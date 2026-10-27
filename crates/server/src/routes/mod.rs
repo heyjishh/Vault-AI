@@ -19,6 +19,24 @@ pub mod private_vault;
 pub mod settings;
 pub mod vault;
 
+/// Shared citator context normalization for the Ask-family routes
+/// (Ask, research, draft, autonomous): state through the shared
+/// vocabulary (unknown codes become None, never a crash), applicant
+/// trimmed with empty becoming None. One implementation so every
+/// surface normalizes identically.
+pub(crate) fn citator_context(
+    state: Option<&str>,
+    applicant: Option<&str>,
+) -> legal_rag_rag::CitatorContext {
+    legal_rag_rag::CitatorContext {
+        state: state.and_then(legal_rag_rag::citator_v2::normalize_request_state),
+        applicant: applicant
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(str::to_string),
+    }
+}
+
 /// Assemble the full API router.
 pub fn router(state: AppState) -> Router {
     Router::new()

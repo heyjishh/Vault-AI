@@ -1023,6 +1023,14 @@ fn is_self_only_target(
     matches.len() == 1 && matches[0].id == source_id
 }
 
+/// `real_to_positional` maps real document ids to the positional
+/// citation ids ("doc:N") of cited documents. Stored V2 edges carry
+/// real ids (written at ingest), while cited judgments carry positional
+/// ids — without this map a stored JudgmentId edge could never match a
+/// cited judgment, and its evidence would carry a raw real id no client
+/// can resolve. Callers that lost the mapping (cache refresh) pass an
+/// empty map: stored JudgmentId edges stay inert there, exactly as
+/// before, while CaseName edges and snippet detection still resolve.
 pub fn resolve_v2(
     citations: &[Citation],
     v1_edges: &[V1Edge],
@@ -1030,6 +1038,7 @@ pub fn resolve_v2(
     scope: Option<&DocScope>,
     meta: &HashMap<String, crate::pipeline::DocMeta>,
     ctx: &CitatorContext,
+    real_to_positional: &HashMap<String, String>,
 ) -> V2Resolution {
     let empty = || V2Resolution {
         treatments: Vec::new(),
@@ -1129,12 +1138,19 @@ pub fn resolve_v2(
 
     // Convert stored V2 edges (full-text ingest detection). A stored
     // edge duplicating a V1 edge (same source, kind, target) is
-    // skipped — the V1 passage wins, as with snippets below.
+    // skipped — the V1 passage wins, as with snippets below. A stored
+    // JudgmentId target is remapped to the cited positional id when
+    // the target document is cited; unmapped targets keep their real
+    // id and stay inert for cited judgments (the target is not in
+    // this answer), exactly as before.
     for e in &visible_stored {
         let source_title = e.source_title.clone().unwrap_or_default();
         let source_forum = source_forum_of(&e.source_doc_id, &source_title);
         let target = match &e.target_doc_id {
-            Some(id) => EdgeTarget::JudgmentId(id.clone()),
+            Some(id) => match real_to_positional.get(id) {
+                Some(pos) => EdgeTarget::JudgmentId(pos.clone()),
+                None => EdgeTarget::JudgmentId(id.clone()),
+            },
             None => resolve_below(&e.target_name, source_forum, domain, &judgments, &e.source_doc_id),
         };
         let kind = stored_kind_to_engine(e.kind);
@@ -1230,7 +1246,15 @@ pub fn resolve_v2(
                 status: map_status(cited.status),
                 evidence_source_title: Some(ev.source_title.clone()),
                 evidence_passage: Some(ev.passage.clone()),
-                evidence_doc_id: Some(ev.source_doc_id.clone()),
+                // Evidence attribution follows the same mapping: a
+                // cited source is identified by its positional id,
+                // an uncited source keeps its real id (as before).
+                evidence_doc_id: Some(
+                    real_to_positional
+                        .get(&ev.source_doc_id)
+                        .cloned()
+                        .unwrap_or_else(|| ev.source_doc_id.clone()),
+                ),
             },
             None => CitationTreatment {
                 status: map_status(cited.status),
@@ -1369,7 +1393,7 @@ mod tests {
             source_title: Some("Kumar v. State — Supreme Court (2025)".to_string()),
             passage: "We affirm Kumar v. State.".to_string(),
         }];
-        let res = resolve_v2(&citations, &v1_edges, &[], None, &HashMap::new(), &CitatorContext::default());
+        let res = resolve_v2(&citations, &v1_edges, &[], None, &HashMap::new(), &CitatorContext::default(), &HashMap::new());
         let by_id: HashMap<&str, &CitationTreatment> = res
             .treatments
             .iter()
@@ -1403,7 +1427,7 @@ mod tests {
                 "We affirm Kumar v. State. The Supreme Court held that the High Court correctly applied the standard of proof.",
             ),
         ];
-        let res = resolve_v2(&citations, &[], &[], None, &HashMap::new(), &CitatorContext::default());
+        let res = resolve_v2(&citations, &[], &[], None, &HashMap::new(), &CitatorContext::default(), &HashMap::new());
         let by_id: HashMap<&str, &CitationTreatment> = res
             .treatments
             .iter()
@@ -1627,7 +1651,7 @@ mod tests {
             stored("Mehta v. Desai", Some("doc:0"), StoredV2Kind::Reversed, "real-hc", "Mehta v. Desai — Allahabad High Court (2023)"),
             stored("Mehta v. Desai", Some("doc:1"), StoredV2Kind::Affirmed, "real-sc", "Mehta v. Desai — Supreme Court (2025)"),
         ];
-        let res = resolve_v2(&citations, &[], &stored, None, &HashMap::new(), &CitatorContext::default());
+        let res = resolve_v2(&citations, &[], &stored, None, &HashMap::new(), &CitatorContext::default(), &HashMap::new());
         let by_id: HashMap<&str, &CitationTreatment> = res
             .treatments
             .iter()
@@ -1638,6 +1662,51 @@ mod tests {
         let line = res.governing_line.expect("governing line");
         assert!(line.contains("Supreme Court"), "{line}");
         assert_eq!(res.ranked_corpus_ids.last().unwrap(), "doc:0");
+    }
+
+    #[test]
+    fn stored_real_id_edge_remapped_to_positional() {
+        // REGRESSION (found in Phase 2): ingest writes REAL document
+        // ids into stored edges, but Ask/research citations carry
+        // positional "doc:N" ids. Without the real→positional map the
+        // JudgmentId edge could never match a cited judgment — the
+        // earlier stored-edge test masked this by using positional ids
+        // as target_doc_id. Neutral snippets, so only the stored edge
+        // can produce the status; the evidence attribution must also
+        // come back positional, not a raw real id.
+        let citations = vec![
+            cit("doc:0", "Mehta v. Desai — District Court (2021)", "The accused was convicted."),
+            cit("doc:1", "Mehta v. Desai — Allahabad High Court (2023)", "The court heard the appeal."),
+        ];
+        let stored = vec![stored(
+            "Mehta v. Desai",
+            Some("doc-aaaa1111"),
+            StoredV2Kind::Reversed,
+            "doc-bbbb2222",
+            "Mehta v. Desai — Allahabad High Court (2023)",
+        )];
+        let mut map = HashMap::new();
+        map.insert("doc-aaaa1111".to_string(), "doc:0".to_string());
+        map.insert("doc-bbbb2222".to_string(), "doc:1".to_string());
+        let res = resolve_v2(&citations, &[], &stored, None, &HashMap::new(), &CitatorContext::default(), &map);
+        let by_id: HashMap<&str, &CitationTreatment> = res
+            .treatments
+            .iter()
+            .map(|(id, t)| (id.as_str(), t))
+            .collect();
+        assert_eq!(by_id["doc:0"].status, V1Status::Reversed);
+        assert_eq!(by_id["doc:0"].evidence_doc_id.as_deref(), Some("doc:1"));
+        assert_eq!(res.ranked_corpus_ids.last().unwrap(), "doc:0");
+        // Without the map the same edge is inert for cited judgments
+        // (the target is not in this answer) — documents the refresh
+        // path's documented limitation, it must not crash or mislabel.
+        let res_nomap = resolve_v2(&citations, &[], &stored, None, &HashMap::new(), &CitatorContext::default(), &HashMap::new());
+        let by_id_nomap: HashMap<&str, &CitationTreatment> = res_nomap
+            .treatments
+            .iter()
+            .map(|(id, t)| (id.as_str(), t))
+            .collect();
+        assert_eq!(by_id_nomap["doc:0"].status, V1Status::Unknown);
     }
 
     #[test]
@@ -1657,7 +1726,7 @@ mod tests {
             "doc:2",
             "Kumar v. State — Supreme Court (2025)",
         )];
-        let res = resolve_v2(&citations, &[], &stored, None, &HashMap::new(), &CitatorContext::default());
+        let res = resolve_v2(&citations, &[], &stored, None, &HashMap::new(), &CitatorContext::default(), &HashMap::new());
         let by_id: HashMap<&str, &CitationTreatment> = res
             .treatments
             .iter()
@@ -1684,7 +1753,7 @@ mod tests {
             "doc:2",
             "Kumar v. State — Supreme Court (2025)",
         )];
-        let res = resolve_v2(&citations, &[], &stored, None, &HashMap::new(), &CitatorContext::default());
+        let res = resolve_v2(&citations, &[], &stored, None, &HashMap::new(), &CitatorContext::default(), &HashMap::new());
         let by_id: HashMap<&str, &CitationTreatment> = res
             .treatments
             .iter()
@@ -1723,10 +1792,10 @@ mod tests {
             "real-bom",
             "Sharma v. State — High Court of Bombay (2023)",
         )];
-        let res = resolve_v2(&citations, &[], &stored, None, &HashMap::new(), &ctx(Some("MH"), None));
+        let res = resolve_v2(&citations, &[], &stored, None, &HashMap::new(), &ctx(Some("MH"), None), &HashMap::new());
         let line = res.governing_line.expect("MH governing line");
         assert!(line.contains("Bombay"), "{line}");
-        let res_none = resolve_v2(&citations, &[], &stored, None, &HashMap::new(), &CitatorContext::default());
+        let res_none = resolve_v2(&citations, &[], &stored, None, &HashMap::new(), &CitatorContext::default(), &HashMap::new());
         assert!(res_none.governing_line.is_none(), "no state context binds no state authority");
     }
 
@@ -1750,7 +1819,7 @@ mod tests {
             "Sharma v. State — High Court of Bombay (2023)",
         )];
         for state in ["KA", "MH"] {
-            let res = resolve_v2(&citations, &[], &stored, None, &HashMap::new(), &ctx(Some(state), None));
+            let res = resolve_v2(&citations, &[], &stored, None, &HashMap::new(), &ctx(Some(state), None), &HashMap::new());
             let line = res.governing_line.expect("governing line");
             assert!(line.contains("Supreme Court"), "state {state}: {line}");
         }
@@ -1781,12 +1850,13 @@ mod tests {
             None,
             &meta,
             &ctx(None, Some("Nexa Traders Pvt Ltd")),
+            &HashMap::new(),
         );
         let line = res.governing_line.expect("applicant-match governing line");
         assert!(line.contains("Advance Ruling"), "{line}");
-        let res_other = resolve_v2(&citations, &[], &[], None, &meta, &ctx(None, Some("Other Corp")));
+        let res_other = resolve_v2(&citations, &[], &[], None, &meta, &ctx(None, Some("Other Corp")), &HashMap::new());
         assert!(res_other.governing_line.is_none(), "other applicant: AAR must not govern");
-        let res_none = resolve_v2(&citations, &[], &[], None, &meta, &CitatorContext::default());
+        let res_none = resolve_v2(&citations, &[], &[], None, &meta, &CitatorContext::default(), &HashMap::new());
         assert!(res_none.governing_line.is_none(), "absent applicant: AAR must not govern");
     }
 
@@ -1818,7 +1888,7 @@ mod tests {
                 ..Default::default()
             },
         );
-        let res = resolve_v2(&citations, &[], &[], None, &meta, &CitatorContext::default());
+        let res = resolve_v2(&citations, &[], &[], None, &meta, &CitatorContext::default(), &HashMap::new());
         let by_id: HashMap<&str, &CitationTreatment> = res
             .treatments
             .iter()
