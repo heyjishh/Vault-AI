@@ -587,6 +587,11 @@ pub struct AutonomousRunRequest {
     /// a `status` event per sub-agent, then a `done` event carrying
     /// the final report plus every sub-agent's receipt.
     pub stream: Option<bool>,
+    /// Citator V2 context for researcher legs + the governing line,
+    /// as on Ask: asker state (unknown codes behave as absent) and
+    /// AAR/AAAR applicant.
+    pub state: Option<String>,
+    pub applicant: Option<String>,
 }
 
 /// Orchestrator config for this server: commissioned defaults, with
@@ -622,9 +627,10 @@ pub async fn autonomous_run(
     }
     crate::routes::billing::ensure_quota(&state, &user.id)?;
     let docs = doc_scope(&state, &body.matter_id, &user)?;
+    let ctx = crate::routes::citator_context(body.state.as_deref(), body.applicant.as_deref());
 
     if stream {
-        return Ok(autonomous_stream(state, user, body, docs).await.into_response());
+        return Ok(autonomous_stream(state, user, body, docs, ctx).await.into_response());
     }
 
     if orchestrated {
@@ -633,7 +639,7 @@ pub async fn autonomous_run(
         let run = legal_rag_rag::usage::scope_usage(scope.clone(), async {
             state
                 .orchestrator
-                .run(body.goal.trim(), docs, cfg, None)
+                .run(body.goal.trim(), docs, cfg, ctx, None)
                 .await
         })
         .await?;
@@ -682,6 +688,7 @@ async fn autonomous_stream(
     user: legal_rag_auth::User,
     body: AutonomousRunRequest,
     docs: Option<Vec<String>>,
+    ctx: legal_rag_rag::CitatorContext,
 ) -> axum::response::Sse<
     impl futures::Stream<Item = Result<axum::response::sse::Event, std::convert::Infallible>>,
 > {
@@ -703,7 +710,7 @@ async fn autonomous_stream(
         let scope_in = scope.clone();
         let run = legal_rag_rag::usage::scope_usage(scope_in, async {
             orchestrator
-                .run(&goal, docs, cfg, Some(progress_tx))
+                .run(&goal, docs, cfg, ctx, Some(progress_tx))
                 .await
         })
         .await;

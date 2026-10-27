@@ -428,20 +428,23 @@ impl SubAgentOrchestrator {
 
     /// Run one grounded leg call for a researcher branch (corpus + web,
     /// strictly brief-scoped when `scope_docs` is set — no fallback).
+    /// `ctx` is the request's citator context, so researcher evidence
+    /// carries state/applicant-aware treatments and governing.
     async fn researcher_query(
         &self,
         branch: &str,
         scope_docs: &Option<Vec<String>>,
+        ctx: crate::query::CitatorContext,
     ) -> Result<crate::query::QueryAnswer> {
         match scope_docs {
             Some(docs) => {
                 self.query
-                    .query_with_web(branch, QueryMode::Mix, 4, 2, Some(docs.clone()), true, crate::query::CitatorContext::default())
+                    .query_with_web(branch, QueryMode::Mix, 4, 2, Some(docs.clone()), true, ctx)
                     .await
             }
             None => {
                 self.query
-                    .query_with_web(branch, QueryMode::Mix, 4, 2, None, false, crate::query::CitatorContext::default())
+                    .query_with_web(branch, QueryMode::Mix, 4, 2, None, false, ctx)
                     .await
             }
         }
@@ -449,12 +452,15 @@ impl SubAgentOrchestrator {
 
     /// Run the full lead → researchers → drafter → checker →
     /// reconciler pipeline. `progress` receives status events for SSE
-    /// streaming; `None` runs silently for the JSON response.
+    /// streaming; `None` runs silently for the JSON response. `ctx`
+    /// threads the request's citator context into every researcher leg
+    /// and into the governing line appended to the final report.
     pub async fn run(
         &self,
         goal: &str,
         scope_docs: Option<Vec<String>>,
         config: OrchestratorConfig,
+        ctx: crate::query::CitatorContext,
         progress: Option<UnboundedSender<QueryEvent>>,
     ) -> Result<OrchestratedRun> {
         let started = Instant::now();
@@ -548,6 +554,7 @@ impl SubAgentOrchestrator {
                 let svc = self.query.clone();
                 let scope = scope_docs.clone();
                 let branch_owned = branch.clone();
+                let ctx_child = ctx.clone();
                 let handle = tokio::spawn(async move {
                     usage::scope_usage(child2, async move {
                         match &scope {
@@ -559,7 +566,7 @@ impl SubAgentOrchestrator {
                                     2,
                                     Some(docs.clone()),
                                     true,
-                                    crate::query::CitatorContext::default(),
+                                    ctx_child,
                                 )
                                 .await
                             }
@@ -571,7 +578,7 @@ impl SubAgentOrchestrator {
                                     2,
                                     None,
                                     false,
-                                    crate::query::CitatorContext::default(),
+                                    ctx_child,
                                 )
                                 .await
                             }
@@ -700,7 +707,7 @@ impl SubAgentOrchestrator {
                     let child2 = child.clone();
                     let branch_owned = branch.clone();
                     let fut = usage::scope_usage(child2, async {
-                        self.researcher_query(&branch_owned, &scope_docs).await
+                        self.researcher_query(&branch_owned, &scope_docs, ctx.clone()).await
                     });
                     let retry = tokio::time::timeout(timeout, fut).await;
                     let totals = child.lock().map(|t| *t).unwrap_or_default();
@@ -848,13 +855,26 @@ impl SubAgentOrchestrator {
         if !draft_ok {
             // Never hard-fail a user-visible run on a drafting error:
             // ship the grounded findings with an explicit flag instead.
-            let fallback = if findings_text.is_empty() {
+            let mut fallback = if findings_text.is_empty() {
                 "No findings could be gathered and drafting failed; no answer can be given from the sources.".to_string()
             } else {
                 format!(
                     "Drafting failed; the researchers' grounded findings are reported verbatim below (no synthesized verdict is asserted).\n\n{findings_text}"
                 )
             };
+            // A governing line is a deterministic derivation from the
+            // researchers' treated evidence, not a synthesized verdict,
+            // so it is appended even on the drafter-error fallback —
+            // and never when the evidence is inconclusive (None).
+            let gov_scope: Option<crate::query::DocScope> =
+                scope_docs.as_ref().map(|docs| docs.iter().cloned().collect());
+            if let Some(line) = self
+                .query
+                .governing_line_for_citations(&global_citations, gov_scope.as_ref(), &ctx)
+                .await
+            {
+                fallback = format!("{fallback}\n\n{line}");
+            }
             return Ok(OrchestratedRun {
                 goal: goal.to_string(),
                 final_report: fallback,
@@ -1005,7 +1025,7 @@ impl SubAgentOrchestrator {
                 "Verify this disputed claim against the brief documents, citing sources: {disputed}"
             );
             let fut = usage::scope_usage(child2, async {
-                self.researcher_query(&requery, &scope_docs).await
+                self.researcher_query(&requery, &scope_docs, ctx.clone()).await
             });
             let mut receipt =
                 SubAgentReceipt::new("reconciler", "reconciler", &requery);
@@ -1071,6 +1091,16 @@ impl SubAgentOrchestrator {
             stopped = "partial".to_string();
         }
 
+        let mut final_report = final_report;
+        let gov_scope: Option<crate::query::DocScope> =
+            scope_docs.as_ref().map(|docs| docs.iter().cloned().collect());
+        if let Some(line) = self
+            .query
+            .governing_line_for_citations(&global_citations, gov_scope.as_ref(), &ctx)
+            .await
+        {
+            final_report = format!("{final_report}\n\n{line}");
+        }
         Ok(OrchestratedRun {
             goal: goal.to_string(),
             final_report,
@@ -1203,7 +1233,7 @@ mod tests {
             r#"{"branches": [{"query": "q1", "why": "only"}], "verdict_supported": true, "issues": []}"#,
         );
         let run = o
-            .run("a goal", None, OrchestratorConfig::default(), None)
+            .run("a goal", None, OrchestratorConfig::default(), crate::query::CitatorContext::default(), None)
             .await
             .unwrap();
         let roles: Vec<&str> = run.sub_agents.iter().map(|r| r.role.as_str()).collect();
@@ -1222,7 +1252,7 @@ mod tests {
         let o = orchestrator_with(r#"{"branches": [{"query": "q1", "why": "only"}]}"#);
         let mut cfg = OrchestratorConfig::default();
         cfg.per_run_token_cap = 0;
-        let run = o.run("a goal", None, cfg, None).await.unwrap();
+        let run = o.run("a goal", None, cfg, crate::query::CitatorContext::default(), None).await.unwrap();
         // Lead runs first and bills its mock tokens, so the cap trips
         // immediately after it; no researcher receipt exists.
         assert_eq!(run.stopped, "budget");
