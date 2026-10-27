@@ -321,6 +321,7 @@ async fn main() -> anyhow::Result<()> {
     // Citator: the query service reads the same treatment store the
     // ingest pipeline writes (new uploads) and backfill populates.
     query.set_treatment_store(rag.treatments());
+    query.set_v2_edge_store(rag.v2_treatments());
     // Let the retrieval cache spawn background revalidation tasks.
     query.bind_self(&query);
     // ColBERT late interaction (optional, Tier-2): LEGAL_RAG_COLBERT_URL
@@ -351,6 +352,7 @@ async fn main() -> anyhow::Result<()> {
         graph_store: graph_store.clone(),
         rag: rag.clone(),
         treatments: rag.treatments(),
+        v2_treatments: rag.v2_treatments(),
         user_store: user_store.clone(),
     };
     // Periodic saver every 5 minutes (also covers crash-durability between saves).
@@ -504,6 +506,7 @@ struct SnapshotHandles {
     graph_store: Arc<InMemoryGraphStore>,
     rag: Arc<RagAnything>,
     treatments: Arc<legal_rag_rag::TreatmentStore>,
+    v2_treatments: Arc<legal_rag_rag::citator_v2::V2EdgeStore>,
     user_store: Arc<InMemoryUserStore>,
 }
 
@@ -541,6 +544,11 @@ impl SnapshotHandles {
             &serde_json::json!({ "documents": documents, "status": status }),
         )?;
         persist::save_json(&self.data_dir, "citator.json", &self.treatments.snapshot())?;
+        persist::save_json(
+            &self.data_dir,
+            "citator_v2.json",
+            &self.v2_treatments.snapshot(),
+        )?;
         persist::save_json(&self.data_dir, "users.json", &self.user_store.snapshot())?;
         tracing::info!(dir = %self.data_dir.display(), "snapshot saved");
         Ok(())
@@ -611,6 +619,17 @@ async fn restore_snapshots(
         }
         Ok(None) => {}
         Err(e) => tracing::warn!(error = %e, "citator snapshot load failed"),
+    }
+    match persist::load_json::<Vec<legal_rag_rag::citator_v2::StoredV2Edge>>(
+        data_dir,
+        "citator_v2.json",
+    ) {
+        Ok(Some(edges)) => {
+            info!(edges = edges.len(), "restored citator V2 snapshot");
+            rag.v2_treatments().restore(edges);
+        }
+        Ok(None) => {}
+        Err(e) => tracing::warn!(error = %e, "citator V2 snapshot load failed"),
     }
     match persist::load_json::<Vec<legal_rag_auth::UserSnapshot>>(data_dir, "users.json") {
         Ok(Some(users)) => {

@@ -326,6 +326,10 @@ pub struct QueryService {
     /// empty store, so every citation resolves Unknown until ingest
     /// or backfill populates it).
     treatments: std::sync::RwLock<Arc<crate::citator::TreatmentStore>>,
+    /// Citator V2 edge store (full-text ingest detection), pushed in
+    /// by the server; defaults to an empty store. Never read when the
+    /// V2 switch is off.
+    v2_treatments: std::sync::RwLock<Arc<crate::citator_v2::V2EdgeStore>>,
     web: Arc<dyn WebSearch>,
     reranker: Option<Arc<dyn Reranker>>,
     /// Optional ColBERT-style late-interaction rescorer, bound by the
@@ -383,6 +387,7 @@ impl QueryService {
             doc_titles,
             doc_meta: std::sync::RwLock::new(Arc::new(|_| None)),
             treatments: std::sync::RwLock::new(Arc::new(crate::citator::TreatmentStore::new())),
+            v2_treatments: std::sync::RwLock::new(Arc::new(crate::citator_v2::V2EdgeStore::new())),
             web,
             reranker,
             late_interactor: std::sync::RwLock::new(None),
@@ -762,6 +767,12 @@ impl QueryService {
         *self.treatments.write().expect("lock poisoned") = store;
     }
 
+    /// Bind the shared citator V2 edge store (server, right after
+    /// construction — the same store the ingest pipeline writes).
+    pub fn set_v2_edge_store(&self, store: Arc<crate::citator_v2::V2EdgeStore>) {
+        *self.v2_treatments.write().expect("lock poisoned") = store;
+    }
+
     /// Re-resolve every corpus citation's treatment against the
     /// current edge set. Used for cache hits (edges may have landed
     /// after the answer was cached, e.g. via backfill) — verified
@@ -791,13 +802,14 @@ impl QueryService {
         // already fixed the order.
         if crate::citator_v2::citator_v2_enabled() {
             let edges = self.treatments.read().expect("lock poisoned").all();
+            let stored_v2 = self.v2_treatments.read().expect("lock poisoned").all();
             // Cached citations lost their real document ids when they
             // were built (positional "doc:N" only), so refresh falls
             // back to title inference; fresh queries use stored
             // metadata via prepare_context.
             let meta_empty: std::collections::HashMap<String, crate::pipeline::DocMeta> =
                 std::collections::HashMap::new();
-            let res = crate::citator_v2::resolve_v2(&answer.citations, &edges, effective.as_ref(), &meta_empty);
+            let res = crate::citator_v2::resolve_v2(&answer.citations, &edges, &stored_v2, effective.as_ref(), &meta_empty);
             let by_id: std::collections::HashMap<&str, crate::citator::CitationTreatment> = res
                 .treatments
                 .iter()
@@ -1433,6 +1445,9 @@ impl QueryService {
         if crate::citator_v2::citator_v2_enabled() {
             let effective_scope: Option<DocScope> = if fell_back { None } else { scope.clone() };
             let edges = self.treatments.read().expect("lock poisoned").all();
+            // Stored V2 edges (full-text ingest detection) outrank
+            // snippet detection; the adapter dedups against them.
+            let stored_v2 = self.v2_treatments.read().expect("lock poisoned").all();
             // Stored metadata, keyed by BOTH the positional citation id
             // (for cited judgments) and the real document id (for V1
             // edge sources, which carry real ids).
@@ -1452,7 +1467,7 @@ impl QueryService {
                     }
                 }
             }
-            let res = crate::citator_v2::resolve_v2(&citations, &edges, effective_scope.as_ref(), &meta_map);
+            let res = crate::citator_v2::resolve_v2(&citations, &edges, &stored_v2, effective_scope.as_ref(), &meta_map);
             if !res.treatments.is_empty() {
                 let by_id: std::collections::HashMap<&str, crate::citator::CitationTreatment> = res
                     .treatments

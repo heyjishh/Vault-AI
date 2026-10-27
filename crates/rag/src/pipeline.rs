@@ -183,6 +183,8 @@ pub struct ProcessReport {
     pub relations: usize,
     /// Citator treatment edges detected in this document's text.
     pub treatments: usize,
+    /// Citator V2 edges detected in this document's full text.
+    pub v2_treatments: usize,
 }
 
 /// The RAG-Anything pipeline orchestrator.
@@ -198,6 +200,9 @@ pub struct RagAnything {
     documents: RwLock<HashMap<String, DocumentInfo>>,
     /// Citator treatment edges (shared with the query service).
     treatments: Arc<crate::citator::TreatmentStore>,
+    /// Citator V2 edges from full-text ingest detection (shared with
+    /// the query service). Separate from V1's store by design.
+    v2_treatments: Arc<crate::citator_v2::V2EdgeStore>,
 }
 
 impl RagAnything {
@@ -255,6 +260,7 @@ impl RagAnything {
             doc_status: RwLock::new(HashMap::new()),
             documents: RwLock::new(HashMap::new()),
             treatments: Arc::new(crate::citator::TreatmentStore::new()),
+            v2_treatments: Arc::new(crate::citator_v2::V2EdgeStore::new()),
         }
     }
 
@@ -293,6 +299,16 @@ impl RagAnything {
 
     pub fn treatment_count(&self) -> usize {
         self.treatments.count()
+    }
+
+    /// The shared citator V2 edge store (query service reads it;
+    /// ingest and backfill write it; snapshots persist it).
+    pub fn v2_treatments(&self) -> Arc<crate::citator_v2::V2EdgeStore> {
+        self.v2_treatments.clone()
+    }
+
+    pub fn v2_treatment_count(&self) -> usize {
+        self.v2_treatments.count()
     }
 
     /// Backfill treatment edges for the existing corpus WITHOUT
@@ -387,6 +403,52 @@ impl RagAnything {
             }
         }
         Ok(changed)
+    }
+
+    /// Backfill V2 edges for the existing corpus WITHOUT re-embedding
+    /// anything: full-text V2 detection over stored parent chunks.
+    /// Idempotent via store dedup (re-running adds nothing). Returns
+    /// new edges added. Same kill switch as ingest detection.
+    pub async fn backfill_v2_edges(&self) -> Result<usize> {
+        if !crate::citator::citator_enabled() {
+            return Ok(0);
+        }
+        let docs = self.list_documents();
+        let registry_meta: std::collections::HashMap<String, DocMeta> = docs
+            .iter()
+            .map(|d| (d.id.clone(), d.meta.clone()))
+            .collect();
+        let judgments: Vec<citator_v2::Judgment> = docs
+            .iter()
+            .map(|d| crate::citator_v2::judgment_from_meta(&d.id, &d.title, &registry_meta))
+            .collect();
+        let chunks = self.store.all_chunks().await?;
+        let mut added = 0usize;
+        for chunk in chunks.iter().filter(|c| {
+            matches!(
+                c.metadata.get("pc").map(|s| s.as_str()),
+                None | Some("parent")
+            )
+        }) {
+            let Some(source) = judgments.iter().find(|j| j.id == chunk.doc_id) else {
+                continue;
+            };
+            let candidates: Vec<citator_v2::Judgment> = judgments
+                .iter()
+                .filter(|j| j.id != source.id)
+                .cloned()
+                .collect();
+            let title = self.doc_title(&chunk.doc_id);
+            let edges = crate::citator_v2::detect_v2_edges_for_chunk(
+                &chunk.text,
+                source,
+                &candidates,
+                &chunk.id,
+                title.as_deref(),
+            );
+            added += self.v2_treatments.add(edges);
+        }
+        Ok(added)
     }
 
     /// Snapshot the document registry (documents + statuses) for disk persistence.
@@ -502,6 +564,7 @@ impl RagAnything {
                 entities: 0,
                 relations: 0,
                 treatments: 0,
+                v2_treatments: 0,
             });
         }
         self.set_status(&doc_id, &file_ref, DocStatus::Processing, None, 0, 0);
@@ -640,6 +703,7 @@ impl RagAnything {
         let mut entities_total = 0usize;
         let mut relations_total = 0usize;
         let mut treatments_total = 0usize;
+        let mut v2_total = 0usize;
         let mut chunk_ids: Vec<String> = Vec::new();
 
         // Step 3: insert pure text (chunk → embed → graph).
@@ -831,6 +895,46 @@ impl RagAnything {
                 // fallback the registry insert below uses).
                 let ingest_source_title =
                     title.as_deref().filter(|t| !t.trim().is_empty()).unwrap_or(file_ref);
+                // Citator V2: source judgment (metadata preferred) and
+                // reversal candidates (every other registry document),
+                // built once per document, not per chunk.
+                let registry_meta: std::collections::HashMap<String, DocMeta> = self
+                    .documents
+                    .read()
+                    .expect("lock poisoned")
+                    .iter()
+                    .map(|(id, info)| (id.clone(), info.meta.clone()))
+                    .collect();
+                let candidates: Vec<citator_v2::Judgment> = self
+                    .documents
+                    .read()
+                    .expect("lock poisoned")
+                    .iter()
+                    .map(|(id, info)| {
+                        crate::citator_v2::judgment_from_meta(id, &info.title, &registry_meta)
+                    })
+                    .collect();
+                let mut source_meta_map: std::collections::HashMap<String, DocMeta> =
+                    std::collections::HashMap::new();
+                // Same construction the registry insert below uses;
+                // cloned fields so that insert still sees them.
+                let mut source_doc_meta = DocMeta::default();
+                if inferred_meta.forum != citator_v2::Forum::Unknown {
+                    source_doc_meta.forum = Some(
+                        crate::citator_v2::forum_to_stored(inferred_meta.forum).to_string(),
+                    );
+                }
+                source_doc_meta.state = inferred_meta.state.clone();
+                source_doc_meta.decided_on = inferred_meta
+                    .date
+                    .clone()
+                    .map(crate::citator_v2::format_decided_on);
+                source_meta_map.insert(doc_id.to_string(), source_doc_meta);
+                let source_judgment = crate::citator_v2::judgment_from_meta(
+                    doc_id,
+                    ingest_source_title,
+                    &source_meta_map,
+                );
                 for record in &records {
                     let (entities, relations) =
                         extract_graph_elements(self.llm.as_ref(), record).await;
@@ -854,6 +958,20 @@ impl RagAnything {
                             Some(ingest_source_title),
                         );
                         treatments_total += self.treatments.add(edges);
+                    }
+                    // Citator V2: full-text treatment + reversal
+                    // detection over the parent text (not snippets).
+                    // Same kill switch as V1 ingest detection; the
+                    // store is separate, so V1 never sees V2 edges.
+                    if crate::citator::citator_enabled() {
+                        let v2_edges = crate::citator_v2::detect_v2_edges_for_chunk(
+                            &record.text,
+                            &source_judgment,
+                            &candidates,
+                            &record.id,
+                            Some(ingest_source_title),
+                        );
+                        v2_total += self.v2_treatments.add(v2_edges);
                     }
                 }
                 chunk_count = records.len();
@@ -943,6 +1061,7 @@ impl RagAnything {
             entities: entities_total,
             relations: relations_total,
             treatments: treatments_total,
+            v2_treatments: v2_total,
         })
     }
 
@@ -1021,6 +1140,7 @@ impl RagAnything {
             // Treatment evidence dies with its source document: a
             // deleted treating judgment must stop flagging citations.
             self.treatments.remove_chunks(&chunk_ids);
+            self.v2_treatments.remove_chunks(&chunk_ids);
         }
         self.doc_status.write().expect("lock poisoned").remove(doc_id);
         self.documents.write().expect("lock poisoned").remove(doc_id);
@@ -1542,6 +1662,29 @@ mod tests {
         assert_eq!(m.applicant, None);
         let round: DocMeta = serde_json::from_value(serde_json::to_value(&m).unwrap()).unwrap();
         assert_eq!(round.forum, None);
+    }
+
+    #[tokio::test]
+    async fn ingest_v2_edges_from_appellate_language() {
+        // Appellate-reversal language is invisible to V1's verb forms
+        // (no "appeal allowed / impugned judgment set aside" pattern)
+        // but V2's full-text ingest detection must catch it.
+        let rag = rag();
+        let text = "IN THE HIGH COURT OF JUDICATURE AT BOMBAY\nCivil Appeal No. 7 of 2023\n\
+            Decided on 10 April 2024.\nIn Mehta v. Desai, the appeal is allowed and the impugned judgment is set aside.";
+        let report = rag
+            .process_document_complete("hc.md", text.as_bytes(), Some("Mehta v. Desai".into()), None)
+            .await
+            .unwrap();
+        assert_eq!(report.treatments, 0, "V1 must not claim appellate language");
+        assert_eq!(report.v2_treatments, 1, "V2 must catch the reversal");
+        let edges = rag.v2_treatments().all();
+        assert_eq!(edges.len(), 1);
+        assert_eq!(edges[0].kind, crate::citator_v2::StoredV2Kind::Reversed);
+        assert!(edges[0].target_name.contains("Mehta"));
+        // Re-running the ingest path's detection over the same text
+        // adds nothing (store dedup).
+        assert_eq!(rag.v2_treatments().add(edges), 0);
     }
 
     #[tokio::test]

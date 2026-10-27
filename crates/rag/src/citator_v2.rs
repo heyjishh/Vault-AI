@@ -23,9 +23,11 @@
 //!   fallback for documents whose metadata is still empty, so a title
 //!   with no forum marker no longer forces `Unknown` forum when the
 //!   header names the court.
-//! - Reversal detection runs on cited snippets (first 1500 chars of the
-//!   retrieved chunk), not full judgment texts; full-text detection stays
-//!   an ingest concern.
+//! - Treatment + reversal detection runs over full parent-chunk texts
+//!   at ingest, and the resulting V2 edges are stored (`V2EdgeStore`,
+//!   persisted as `citator_v2.json`). Ask resolution uses those stored
+//!   edges; snippet detection remains only as a fallback for documents
+//!   ingested before this change (no stored edges yet).
 //! - No per-request state or applicant context exists in the query API,
 //!   so governing selection runs with state None (only national authority
 //!   governs outright) and applicant None (AAR/AAAR never govern).
@@ -728,6 +730,189 @@ fn map_status(status: V2Status) -> V1Status {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Stored V2 edges (FIX 2)
+// ---------------------------------------------------------------------------
+//
+// Full-text V2 detection at ingest writes edges here; Ask resolution
+// reads them. This store is deliberately SEPARATE from V1's
+// `TreatmentStore`: V1's store, detection, and resolution are never
+// touched by V2 writes, so V1 behavior with the switch off is exactly
+// as before (the V1 path never reads this store).
+
+/// Treatment kind for a stored V2 edge. Mirrors the engine's
+/// `TreatmentKind` (including `Reversed`, which V1's enum lacks).
+/// Serialized snake_case for `citator_v2.json`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum StoredV2Kind {
+    Overruled,
+    Reversed,
+    Followed,
+    Distinguished,
+    Applied,
+    Affirmed,
+}
+
+fn stored_kind_to_engine(kind: StoredV2Kind) -> V2Kind {
+    match kind {
+        StoredV2Kind::Overruled => V2Kind::Overruled,
+        StoredV2Kind::Reversed => V2Kind::Reversed,
+        StoredV2Kind::Followed => V2Kind::Followed,
+        StoredV2Kind::Distinguished => V2Kind::Distinguished,
+        StoredV2Kind::Applied => V2Kind::Applied,
+        StoredV2Kind::Affirmed => V2Kind::Affirmed,
+    }
+}
+
+fn engine_kind_to_stored(kind: V2Kind) -> StoredV2Kind {
+    match kind {
+        V2Kind::Overruled => StoredV2Kind::Overruled,
+        V2Kind::Reversed => StoredV2Kind::Reversed,
+        V2Kind::Followed => StoredV2Kind::Followed,
+        V2Kind::Distinguished => StoredV2Kind::Distinguished,
+        V2Kind::Applied => StoredV2Kind::Applied,
+        V2Kind::Affirmed => StoredV2Kind::Affirmed,
+    }
+}
+
+/// One V2 treatment relationship, as detected at ingest over a full
+/// parent-chunk text. `target_doc_id` is set when the engine linked
+/// the edge to a specific judgment (appeal number / CNR / party
+/// match); otherwise the target is a case name resolved at Ask time
+/// by the nearest-below rule. The passage is the provenance — a status
+/// is never asserted without one.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct StoredV2Edge {
+    pub target_name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub target_doc_id: Option<String>,
+    pub kind: StoredV2Kind,
+    pub source_doc_id: String,
+    pub source_chunk_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_title: Option<String>,
+    pub passage: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub linkage: Option<String>,
+}
+
+/// In-memory V2 edge store, shared between the ingest pipeline
+/// (writer) and the query service (reader) behind one Arc. Mirrors
+/// V1's `TreatmentStore` semantics: deduped insert, chunk-scoped
+/// removal on document deletion, snapshot/restore for persistence.
+#[derive(Debug, Default)]
+pub struct V2EdgeStore {
+    edges: std::sync::RwLock<Vec<StoredV2Edge>>,
+}
+
+impl V2EdgeStore {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    fn edge_key(e: &StoredV2Edge) -> String {
+        format!(
+            "{}|{}|{:?}|{}",
+            e.source_chunk_id,
+            e.target_name.to_lowercase(),
+            e.kind,
+            e.target_doc_id.as_deref().unwrap_or("")
+        )
+    }
+
+    /// Insert edges, skipping exact duplicates. Returns new count.
+    pub fn add(&self, edges: Vec<StoredV2Edge>) -> usize {
+        let mut guard = self.edges.write().expect("lock poisoned");
+        let mut known: std::collections::HashSet<String> =
+            guard.iter().map(Self::edge_key).collect();
+        let mut added = 0usize;
+        for e in edges {
+            if known.insert(Self::edge_key(&e)) {
+                guard.push(e);
+                added += 1;
+            }
+        }
+        added
+    }
+
+    pub fn all(&self) -> Vec<StoredV2Edge> {
+        self.edges.read().expect("lock poisoned").clone()
+    }
+
+    pub fn count(&self) -> usize {
+        self.edges.read().expect("lock poisoned").len()
+    }
+
+    pub fn snapshot(&self) -> Vec<StoredV2Edge> {
+        self.all()
+    }
+
+    pub fn restore(&self, edges: Vec<StoredV2Edge>) {
+        *self.edges.write().expect("lock poisoned") = edges;
+    }
+
+    /// Drop edges sourced from deleted chunks (document removal).
+    /// Returns removed count.
+    pub fn remove_chunks(&self, chunk_ids: &[String]) -> usize {
+        let removed: std::collections::HashSet<&str> =
+            chunk_ids.iter().map(|s| s.as_str()).collect();
+        let mut guard = self.edges.write().expect("lock poisoned");
+        let before = guard.len();
+        guard.retain(|e| !removed.contains(e.source_chunk_id.as_str()));
+        before - guard.len()
+    }
+}
+
+/// Run V2 detection (treatments + appellate reversals) over one full
+/// parent-chunk text. `candidates` are the judgments the reversal
+/// linkage may attach to (every other document in the corpus).
+/// Same-caption edges are KEPT here on purpose: a judgment affirming
+/// a lower judgment with the same caption is real, and Ask-time
+/// resolution attaches it by document id (never to the source
+/// itself). Filtering by current corpus would break retroactively
+/// when a lower judgment is uploaded later, so storage keeps
+/// everything and Ask time decides.
+pub fn detect_v2_edges_for_chunk(
+    text: &str,
+    source: &Judgment,
+    candidates: &[Judgment],
+    source_chunk_id: &str,
+    source_title: Option<&str>,
+) -> Vec<StoredV2Edge> {
+    let mut out: Vec<StoredV2Edge> = Vec::new();
+    let mut push = |e: V2Edge| {
+        let (target_name, target_doc_id) = match &e.target {
+            EdgeTarget::JudgmentId(id) => (
+                candidates
+                    .iter()
+                    .find(|j| &j.id == id)
+                    .map(|j| j.case_name.clone())
+                    .unwrap_or_default(),
+                Some(id.clone()),
+            ),
+            EdgeTarget::CaseName(name) => (name.clone(), None),
+        };
+        out.push(StoredV2Edge {
+            target_name,
+            target_doc_id,
+            kind: engine_kind_to_stored(e.kind),
+            source_doc_id: e.source_doc_id.clone(),
+            source_chunk_id: source_chunk_id.to_string(),
+            source_title: source_title.map(|s| s.to_string()),
+            passage: e.passage.clone(),
+            linkage: e.linkage.clone(),
+        });
+    };
+    for e in detect_treatments(text, source) {
+        push(e);
+    }
+    for e in detect_reversals(text, source, candidates) {
+        push(e);
+    }
+    out
+}
+
 /// Full V2 resolution for one Ask's citations.
 pub struct V2Resolution {
     /// (citation doc_id, treatment) for every corpus citation resolved.
@@ -788,7 +973,7 @@ fn resolve_below(
 /// Build a V2 judgment for one document: stored metadata wins, title
 /// inference is the last-resort fallback. `meta` maps doc id → DocMeta;
 /// a missing entry means "no metadata" (legacy document), not an error.
-fn judgment_from_meta(
+pub(crate) fn judgment_from_meta(
     doc_id: &str,
     title: &str,
     meta: &HashMap<String, crate::pipeline::DocMeta>,
@@ -816,9 +1001,27 @@ fn judgment_from_meta(
     j
 }
 
+/// True when a CaseName target's only matching judgment is the source
+/// itself — a self-treatment, which must never resolve (a judgment
+/// describing its own holding is not a later treatment of it). Genuine
+/// above-source targets (a lower judgment following a higher one) are
+/// untouched: their match set is not the source alone.
+fn is_self_only_target(
+    name: &str,
+    source_id: &str,
+    judgments: &[Judgment],
+) -> bool {
+    let matches: Vec<&Judgment> = judgments
+        .iter()
+        .filter(|j| citator_v2::normalize::same_matter(name, &j.case_name))
+        .collect();
+    matches.len() == 1 && matches[0].id == source_id
+}
+
 pub fn resolve_v2(
     citations: &[Citation],
     v1_edges: &[V1Edge],
+    stored_v2: &[StoredV2Edge],
     scope: Option<&DocScope>,
     meta: &HashMap<String, crate::pipeline::DocMeta>,
 ) -> V2Resolution {
@@ -852,9 +1055,16 @@ pub fn resolve_v2(
         return empty();
     }
 
-    // Synthesized judgments for V1 edge sources (chain walking needs them).
+    // Synthesized judgments for edge sources (chain walking needs them).
     // Only scope-visible edges are converted, mirroring the V1 rule.
     let visible_edges: Vec<&V1Edge> = v1_edges
+        .iter()
+        .filter(|e| match scope {
+            Some(s) => s.contains(e.source_doc_id.as_str()),
+            None => true,
+        })
+        .collect();
+    let visible_stored: Vec<&StoredV2Edge> = stored_v2
         .iter()
         .filter(|e| match scope {
             Some(s) => s.contains(e.source_doc_id.as_str()),
@@ -871,15 +1081,35 @@ pub fn resolve_v2(
             }
         }
     }
+    for e in &visible_stored {
+        let source_title = e.source_title.clone().unwrap_or_default();
+        if !judgments.iter().any(|j| j.id == e.source_doc_id) {
+            let sj = judgment_from_meta(&e.source_doc_id, &source_title, meta);
+            judgments.push(sj);
+            if !source_title.is_empty() {
+                display.insert(e.source_doc_id.clone(), source_title);
+            }
+        }
+    }
 
     let domain = best_fit_domain(&judgments.iter().map(|j| j.forum).collect::<Vec<_>>());
+
+    // Forum of an edge's source, from its (metadata-aware) judgment
+    // when synthesized, else title inference.
+    let source_forum_of = |source_doc_id: &str, source_title: &str| -> Forum {
+        judgments
+            .iter()
+            .find(|j| j.id == source_doc_id)
+            .map(|j| j.forum)
+            .unwrap_or_else(|| infer_forum(source_title))
+    };
 
     // Convert V1 edges, resolving name targets against the judgment set
     // with the nearest-below rule (see `resolve_below`).
     let mut edges: Vec<V2Edge> = Vec::new();
     for e in &visible_edges {
         let source_title = e.source_title.clone().unwrap_or_default();
-        let source_forum = infer_forum(&source_title);
+        let source_forum = source_forum_of(&e.source_doc_id, &source_title);
         let target = resolve_below(&e.target, source_forum, domain, &judgments, &e.source_doc_id);
         edges.push(V2Edge {
             target,
@@ -891,16 +1121,43 @@ pub fn resolve_v2(
         });
     }
 
-    // V2 detection over cited snippets, candidates restricted to
-    // judgments below the source forum (an appellate judgment reverses
-    // or treats a lower one, never a higher one). Unknown source rank
-    // keeps all candidates except the source itself.
-    // Both reversal detection and full treatment detection run here:
-    // V1 ingest edges miss same-caption affirmances (V1's name-based
-    // self-guard drops an SC judgment affirming "Kumar v. State" when
-    // the SC judgment is itself titled "Kumar v. State"), while the
-    // snippet path resolves by document id, so the affirmance lands
-    // on the HC step below, never on the source itself.
+    // Convert stored V2 edges (full-text ingest detection). A stored
+    // edge duplicating a V1 edge (same source, kind, target) is
+    // skipped — the V1 passage wins, as with snippets below.
+    for e in &visible_stored {
+        let source_title = e.source_title.clone().unwrap_or_default();
+        let source_forum = source_forum_of(&e.source_doc_id, &source_title);
+        let target = match &e.target_doc_id {
+            Some(id) => EdgeTarget::JudgmentId(id.clone()),
+            None => resolve_below(&e.target_name, source_forum, domain, &judgments, &e.source_doc_id),
+        };
+        let kind = stored_kind_to_engine(e.kind);
+        let dup = edges.iter().any(|x| {
+            x.source_doc_id == e.source_doc_id && x.kind == kind && x.target == target
+        });
+        if !dup {
+            edges.push(V2Edge {
+                target,
+                kind,
+                source_doc_id: e.source_doc_id.clone(),
+                source_title: source_title.clone(),
+                passage: e.passage.clone(),
+                linkage: e.linkage.clone(),
+            });
+        }
+    }
+
+    // Snippet detection as a FALLBACK for documents ingested before
+    // stored V2 edges existed: candidates restricted to judgments
+    // below the source forum (an appellate judgment reverses or treats
+    // a lower one, never a higher one). Unknown source rank keeps all
+    // candidates except the source itself. Stored edges (above) already
+    // cover same-caption affirmances — V1's name-based self-guard
+    // dropped an SC judgment affirming "Kumar v. State" when the SC
+    // judgment is itself titled "Kumar v. State", but the stored V2
+    // path resolves by document id, so the affirmance lands on the HC
+    // step below, never on the source itself — and the self-only guard
+    // below drops it entirely when no lower judgment shares the caption.
     let cited_judgments: Vec<Judgment> = judgments
         .iter()
         .filter(|j| j.id.starts_with("doc:"))
@@ -937,6 +1194,16 @@ pub fn resolve_v2(
             }
         }
     }
+
+    // Self-only guard: drop converted edges whose CaseName target
+    // matches nothing but the source judgment itself (a judgment
+    // describing its own holding). Stored V2 edges keep same-caption
+    // affirmances by design, so this is the check that stops one from
+    // self-affirming when no lower judgment shares the caption.
+    edges.retain(|e| match &e.target {
+        EdgeTarget::CaseName(name) => !is_self_only_target(name, &e.source_doc_id, &judgments),
+        EdgeTarget::JudgmentId(_) => true,
+    });
 
     let cited_ids: Vec<String> = cited_judgments.iter().map(|j| j.id.clone()).collect();
     let input = AskInput {
@@ -1093,7 +1360,7 @@ mod tests {
             source_title: Some("Kumar v. State — Supreme Court (2025)".to_string()),
             passage: "We affirm Kumar v. State.".to_string(),
         }];
-        let res = resolve_v2(&citations, &v1_edges, None, &HashMap::new());
+        let res = resolve_v2(&citations, &v1_edges, &[], None, &HashMap::new());
         let by_id: HashMap<&str, &CitationTreatment> = res
             .treatments
             .iter()
@@ -1127,7 +1394,7 @@ mod tests {
                 "We affirm Kumar v. State. The Supreme Court held that the High Court correctly applied the standard of proof.",
             ),
         ];
-        let res = resolve_v2(&citations, &[], None, &HashMap::new());
+        let res = resolve_v2(&citations, &[], &[], None, &HashMap::new());
         let by_id: HashMap<&str, &CitationTreatment> = res
             .treatments
             .iter()
@@ -1284,6 +1551,139 @@ mod tests {
         assert_eq!(j.applicant, None);
     }
 
+    // -- FIX 2: stored V2 edges -------------------------------------------
+
+    fn stored(
+        target_name: &str,
+        target_doc_id: Option<&str>,
+        kind: StoredV2Kind,
+        source_doc_id: &str,
+        source_title: &str,
+    ) -> StoredV2Edge {
+        StoredV2Edge {
+            target_name: target_name.to_string(),
+            target_doc_id: target_doc_id.map(|s| s.to_string()),
+            kind,
+            source_doc_id: source_doc_id.to_string(),
+            source_chunk_id: format!("chunk-{source_doc_id}"),
+            source_title: Some(source_title.to_string()),
+            passage: "passage".to_string(),
+            linkage: None,
+        }
+    }
+
+    #[test]
+    fn stored_v2_edge_store_dedupes_and_removes() {
+        let store = V2EdgeStore::new();
+        let e = stored("Mehta v. Desai", None, StoredV2Kind::Reversed, "real-hc", "HC");
+        assert_eq!(store.add(vec![e.clone(), e.clone()]), 1);
+        assert_eq!(store.count(), 1);
+        assert_eq!(store.remove_chunks(&["chunk-real-hc".to_string()]), 1);
+        assert_eq!(store.count(), 0);
+    }
+
+    #[test]
+    fn full_text_detection_finds_late_reversal() {
+        // Reversal language past the first 1500 chars: a snippet-only
+        // scan misses it, full-text ingest detection must not.
+        let filler = "The court heard arguments on the merits and considered the record in detail. ";
+        let mut text = filler.repeat(40);
+        text.push_str("In Mehta v. Desai, the appeal is allowed and the impugned judgment is set aside.");
+        assert!(text.len() > 3000);
+        let snippet: String = text.chars().take(1500).collect();
+        assert!(!snippet.contains("appeal is allowed"));
+        let source = Judgment::new("real-hc", "Kumar v. State", Forum::HighCourt);
+        let candidates = vec![Judgment::new("real-dist", "Mehta v. Desai", Forum::DistrictCourt)];
+        let edges = detect_v2_edges_for_chunk(&text, &source, &candidates, "c-hc", Some("HC"));
+        assert!(
+            edges.iter().any(|e| e.kind == StoredV2Kind::Reversed
+                && e.target_name.contains("Mehta")),
+            "got {edges:?}"
+        );
+        // The same detection over the snippet alone finds nothing.
+        let snippet_edges = detect_reversals(&snippet, &source, &candidates);
+        assert!(snippet_edges.is_empty(), "got {snippet_edges:?}");
+    }
+
+    #[test]
+    fn stored_edge_resolution_matches_engine() {
+        // No V1 edges, neutral snippets: statuses come from stored V2
+        // edges alone (full-text ingest), including governing + rank-down.
+        let citations = vec![
+            cit("doc:0", "Mehta v. Desai — District Court (2021)", "The accused was convicted."),
+            cit("doc:1", "Mehta v. Desai — Allahabad High Court (2023)", "The court heard the appeal."),
+            cit("doc:2", "Mehta v. Desai — Supreme Court (2025)", "The court heard the matter."),
+        ];
+        let stored = vec![
+            stored("Mehta v. Desai", Some("doc:0"), StoredV2Kind::Reversed, "real-hc", "Mehta v. Desai — Allahabad High Court (2023)"),
+            stored("Mehta v. Desai", Some("doc:1"), StoredV2Kind::Affirmed, "real-sc", "Mehta v. Desai — Supreme Court (2025)"),
+        ];
+        let res = resolve_v2(&citations, &[], &stored, None, &HashMap::new());
+        let by_id: HashMap<&str, &CitationTreatment> = res
+            .treatments
+            .iter()
+            .map(|(id, t)| (id.as_str(), t))
+            .collect();
+        assert_eq!(by_id["doc:0"].status, V1Status::Reversed);
+        assert_eq!(by_id["doc:1"].status, V1Status::GoodLaw);
+        let line = res.governing_line.expect("governing line");
+        assert!(line.contains("Supreme Court"), "{line}");
+        assert_eq!(res.ranked_corpus_ids.last().unwrap(), "doc:0");
+    }
+
+    #[test]
+    fn same_caption_affirmance_stored_not_self() {
+        // SC "Kumar v. State" affirming HC "Kumar v. State": the stored
+        // CaseName edge must land on the HC step below, never on the
+        // SC source itself.
+        let citations = vec![
+            cit("doc:0", "State v. Kumar — District Court (2021)", "The accused was convicted."),
+            cit("doc:1", "Kumar v. State — Allahabad High Court (2023)", "The court heard the appeal."),
+            cit("doc:2", "Kumar v. State — Supreme Court (2025)", "We affirm Kumar v. State."),
+        ];
+        let stored = vec![stored(
+            "Kumar v. State",
+            None,
+            StoredV2Kind::Affirmed,
+            "doc:2",
+            "Kumar v. State — Supreme Court (2025)",
+        )];
+        let res = resolve_v2(&citations, &[], &stored, None, &HashMap::new());
+        let by_id: HashMap<&str, &CitationTreatment> = res
+            .treatments
+            .iter()
+            .map(|(id, t)| (id.as_str(), t))
+            .collect();
+        assert_eq!(by_id["doc:1"].status, V1Status::GoodLaw, "HC affirmed, not Unknown");
+        assert_eq!(by_id["doc:2"].status, V1Status::Unknown, "SC must not self-affirm");
+    }
+
+    #[test]
+    fn self_only_affirmance_dropped() {
+        // Only the SC is cited: its own "We affirm Kumar v. State"
+        // edge names nothing but itself, so it must be dropped rather
+        // than self-affirming.
+        let citations = vec![cit(
+            "doc:2",
+            "Kumar v. State — Supreme Court (2025)",
+            "We affirm Kumar v. State.",
+        )];
+        let stored = vec![stored(
+            "Kumar v. State",
+            None,
+            StoredV2Kind::Affirmed,
+            "doc:2",
+            "Kumar v. State — Supreme Court (2025)",
+        )];
+        let res = resolve_v2(&citations, &[], &stored, None, &HashMap::new());
+        let by_id: HashMap<&str, &CitationTreatment> = res
+            .treatments
+            .iter()
+            .map(|(id, t)| (id.as_str(), t))
+            .collect();
+        assert_eq!(by_id["doc:2"].status, V1Status::Unknown);
+    }
+
     #[test]
     fn stored_meta_lets_bare_title_join_chain() {
         // The HC citation carries NO forum marker in its title; only
@@ -1312,7 +1712,7 @@ mod tests {
                 ..Default::default()
             },
         );
-        let res = resolve_v2(&citations, &[], None, &meta);
+        let res = resolve_v2(&citations, &[], &[], None, &meta);
         let by_id: HashMap<&str, &CitationTreatment> = res
             .treatments
             .iter()

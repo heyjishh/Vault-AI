@@ -80,8 +80,11 @@ pub async fn backfill_citator_v2(
     AdminUser(_admin): AdminUser,
 ) -> Result<Json<serde_json::Value>, ApiError> {
     let meta_updated = state.rag.backfill_doc_meta().await?;
+    let v2_edges_added = state.rag.backfill_v2_edges().await?;
     Ok(Json(serde_json::json!({
         "meta_updated": meta_updated,
+        "v2_edges_added": v2_edges_added,
+        "v2_total": state.rag.v2_treatment_count(),
     })))
 }
 
