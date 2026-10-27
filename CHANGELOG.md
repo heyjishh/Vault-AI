@@ -74,6 +74,43 @@ live**, what is **built but unverified**, and what is **roadmap**.
     12}, second run {0, 0, 12}; the 8 added edges all came from
     legacy corpus docs, none from the new fixtures (ingest already
     covered those). NO version bump, NO push.
+  - **Phase 2 — citator on Research, Draft, Interact, autonomous
+    (27 Oct, workspace 177 green, standalone still 44):**
+    Research citations now carry V2 treatments (stored edges +
+    stored metadata) with live-first rank-down and a new
+    `ResearchReport.governing_line` field (absent when nothing
+    governs); `ResearchRequest` accepts optional `state` +
+    `applicant`. Draft grounds through a real citator context
+    (scoped + unscoped). Autonomous runs thread the context into
+    every researcher leg/retry/re-query and append the governing
+    line from the researchers' treated evidence to the final report
+    (both construction paths; never when inconclusive); the legacy
+    planner-executor path stays on default context. Interact takes
+    no state/applicant fields (it never calls `query()` — they
+    would be dead) and instead reports the document's own V2
+    treatment in `InteractResponse`. Shared normalization in
+    `routes::citator_context`; kill switch still defaults OFF, V1
+    behavior untouched when off. Two adapter bugs found and fixed
+    with regression tests: stored JudgmentId edges carry real ids
+    that could never match positional citations (Phase 1's live
+    Chain A had succeeded via the snippet fallback, masking it) —
+    `resolve_v2` now takes a real→positional map and remaps targets
+    + evidence; and duplicate judgments of one document tied in
+    `resolve_below` as false ambiguity (both copies Unknown) —
+    `resolve_v2` now dedupes by identity to a canonical judgment
+    and expands treatments/rank back to copies. Live on :3001 (V2
+    on): Ask re-verified (SC governs, HC GoodLaw, district Reversed
+    last, nothing dropped; V2-off Ask re-verified clean);
+    research shows HC GoodLaw + governing line; draft (state UP)
+    shows HC GoodLaw + district Reversed last; interact on the
+    overruled district doc returns Reversed with the HC passage.
+    NOT live-proven, stated plainly: research rank-down with dead
+    law present (no research run retrieved the district doc —
+    retrieval outcome); autonomous positive append (both attempts
+    degraded to `partial` with zero citations as every researcher
+    leg timed out at 120s under sustained bridge load — the
+    no-invention half is proven live twice). NO version bump,
+    NO push.
   - **Deferred with reasons:** HTTP `good_law_only` parameter (engine
     flag exists and is tested; threading it through the query entry
     points is a bigger API change than this integration warrants);

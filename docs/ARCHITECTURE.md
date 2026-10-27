@@ -518,6 +518,84 @@ detection, store, and resolution are untouched when the switch is off.
   clean them. (e) The governing line shows the winning candidate's
   chain (HC → SC for the civil chain), not necessarily from the
   lowest step — the verdict text itself narrates all steps.
+- **Phase 2 — Research, Draft, Interact, autonomous under V2 (27 Oct
+  2026, live-verified on :3001 except where noted).** The kill switch
+  is unchanged: with it off, every surface below behaves exactly as
+  before. Research (`research.rs`) resolves its cited evidence
+  through the same V2 path (stored edges + stored metadata via a
+  shared `QueryService::v2_resolution_for` helper): cited evidence
+  carries treatments, corpus evidence rank-downs live-first (web
+  evidence follows in original order, doc_ids unchanged so the
+  adjudicator's `[doc:N]` markers keep resolving), and
+  `ResearchReport` gains a `governing_line` field (absent when
+  nothing governs — never invented). `ResearchRequest` accepts
+  optional `state` + `applicant`. Draft grounds through a real
+  `CitatorContext` (both scoped and unscoped grounding queries; no
+  governing line is added to draft text). Autonomous runs thread the
+  context into every researcher leg, the sequential retry, and the
+  reconciler re-query, and append the governing line derived from
+  the researchers' treated evidence to the final report on both
+  construction paths (including the drafter-error fallback — a
+  governing line is a deterministic derivation, not a synthesized
+  verdict); nothing is appended when the evidence is inconclusive.
+  The legacy planner-executor path stays on default context.
+  Interact never calls `query()`, so it takes no state/applicant
+  fields (they would be dead); instead `InteractResponse` carries
+  the document's own V2 `treatment`, resolved as a synthesized single
+  citation — an overruled document under analysis is flagged even
+  when the treating judgment is not the interact target, and a
+  document cannot self-affirm (no ingest self-edges, self-only
+  guard). Shared normalization lives in `routes::citator_context`
+  (unknown state → None, never a crash); the Ask route delegates to
+  it. Two adapter bugs found while wiring Phase 2, both fixed with
+  regression tests: (i) stored V2 edges carry REAL document ids
+  while citations carry positional `doc:N` ids, so a stored
+  JudgmentId edge could never match a cited judgment — Phase 1's
+  live Chain A success came via the snippet fallback, masking it,
+  and its stored-edge unit test masked it by using positional ids
+  as target ids. `resolve_v2` now takes a real→positional map
+  (built by `prepare_context` and the new helper; empty on cache
+  refresh, where stored JudgmentId edges stay inert as before) and
+  remaps targets and evidence attribution through it. (ii)
+  Duplicate judgments of one document (research cites per
+  hypothesis; Ask can return two chunks of one doc; a stored edge's
+  synthesized source duplicates its cited judgment) tied in
+  `resolve_below` and read as ambiguity, leaving both copies
+  Unknown. `resolve_v2` now dedupes judgments by identity (caption
+  + forum + date + state) to one canonical judgment, canonicalizes
+  edge sources/targets through it, and expands treatments and
+  ranked order back to duplicate citations (copies rank adjacent to
+  their canonical). Genuinely ambiguous targets (two DISTINCT
+  same-forum documents) still keep the CaseName.
+  Live evidence on :3001 (V2 on): Ask re-verified (SC governs as
+  latest in chain, HC GoodLaw, district Reversed last, nothing
+  dropped; V2-off Ask re-verified with governing None and all
+  treatments Unknown); research shows treatments on cited evidence
+  (HC GoodLaw) plus the governing-line field, and the adjudicator's
+  conclusion tracks the chain; draft memo (state UP) carries HC
+  GoodLaw + district Reversed with the district ranked last; interact
+  on the overruled district doc returns treatment Reversed with the
+  HC passage (evidence id is the real HC document id — interact has
+  no citation list to point into). Phase 2 limits, stated plainly:
+  (1) research rank-down with dead law present was not captured
+  live — no research run retrieved the district doc (retrieval
+  outcome, not a citator outcome); the rank-down code path is shared
+  with Ask (proven live) and unit-proven for research's helper.
+  (2) Autonomous positive proof (governing line appended to a
+  successful run) was not captured live: both attempts degraded to
+  `partial` with zero citations because every researcher leg timed
+  out at the 120s per-subagent budget under sustained anonymous-bridge
+  load (single-leg Ask/research/draft/interact all succeeded in the
+  same session — they carry no 120s cap); the no-invention half IS
+  proven live twice (no governing line on empty evidence), and the
+  append itself reuses the unit-proven resolution helper. The lead
+  also confabulated an unrelated caption on the first attempt
+  (pre-existing lead-planning quality, untouched by Phase 2).
+  (3) The research adjudicator still weighs unannotated evidence —
+  treatments surface on the report, they do not rewrite the
+  adjudication. (4) Research answers cache by question (a rerun
+  replayed in under a second), which bounds live-verification
+  sampling.
 
 ## 6. Frontend architecture
 
