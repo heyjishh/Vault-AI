@@ -74,6 +74,17 @@ pub struct InteractResponse {
     pub output: String,
     /// True when the document was longer than the analysis budget.
     pub truncated: bool,
+    /// Citator V2 treatment of the document itself (None when the
+    /// switch is off). Interact works a single document and never
+    /// calls query(), so there is no query call to thread
+    /// state/applicant into — the citator-meaningful surface here is
+    /// flagging an overruled/reversed document under analysis. Note a
+    /// single-doc view cannot determine "governing" (that needs a
+    /// chain), only the document's own treatment; an overruled
+    /// document is flagged even when the treating judgment is not the
+    /// interact target, because stored edges are scope-free here.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub treatment: Option<legal_rag_rag::CitationTreatment>,
 }
 
 pub async fn interact(
@@ -95,6 +106,50 @@ pub async fn interact(
         )
         .into());
     }
+    // Citator V2 treatment of this document (switch on only). The
+    // resolution runs over a synthesized single citation: stored V2
+    // edges (full-text ingest) + V1 edges + stored metadata, with the
+    // real→positional map so stored JudgmentId edges match. Ingest
+    // never creates self-edges and the adapter's self-only guard drops
+    // a same-caption affirmance when no lower judgment shares the
+    // caption, so a document cannot self-affirm here.
+    let treatment = if legal_rag_rag::citator_v2::citator_v2_enabled() {
+        let citation = legal_rag_rag::Citation {
+            doc_title: Some(title.clone()),
+            stale: None,
+            sentence: None,
+            snippet: text.chars().take(1500).collect(),
+            doc_id: "doc:0".to_string(),
+            chunk_id: String::new(),
+            ordinal: 0,
+            score: 1.0,
+            source_url: None,
+            source_date: None,
+            treatment: None,
+        };
+        let mut meta_map = std::collections::HashMap::new();
+        if let Some(m) = state.rag.document_meta(&body.document_id) {
+            meta_map.insert("doc:0".to_string(), m.clone());
+            meta_map.insert(body.document_id.clone(), m);
+        }
+        let mut real_to_positional = std::collections::HashMap::new();
+        real_to_positional.insert(body.document_id.clone(), "doc:0".to_string());
+        let res = legal_rag_rag::citator_v2::resolve_v2(
+            std::slice::from_ref(&citation),
+            &state.rag.treatments().all(),
+            &state.rag.v2_treatments().all(),
+            None,
+            &meta_map,
+            &legal_rag_rag::CitatorContext::default(),
+            &real_to_positional,
+        );
+        res.treatments
+            .into_iter()
+            .find(|(id, _)| id == "doc:0")
+            .map(|(_, t)| t)
+    } else {
+        None
+    };
     let prompt = format!("Document: {title}\n\n{text}\n\n---\nTask: {instruction}");
     let analyst_system = state
         .settings
@@ -132,6 +187,7 @@ pub async fn interact(
         action: body.action,
         output,
         truncated: full_len > DOC_CHAR_BUDGET,
+        treatment,
     }))
 }
 
