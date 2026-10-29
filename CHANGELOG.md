@@ -652,6 +652,43 @@ live**, what is **built but unverified**, and what is **roadmap**.
   surfaced as a flaky failure in the Piece 4 regression test.
 
 ### Fixed
+- **SereneDB restore path can no longer empty the corpus
+  (30 Oct 2026, Piece 21).** The second half of the Piece 20
+  incident: executing that recovery exposed a worse bug in the
+  restore path itself. The SereneDB snapshot dump
+  (`SereneDbVectorStore::all_chunks`) used a text-only projection
+  with **no embedding column**, so every snapshot written while
+  SereneDB was the active store held embedding-less records — and
+  the boot restore's upsert deleted every snapshot id from
+  `legal_chunks` *first*, then failed its single insert
+  (`VARCHAR '[]' can't be cast to FLOAT[1024]`) on those empty
+  embeddings, turning a heal into a total corpus loss (prod was
+  healed manually the same night; until this fix deployed, any
+  prod restart would have re-run the destructive restore). Fixes:
+  (1) `all_chunks` is now a true backup projection — it selects
+  the embedding column and decodes it (tokio-postgres exposes the
+  returned `FLOAT[N]` value as an `f32` array; the bracketed text
+  form the writer emits is parsed as a fallback), while the
+  genuinely text-only projections (`search`, `get_by_ids`,
+  `chunks_of_doc`) stay as they are — no caller of those consumes
+  record embeddings; (2) upsert validates **before any DELETE**:
+  the store now carries its configured dimensions, records whose
+  embedding length differs (empty included) are skipped with a
+  loud WARN naming count, ids and reasons, and a skipped id never
+  enters a delete batch — an existing row for it is left
+  untouched; (3) valid records upsert in batches of at most 25
+  with each batch's delete + insert kept together, so a mid-way
+  failure strands at most one small batch. Regression coverage:
+  pure unit tests for the partition/batch plan (mixed valid,
+  empty and wrong-dimension records; skipped ids never batched),
+  plus a `SERENEDB_URL`-gated live integration test against a
+  unique scratch table proving a seeded row targeted by an
+  empty-embedding record survives byte-identical, a
+  wrong-dimension record never lands, and 26 new valid records
+  land across batches — verified against the local SereneDB.
+  Full workspace suite: **246 passed / 0 failed**; the test
+  instance restarted on this build passes Ask + Interact smoke
+  with `/health` sane (42 documents, 0 hollow).
 - **Corpus durability: restarts can no longer silently erase indexed
   documents, and chunk loss is now detected and recoverable
   (30 Oct 2026, Piece 20).** The data-loss class, plainly: chunks
