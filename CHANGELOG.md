@@ -15,6 +15,12 @@ live**, what is **built but unverified**, and what is **roadmap**.
 ## [Unreleased]
 
 ### Added
+- **Stack health watch (29 Oct 2026)**: `health-check.sh` checks
+  SereneDB, the four sidecars, prod, test, and the Cloudflare tunnel
+  agent; a cron runs it every 10 minutes and, if anything is down,
+  restores it via the idempotent `restore-stack.sh` and reports —
+  silent while everything is healthy. First night: caught and
+  restored a full stack outage after a sandbox replacement.
 - **Refine prompt in every chat surface (29 Oct 2026)**: Ask,
   Interact's document chat, Research, Draft, and the Agents inputs
   (workflow + autonomous) gain one shared **Refine** control — the
