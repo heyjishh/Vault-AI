@@ -384,6 +384,18 @@ live**, what is **built but unverified**, and what is **roadmap**.
     hypotheses adjudicated with decisions + open points and 6 web
     citations; Research with web broken → HTTP 200 corpus-only with
     web_note and inconclusive verdicts.
+- **Brief status change "5xx" — investigated, no code defect found
+  (29 Oct 2026)**: the full path was re-verified live on :3001 against
+  the real 26-document General brief — PATCH through Active / On hold
+  / Closed and the UI's refetches (detail, list, memory, timeline)
+  all returned 200, and both instances serve the current frontend
+  bundle whose StatusSelect sends exactly those values. The report
+  coincided with the day's repeated sandbox restarts (stack down);
+  with the backend unreachable, the serving layer returns the 502 the
+  user saw — the same surface as the Ask 502. No production code
+  change was made; a store-level regression test now locks all three
+  transitions on a brief with a filed document, including persistence
+  across reload.
 
 ## [1.8.0] — 2026-10-25
 

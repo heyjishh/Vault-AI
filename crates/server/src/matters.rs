@@ -276,3 +276,64 @@ impl MatterStore {
         default_id
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn temp_store() -> (MatterStore, PathBuf) {
+        let path = std::env::temp_dir().join(format!(
+            "matters-test-{}.json",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&path);
+        (MatterStore::load(path.clone()), path)
+    }
+
+    /// Regression for the 2026-10-29 "Brief status change shows 5xx"
+    /// report. The live path was verified healthy on :3001 (PATCH +
+    /// detail/list/memory/timeline all 200 on the 26-document General
+    /// brief; the failure coincided with stack downtime), and this
+    /// test locks the store behaviour the route depends on: all three
+    /// status transitions on a brief WITH a filed document, with the
+    /// change persisted and the filing intact after a reload (the
+    /// store-level equivalent of the UI's refetch).
+    #[test]
+    fn status_transitions_on_brief_with_filed_document() {
+        let (store, path) = temp_store();
+        let m = store.create("Status probe", "", "", "", "user-1", None);
+        store
+            .add_document(&m.id, "doc-filed-1")
+            .expect("attach works");
+        assert_eq!(store.get(&m.id).unwrap().status, "Active");
+
+        for target in ["On hold", "Closed", "Active"] {
+            let updated = store
+                .update(
+                    &m.id,
+                    None,
+                    None,
+                    None,
+                    Some(target.to_string()),
+                    None,
+                    None,
+                )
+                .expect("update returns the matter");
+            assert_eq!(updated.status, target);
+
+            // Refetch from memory (list + detail paths).
+            assert_eq!(store.get(&m.id).unwrap().status, target);
+            assert!(store
+                .list()
+                .iter()
+                .any(|x| x.id == m.id && x.status == target));
+
+            // Refetch from disk: persisted, filing preserved.
+            let reloaded = MatterStore::load(path.clone());
+            let from_disk = reloaded.get(&m.id).expect("matter persisted");
+            assert_eq!(from_disk.status, target);
+            assert_eq!(from_disk.document_ids, vec!["doc-filed-1".to_string()]);
+        }
+        let _ = std::fs::remove_file(&path);
+    }
+}
