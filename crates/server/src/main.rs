@@ -128,6 +128,11 @@ async fn main() -> anyhow::Result<()> {
             (dyn_llm.clone() as Arc<dyn LlmClient>, Some(dyn_llm))
         };
 
+    // Undecorated handle on the same client, captured before the
+    // cache wrap below: confidential generation (Piece 16) must never
+    // flow through CachedLlm.
+    let llm_uncached = llm.clone();
+
     // Semantic cache (application-level KV cache): extraction + embedding
     // results keyed by content hash. Disable with LEGAL_RAG_CACHE_ENABLED=0.
     let cache_enabled = !matches!(
@@ -429,6 +434,7 @@ async fn main() -> anyhow::Result<()> {
         store,
         graph,
         llm,
+        llm_uncached,
         web,
         llm_cache,
         emb_cache,

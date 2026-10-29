@@ -17,7 +17,7 @@ const KIND_LABEL: Record<string, string> = {
   draft: 'Draft', upload: 'Upload', document: 'Document filed', created: 'Created',
 }
 
-export default function MatterPage({ matterId, back }: { matterId: string; back: () => void }) {
+export default function MatterPage({ matterId, back, go }: { matterId: string; back: () => void; go?: (view: string) => void }) {
   const [tab, setTab] = useState<Tab>('Overview')
   const detail = useQuery({ queryKey: ['matter', matterId], queryFn: () => mattersApi.get(matterId) })
   const m = detail.data
@@ -63,7 +63,7 @@ export default function MatterPage({ matterId, back }: { matterId: string; back:
             {tab === 'Overview' && <Overview matterId={matterId} notes={m.notes} />}
             {tab === 'Documents' && <Documents matterId={matterId} />}
             {tab === 'Ask' && <AssistantPage matterId={matterId} />}
-            {tab === 'Interact' && <InteractPage matterId={matterId} />}
+            {tab === 'Interact' && <InteractPage matterId={matterId} go={go} />}
             {tab === 'Draft' && <DraftPage matterId={matterId} />}
             {tab === 'History' && <History matterId={matterId} />}
             {tab === 'Notes' && <Notes matterId={matterId} initial={m.notes} />}

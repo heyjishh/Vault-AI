@@ -100,7 +100,7 @@ fn filtered_scope(
 /// search the owner's vault, decrypt the top hits for this request only.
 /// Asking for private sources with a locked vault is an explicit error —
 /// never a silent skip.
-async fn private_sources(
+pub(crate) async fn private_sources(
     state: &AppState,
     user_id: &str,
     question: &str,

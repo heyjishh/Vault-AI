@@ -298,6 +298,9 @@ export interface InteractDocumentResult {
   treatment?: CitationTreatment | null
 }
 
+/** Piece 16: the only sources Interact may read from. */
+export type InteractSource = 'vault' | 'private' | 'both'
+
 export interface InteractResponse {
   document_id: string
   document_title: string
@@ -306,6 +309,10 @@ export interface InteractResponse {
   truncated: boolean
   /** Per-document results for the whole selection (Piece 5). */
   documents?: InteractDocumentResult[]
+  /** The source mode the run actually used (Piece 16). */
+  source?: InteractSource
+  /** Chat citations: [doc:N] vault documents, [private:N] private hits. */
+  citations?: Citation[]
   treatment?: CitationTreatment | null
 }
 
@@ -316,7 +323,7 @@ export interface DraftResponse {
 }
 
 export const createApi = {
-  async interact(document_ids: string[], action: string, question?: string, refine_terms?: string[]): Promise<InteractResponse> {
+  async interact(document_ids: string[], action: string, question?: string, refine_terms?: string[], source: InteractSource = 'vault'): Promise<InteractResponse> {
     try {
       const r = await api.post<InteractResponse>('/knowledge/interact', {
         document_id: document_ids[0],
@@ -324,6 +331,7 @@ export const createApi = {
         action,
         question,
         refine_terms: refine_terms?.length ? refine_terms : undefined,
+        source,
       })
       return r.data
     } catch (e) { throw new Error(err(e)) }

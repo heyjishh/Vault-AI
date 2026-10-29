@@ -15,6 +15,37 @@ live**, what is **built but unverified**, and what is **roadmap**.
 ## [Unreleased]
 
 ### Added
+- **Interact: Ask-style UI + Vault / Private / Both source selector
+  (29 Oct 2026)**: Interact's chat surface adopts the Ask experience —
+  a message thread (question headings, live status line with elapsed
+  time, inline errors with Retry), an Ask-style composer (Enter to
+  send, Refine control kept from Piece 13, terms folding as the
+  focus line), and citation cards. A prominent **source selector**
+  governs every run, enforced server-side by a `source` field on the
+  Interact endpoint: **Vault** (default — the active brief's
+  documents, unchanged behaviour), **Private** (ONLY the user's
+  Confidential Vault, via Ask's existing private retrieval path —
+  owner-only chunks decrypted in memory per request, `[private:N]`
+  citations; the brief's documents are never loaded), and **Both**
+  (brief documents + private retrieval in one answer, citations
+  labelled `[doc:N]` / `[private:N]`). Interact never uses web or
+  system data in any mode. Document actions (summary, chronology,
+  clauses, risks) operate on vault documents: in Private mode they
+  are refused with a plain message (UI disables them with the same
+  note); in Both mode they apply to the vault side only. A locked
+  vault in Private/Both is the private path's explicit 400, surfaced
+  in the UI as an unlock state linking to the Private Vault page —
+  never a silent fallback to Vault. **Privacy invariants**: runs
+  that read the Confidential Vault generate through the dedicated
+  private LLM when configured, else an undecorated client handle —
+  never the shared `CachedLlm` — so private prompts/completions
+  never enter the shared completion cache; their activity records
+  are redacted exactly like Ask's private path (no output, no
+  restorable payload); private text never enters the regular
+  corpus. Streaming parity is partial by plumbing: Interact's
+  endpoint is blocking, so the thread shows Ask's status
+  presentation without token streaming. Upload flows and the
+  document picker are unchanged (Vault/Both modes).
 - **Stack health watch (29 Oct 2026)**: `health-check.sh` checks
   SereneDB, the four sidecars, prod, test, and the Cloudflare tunnel
   agent; a cron runs it every 10 minutes and, if anything is down,

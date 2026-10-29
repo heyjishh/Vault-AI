@@ -2,11 +2,14 @@ import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { CalendarClock, FileSearch, FolderUp, ListTree, ScanSearch, ShieldAlert, Upload } from 'lucide-react'
-import { createApi, vaultApi, type InteractResponse } from '../api/client'
+import { ArrowUp, Briefcase, CalendarClock, Copy, FileSearch, FolderUp, ListTree, Lock, RotateCcw, ScanSearch, ShieldAlert, Upload } from 'lucide-react'
+import { createApi, privateVaultApi, vaultApi, type InteractDocumentResult, type InteractResponse, type InteractSource } from '../api/client'
+import type { Citation } from '../api/types'
 import { useSession } from '../stores/session'
 import { RefineControls, useRefine } from './RefineControls'
-import { EmptyState, Spinner } from './ui'
+import AssistantAvatar from './AssistantAvatar'
+import { SourceModal, citeMarkdownComponents, linkifyCitations } from './SourceModal'
+import { EmptyState } from './ui'
 
 /** Same accept set as the Vault page — Interact upload is the vault
  *  ingest pipeline, not a second path. */
@@ -71,6 +74,17 @@ const ACTIONS = [
   { id: 'chat', label: 'Ask the documents', icon: ScanSearch, hint: 'Free-form question across the selection' },
 ] as const
 
+/** The document actions (chat is the composer, not a button). */
+const ACTION_BUTTONS = ACTIONS.filter((a) => a.id !== 'chat')
+
+/** Piece 16: the only places Interact may read from — no Web, no
+ *  system data, ever. Server-enforced via the request's source. */
+const SOURCES: { id: InteractSource; label: string; hint: string }[] = [
+  { id: 'vault', label: 'Vault', hint: "This brief's documents only" },
+  { id: 'private', label: 'Private Vault', hint: 'Only your Confidential Vault' },
+  { id: 'both', label: 'Both', hint: 'Brief documents + Private Vault, labelled by source' },
+]
+
 /** Mirrors the server cap (MAX_INTERACT_DOCS in routes/create.rs):
  *  the analysis budget is split across the selected documents. */
 export const MAX_INTERACT_DOCS = 20
@@ -115,7 +129,29 @@ function treatmentChip(status: string) {
   return 'bg-amber-100 text-amber-800'
 }
 
-export default function InteractPage({ matterId }: { matterId?: string } = {}) {
+/** One Interact run in the Ask-style thread (Piece 16). */
+interface ITurn {
+  id: number
+  action: string
+  question: string | null
+  source: InteractSource
+  docIds: string[]
+  /** Piece 13 refinement terms captured at send time (chat only). */
+  refineTerms?: string[]
+  status: 'pending' | 'done' | 'error'
+  output: string
+  citations: Citation[]
+  documents: InteractDocumentResult[]
+  documentTitle: string
+  truncated: boolean
+  error: string | null
+  startedAt: number
+  elapsedMs: number | null
+}
+
+let turnSeq = 0
+
+export default function InteractPage({ matterId, go }: { matterId?: string; go?: (view: string) => void } = {}) {
   const toast = useSession((s) => s.toast)
   const qc = useQueryClient()
   // History restore: reopen the exact analysis on its document set.
@@ -125,6 +161,16 @@ export default function InteractPage({ matterId }: { matterId?: string } = {}) {
   // Brief-wide working set (Piece 9): in brief scope the default
   // selection is every document filed in the brief, up to the cap.
   const [briefWide, setBriefWide] = useState(true)
+  // Piece 16: which sources Interact reads from.
+  const [source, setSource] = useState<InteractSource>('vault')
+  const [turns, setTurns] = useState<ITurn[]>([])
+  const [sourceModal, setSourceModal] = useState<Citation | null>(null)
+  const { data: vaultStatus } = useQuery({ queryKey: ['private-vault-status'], queryFn: privateVaultApi.status })
+  const privUnlocked = vaultStatus?.unlocked === true
+  // Known-locked only: while the status is still loading the server
+  // remains the authority (its 400 lands in the turn as an error).
+  const privateLocked = source !== 'vault' && vaultStatus !== undefined && !privUnlocked
+
   useEffect(() => {
     if (!restore || restore.kind !== 'interact') return
     const p = consumeRestore('interact')
@@ -134,13 +180,22 @@ export default function InteractPage({ matterId }: { matterId?: string } = {}) {
       : [String(p.document_id ?? '')].filter(Boolean)
     setBriefWide(false)
     setSelectedIds(ids)
-    setResult({
-      document_id: String(p.document_id ?? ''),
-      document_title: String(p.document_title ?? ''),
+    setTurns([{
+      id: ++turnSeq,
       action: String(p.action ?? 'summary'),
+      question: null,
+      source: 'vault',
+      docIds: ids,
+      status: 'done',
       output: String(p.output ?? ''),
+      citations: [],
+      documents: [],
+      documentTitle: String(p.document_title ?? ''),
       truncated: Boolean(p.truncated),
-    })
+      error: null,
+      startedAt: Date.now(),
+      elapsedMs: null,
+    }])
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [restore])
 
@@ -188,18 +243,76 @@ export default function InteractPage({ matterId }: { matterId?: string } = {}) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
   const [question, setQuestion] = useState('')
-  const [result, setResult] = useState<InteractResponse | null>(null)
   // Prompt refinement (Piece 13) for the chat question.
   const refineCtl = useRefine({ value: question, setValue: setQuestion, surface: 'interact' })
 
   const run = useMutation({
-    mutationFn: (action: string) => createApi.interact(selectedIds, action, action === 'chat' ? question : undefined, action === 'chat' ? refineCtl.consumeTerms() : undefined),
-    onSuccess: (r) => setResult(r),
-    onError: (e) => toast('error', (e as Error).message),
+    mutationFn: async (turn: ITurn) => {
+      const r = await createApi.interact(
+        turn.source === 'private' ? [] : turn.docIds,
+        turn.action,
+        turn.action === 'chat' ? turn.question ?? undefined : undefined,
+        turn.action === 'chat' ? turn.refineTerms : undefined,
+        turn.source,
+      )
+      return r
+    },
+    onSuccess: (r: InteractResponse, turn) => {
+      setTurns((ts) => ts.map((t) => (t.id === turn.id ? {
+        ...t,
+        status: 'done',
+        output: r.output,
+        citations: r.citations ?? [],
+        documents: r.documents ?? [],
+        documentTitle: r.document_title,
+        truncated: r.truncated,
+        elapsedMs: Date.now() - t.startedAt,
+      } : t)))
+    },
+    onError: (e, turn) => {
+      setTurns((ts) => ts.map((t) => (t.id === turn.id ? {
+        ...t,
+        status: 'error',
+        error: (e as Error).message,
+        elapsedMs: Date.now() - t.startedAt,
+      } : t)))
+    },
   })
 
+  const startTurn = (action: string, q: string | null, src: InteractSource, docIds: string[], refineTerms?: string[]) => {
+    if (run.isPending) return
+    const turn: ITurn = {
+      id: ++turnSeq,
+      action,
+      question: q,
+      source: src,
+      docIds,
+      refineTerms,
+      status: 'pending',
+      output: '',
+      citations: [],
+      documents: [],
+      documentTitle: '',
+      truncated: false,
+      error: null,
+      startedAt: Date.now(),
+      elapsedMs: null,
+    }
+    setTurns((ts) => [...ts, turn])
+    run.mutate(turn)
+  }
+
+  const sendChat = () => {
+    const q = question.trim()
+    if (!q) return
+    // Piece 13: the terms captured by Refine ride along and fold
+    // into the instruction server-side as a focus line.
+    const terms = refineCtl.consumeTerms()
+    startTurn('chat', q, source, [...selectedIds], terms.length ? terms : undefined)
+    setQuestion('')
+  }
+
   const toggleDoc = (id: string) => {
-    setResult(null)
     // A manual pick narrows the brief-wide default into a manual set.
     setBriefWide(false)
     setSelectedIds((prev) => {
@@ -213,6 +326,10 @@ export default function InteractPage({ matterId }: { matterId?: string } = {}) {
   }
 
   const hasSelection = selectedIds.length > 0
+  const chatBlocked = run.isPending
+    || !question.trim()
+    || (source !== 'private' && !hasSelection)
+    || privateLocked
 
   // ---- Upload (Piece 7): files/folders land in the vault through
   // the normal ingest route and are auto-selected on success. The
@@ -313,10 +430,57 @@ export default function InteractPage({ matterId }: { matterId?: string } = {}) {
     >
       <h1 className="font-display text-[2rem] tracking-tight">Interact</h1>
       <p className="text-stone-500 mt-1.5 text-[15px]">
-        Work one document or a set of up to {MAX_INTERACT_DOCS}: summarise them, pull their chronology, map their clauses, or interrogate them together.
+        Chat with your documents the way Ask chats with the vault — but Interact reads only what you point it at:
+        this brief's documents, your Confidential Vault, or both. Never the web, never system data.
       </p>
 
+      {/* ---- Piece 16: source selector ---- */}
       <div className="rounded-lex-lg border border-stone-200 bg-white shadow-lex px-6 py-5 mt-6">
+        <span className="text-meta uppercase tracking-wider text-stone-500 font-medium">Sources</span>
+        <div className="grid sm:grid-cols-3 gap-2.5 mt-3">
+          {SOURCES.map((s) => (
+            <button
+              key={s.id}
+              onClick={() => setSource(s.id)}
+              className={`rounded-lex border px-3.5 py-3 text-left transition-colors ${
+                source === s.id ? 'border-ink bg-stone-50' : 'border-stone-200 hover:border-stone-300'
+              }`}
+            >
+              <span className="flex items-center gap-1.5 text-[13.5px] font-medium">
+                {s.id === 'private' ? <Lock size={14} /> : s.id === 'both' ? <Briefcase size={14} /> : <FileSearch size={14} />}
+                {s.label}
+                {source === s.id && <span className="ml-auto text-[11px] font-semibold uppercase tracking-wide text-stone-400">Active</span>}
+              </span>
+              <span className="block text-[11.5px] text-stone-400 leading-snug mt-1">{s.hint}</span>
+            </button>
+          ))}
+        </div>
+        {source === 'private' && (
+          <p className="text-[12.5px] text-stone-500 mt-3">
+            Private mode reads only your Confidential Vault — this brief's documents are not used, and the
+            answer is never cached or written into history.
+          </p>
+        )}
+        {privateLocked && (
+          <div className="mt-3 rounded-lex border border-amber-600/25 bg-[#fdf6e3] px-4 py-3 text-[13px] text-[#7a5b12] flex items-center gap-3 flex-wrap">
+            <span>
+              Your Confidential Vault is locked — {source === 'private' ? 'Private' : 'Both'} needs it
+              unlocked. Unlock it, or switch the source to Vault.
+            </span>
+            {go && (
+              <button
+                onClick={() => go('private')}
+                className="ml-auto font-medium underline underline-offset-2 whitespace-nowrap"
+              >
+                Open Private Vault
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+
+      {source !== 'private' && (
+      <div className="rounded-lex-lg border border-stone-200 bg-white shadow-lex px-6 py-5 mt-5">
         <div className="flex items-baseline justify-between gap-3 flex-wrap">
           <span className="text-meta uppercase tracking-wider text-stone-500 font-medium">
             Documents — {selectedIds.length} selected (max {MAX_INTERACT_DOCS})
@@ -505,53 +669,149 @@ export default function InteractPage({ matterId }: { matterId?: string } = {}) {
             </p>
           )}
         </div>
+      </div>
+      )}
 
-        {hasSelection && (
-          <>
-            <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-2.5 mt-5">
-              {ACTIONS.map((a) => (
-                <button
-                  key={a.id}
-                  disabled={run.isPending || (a.id === 'chat' && !question.trim())}
-                  onClick={() => run.mutate(a.id)}
-                  className="rounded-lex border border-stone-200 px-3.5 py-3 text-left hover:border-ink disabled:opacity-40 transition-colors"
-                >
-                  <a.icon size={16} className="text-stone-500" />
-                  <p className="text-[13.5px] font-medium mt-1.5">{a.label}</p>
-                  <p className="text-[11.5px] text-stone-400 leading-snug">{a.hint}</p>
-                </button>
-              ))}
-            </div>
-            <input
-              value={question}
-              onChange={(e) => setQuestion(e.target.value)}
-              placeholder="For “Ask the documents”: e.g. What is the notice period, and who can terminate?"
-              className="mt-3 w-full rounded-lex border border-stone-300 px-3 py-2.5 text-[14px]"
-            />
-            <div className="mt-2">
-              <RefineControls ctl={refineCtl} disabled={!question.trim()} />
-            </div>
-          </>
-        )}
+      {/* ---- Thread (Ask-style) ---- */}
+      <div className="mt-8">
+        {turns.map((turn) => (
+          <TurnView
+            key={turn.id}
+            turn={turn}
+            onRetry={() => {
+              setTurns((ts) => ts.map((t) => (t.id === turn.id ? { ...t, status: 'pending', error: null, startedAt: Date.now() } : t)))
+              run.mutate({ ...turn, status: 'pending', error: null, startedAt: Date.now() })
+            }}
+            onCite={(c) => setSourceModal(c)}
+            retryDisabled={run.isPending}
+          />
+        ))}
       </div>
 
-      {run.isPending && <Spinner label="Reading the document…" />}
-      {!run.isPending && result && (
-        <div className="rounded-lex-lg border border-stone-200 bg-white shadow-lex px-6 py-5 mt-5">
-          <div className="flex items-baseline justify-between gap-3 flex-wrap">
-            <h2 className="font-display text-xl">
-              {ACTIONS.find((a) => a.id === result.action)?.label} — {result.document_title}
-              {result.documents && result.documents.length > 1 && (
-                <span className="text-stone-400 text-base"> +{result.documents.length - 1} more</span>
-              )}
-            </h2>
-            {result.truncated && (
-              <span className="text-meta text-stone-400">Long document set — analysed within the shared budget</span>
-            )}
+      {/* ---- Document actions ---- */}
+      {source === 'private' ? (
+        <p className="text-[13px] text-stone-500 rounded-lex border border-stone-200 bg-stone-50 px-4 py-3">
+          Actions need Vault documents — switch source to Vault or Both to summarise, build a chronology,
+          map clauses or run a risk review. In Both, actions apply to the vault documents only.
+        </p>
+      ) : (
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+          {ACTION_BUTTONS.map((a) => (
+            <button
+              key={a.id}
+              disabled={run.isPending || !hasSelection}
+              onClick={() => startTurn(a.id, null, source, [...selectedIds])}
+              className="rounded-lex border border-stone-200 bg-white px-3.5 py-3 text-left hover:border-ink disabled:opacity-40 transition-colors"
+            >
+              <a.icon size={16} className="text-stone-500" />
+              <p className="text-[13.5px] font-medium mt-1.5">{a.label}</p>
+              <p className="text-[11.5px] text-stone-400 leading-snug">{a.hint}</p>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* ---- Composer (Ask-style) ---- */}
+      <div className="mt-5 rounded-lex-lg border border-stone-300 bg-white shadow-lex-md">
+        <textarea
+          value={question}
+          onChange={(e) => setQuestion(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat() } }}
+          placeholder={
+            source === 'private'
+              ? 'Ask your Confidential Vault… e.g. What was the escrow amount?'
+              : 'Ask the documents… e.g. What is the notice period, and who can terminate?'
+          }
+          rows={3}
+          className="w-full resize-none px-4 pt-4 pb-2 text-[15px] outline-none placeholder:text-stone-400 bg-transparent rounded-t-lex-lg"
+        />
+        <div className="flex items-center justify-between px-3 pb-3">
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-ink text-ivory px-2.5 py-1 text-[12px]">
+              {source === 'private' ? <Lock size={13} /> : source === 'both' ? <Briefcase size={13} /> : <FileSearch size={13} />}
+              {SOURCES.find((s) => s.id === source)?.label}
+            </span>
+            <RefineControls ctl={refineCtl} disabled={!question.trim()} />
           </div>
-          {result.documents && result.documents.length > 0 && (
-            <div className="flex gap-1.5 flex-wrap mt-2.5">
-              {result.documents.map((d) => (
+          <button
+            onClick={sendChat}
+            disabled={chatBlocked}
+            className="w-8 h-8 rounded-full bg-ink text-ivory flex items-center justify-center hover:bg-ink-900 disabled:opacity-40 transition-colors"
+            title="Ask (Enter)"
+          >
+            <ArrowUp size={16} />
+          </button>
+        </div>
+        <div className="border-t border-stone-200 bg-stone-100/60 px-3 py-2 flex rounded-b-lex-lg">
+          <span className="text-[11px] text-stone-400 self-center">
+            {source === 'private'
+              ? 'Private answers are never cached or saved to history'
+              : source === 'both'
+                ? 'Citations are labelled [doc:N] for documents and [private:N] for your Confidential Vault'
+                : 'Answers cite the selected documents as [doc:N]'}
+          </span>
+          <span className="ml-auto hidden sm:block text-[11px] text-stone-400 self-center">Enter to ask · Shift+Enter for a new line</span>
+        </div>
+      </div>
+
+      {turns.length === 0 && source !== 'private' && !hasSelection && (
+        <div className="mt-5"><EmptyState title="Pick a document to begin" hint="Interact reads the documents themselves — not the whole corpus." /></div>
+      )}
+      {turns.length === 0 && source === 'private' && (
+        <div className="mt-5"><EmptyState title="Ask your Confidential Vault" hint="Only your private documents are read — nothing from this brief, nothing cached, nothing saved to history." /></div>
+      )}
+
+      {sourceModal && <SourceModal citation={sourceModal} onClose={() => setSourceModal(null)} go={go} />}
+    </div>
+  )
+}
+
+function TurnView({ turn, onRetry, onCite, retryDisabled }: {
+  turn: ITurn
+  onRetry: () => void
+  onCite: (c: Citation) => void
+  retryDisabled: boolean
+}) {
+  const toast = useSession((s) => s.toast)
+  const [tick, setTick] = useState(0)
+  useEffect(() => {
+    if (turn.status !== 'pending') return
+    const h = setInterval(() => setTick((v) => v + 1), 500)
+    return () => clearInterval(h)
+  }, [turn.status])
+  void tick
+  const secs = (((turn.elapsedMs ?? Date.now() - turn.startedAt)) / 1000).toFixed(1)
+  const actionLabel = ACTIONS.find((a) => a.id === turn.action)?.label ?? turn.action
+  const heading = turn.action === 'chat'
+    ? turn.question ?? ''
+    : `${actionLabel} — ${turn.documentTitle || 'documents'}${turn.documents.length > 1 ? ` +${turn.documents.length - 1} more` : ''}`
+
+  return (
+    <div className="mb-10">
+      <h2 className="font-display text-[1.6rem] leading-snug tracking-tight">{heading}</h2>
+
+      {turn.status === 'pending' && (
+        <div className="mt-3 flex items-center gap-2.5 text-stone-500 text-[13px]">
+          <AssistantAvatar size={22} playing float={false} />
+          <span className="font-medium text-ink">Clause</span>
+          {turn.source === 'private' ? 'Reading your Confidential Vault…' : 'Reading the documents…'}
+          <span className="text-stone-300">·</span>
+          <span className="tabular-nums">{secs}s</span>
+        </div>
+      )}
+
+      {turn.status === 'error' ? (
+        <div className="mt-4 rounded-lex border border-brand-red/30 bg-[#feeaea] px-4 py-3 text-[13px] text-[#a02c2c] flex items-center justify-between">
+          <span>{turn.error}</span>
+          <button onClick={onRetry} disabled={retryDisabled} className="flex items-center gap-1.5 font-medium underline underline-offset-2 disabled:opacity-40">
+            <RotateCcw size={13} /> Retry
+          </button>
+        </div>
+      ) : turn.status === 'done' ? (
+        <>
+          {turn.documents.length > 0 && (
+            <div className="flex gap-1.5 flex-wrap mt-3">
+              {turn.documents.map((d) => (
                 <span key={d.document_id} className="inline-flex items-center gap-1.5 rounded-full bg-stone-100 px-2.5 py-1 text-[12px] text-stone-600">
                   {d.document_title}
                   {d.truncated && <span className="text-stone-400">(partial)</span>}
@@ -562,16 +822,56 @@ export default function InteractPage({ matterId }: { matterId?: string } = {}) {
                   )}
                 </span>
               ))}
+              {turn.truncated && <span className="text-[12px] text-stone-400 self-center">Long document set — analysed within the shared budget</span>}
             </div>
           )}
           <div className="prose-lex mt-3 text-[14.5px] leading-relaxed">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>{result.output}</ReactMarkdown>
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              components={turn.citations.length > 0 ? citeMarkdownComponents(turn.citations, onCite) : undefined}
+            >
+              {turn.citations.length > 0 ? linkifyCitations(turn.output, turn.citations) : turn.output}
+            </ReactMarkdown>
           </div>
-        </div>
-      )}
-      {!run.isPending && !result && !hasSelection && (
-        <div className="mt-5"><EmptyState title="Pick a document to begin" hint="Interact reads the documents themselves — not the whole corpus." /></div>
-      )}
+
+          {turn.citations.length > 0 && (
+            <div className="mt-4 grid sm:grid-cols-2 gap-2.5">
+              {turn.citations.map((c) => {
+                const isPrivate = c.doc_id.startsWith('private:')
+                return (
+                  <button
+                    key={c.chunk_id + c.doc_id}
+                    onClick={() => onCite(c)}
+                    title="View source"
+                    className="text-left rounded-lex-lg border border-stone-200 bg-white shadow-lex px-4 py-3 hover:border-stone-400 transition-colors"
+                  >
+                    <span className="flex items-center gap-2">
+                      <span className="rounded bg-ink text-ivory px-1.5 py-0.5 text-[11px] font-mono font-semibold">{c.doc_id}</span>
+                      {isPrivate && (
+                        <span className="rounded-full bg-ink text-ivory px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide">Private</span>
+                      )}
+                      <span className="text-[13px] font-medium truncate">{c.doc_title ?? c.doc_id}</span>
+                    </span>
+                    <span className="block text-[12.5px] text-stone-500 leading-relaxed mt-1.5 line-clamp-3">{c.snippet}</span>
+                  </button>
+                )
+              })}
+            </div>
+          )}
+
+          <div className="mt-4 flex items-center gap-2">
+            <button
+              onClick={() => { navigator.clipboard.writeText(turn.output).catch(() => {}); toast('success', 'Answer copied') }}
+              className="flex items-center gap-1.5 rounded-lex border border-stone-200 bg-white px-2.5 py-1.5 text-[12px] font-medium text-stone-600 hover:text-ink hover:border-stone-300 transition-colors"
+            >
+              <Copy size={13} /> Copy
+            </button>
+            {turn.elapsedMs != null && (
+              <span className="text-[12px] text-stone-400">answered in {(turn.elapsedMs / 1000).toFixed(1)}s</span>
+            )}
+          </div>
+        </>
+      ) : null}
     </div>
   )
 }

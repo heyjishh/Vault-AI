@@ -21,6 +21,13 @@ pub struct AppState {
     pub store: Arc<dyn VectorStore>,
     pub graph: Arc<dyn GraphStore>,
     pub llm: Arc<dyn LlmClient>,
+    /// The same provider client WITHOUT the `CachedLlm` decorator.
+    /// Confidential generation (Interact Private/Both modes, Piece 16)
+    /// goes through this handle — or the dedicated `private_llm` when
+    /// configured — so a completion whose prompt or text contains
+    /// private-vault material is never written to, or served from,
+    /// the shared completion cache.
+    pub llm_uncached: Arc<dyn LlmClient>,
     pub web: Arc<dyn WebSearch>,
     pub llm_cache: Option<Arc<SemanticCache>>,
     pub emb_cache: Option<Arc<SemanticCache>>,

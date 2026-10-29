@@ -307,7 +307,7 @@ export default function AppShell() {
               {view === 'dashboard' && <DashboardPage go={setView} openMatter={openMatter} />}
               {view === 'matters' && <MattersPage open={openMatter} />}
               {view === 'matter' && openMatterId && (
-                <MatterPage matterId={openMatterId} back={() => setView('matters')} />
+                <MatterPage matterId={openMatterId} back={() => setView('matters')} go={(v) => setView(v as View)} />
               )}
               {view === 'assistant' && (
                 <AssistantPage
@@ -316,7 +316,7 @@ export default function AppShell() {
                 />
               )}
               {view === 'interact' && (
-                <InteractPage matterId={effectiveMatterId ?? undefined} />
+                <InteractPage matterId={effectiveMatterId ?? undefined} go={(v) => { setActiveTabId(null); setView(v as View) }} />
               )}
               {view === 'draft' && <DraftPage go={(v) => { setActiveTabId(null); setView(v as View) }} />}
               {view === 'research' && <ResearchPage go={(v) => { setActiveTabId(null); setView(v as View) }} />}
