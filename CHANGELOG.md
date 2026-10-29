@@ -42,7 +42,8 @@ live**, what is **built but unverified**, and what is **roadmap**.
   unchanged. This also firms up the brief as the vault boundary in
   Interact: brief scope shows only the brief's own filed documents
   (the standalone full-vault listing remains available only through
-  the explicit This brief / Full vault toggle).
+  the explicit This brief / Full vault toggle — removed again by the
+  brief-only vault change later in this cycle, see Changed).
 - **Interact + upload caps raised (29 Oct 2026)**: the Interact
   multi-document cap rises 5 → **20 documents at a time**
   (server-enforced `MAX_INTERACT_DOCS`, same clean 400 over the cap;
@@ -138,7 +139,8 @@ live**, what is **built but unverified**, and what is **roadmap**.
   "Working in" brief like Ask/Draft, defaults the picker to the
   brief's filed documents, and offers a This brief / Full vault
   toggle (switching keeps only selected documents present in the new
-  list). Live-verified on :3001: 2-document chat across the citator
+  list; the toggle itself was removed by the brief-only vault change
+  later in this cycle — see Changed). Live-verified on :3001: 2-document chat across the citator
   briefs (200, both documents covered), legacy single-doc summary
   (200), brief-scoped list returns only the brief's document vs 31
   in the full vault. Workspace tests 190 → 198.
@@ -414,6 +416,48 @@ live**, what is **built but unverified**, and what is **roadmap**.
   (AES-256 corpus 200 with identical text, wrong-password 400,
   no-password 400, private AES-128 200) and the full rag suite is
   96/96.
+
+### Changed
+- **Brief-only vault — no full-vault view (29 Oct 2026, user
+  decision)**: documents are only ever worked within a Brief. The
+  "Working in" switcher loses its "Full vault (all briefs)" option
+  and only chooses WHICH brief: an active brief always exists —
+  with nothing chosen (or a stored pick that no longer exists) the
+  active brief is the default brief, the same fallback uploads
+  already used server-side. The Vault page now shows ONLY the
+  active brief's documents (via the brief-scoped list endpoint);
+  the standalone Interact view loses the Piece 5/9 This brief /
+  Full vault toggle, so its document universe is exactly the
+  active brief (Piece 9's brief-wide default is now the only
+  scope). Uploads keep filing into the active brief; S3 bulk
+  ingest still files into the default brief and now says so.
+  No document can become unreachable: the boot migration's
+  adoption runs through a counted `adopt_unfiled` (count logged),
+  and deleting a brief or detaching a document from its only
+  brief re-files the orphaned documents into the default brief
+  immediately — the vault has no unfiled state. Deliberately NOT
+  changed: Ask/Draft retrieval internals (incl. the zero-hit
+  full-vault fallback and Ask's in-session "Search full vault
+  instead" widening), Search, Graph, Dashboard, the in-brief
+  "file an existing document" picker, and every Admin Command
+  Center surface. **Verified live on :3001** (release build of
+  this change; workspace tests 202 → **204 green**): fixture
+  briefs A/B holding disjoint documents — the vault data path
+  returned each brief's set only; a document orphaned by detach
+  under the previous build sat in NO brief before the restart
+  (38 total / 37 filed) and was adopted into the default brief
+  at boot (38 / 38 after; General 30 → 31); detach on the new
+  build re-homes instantly; the served bundle contains no
+  "Full vault (all briefs)" option and no scope-toggle copy.
+  Fixtures were removed after verification (corpus back to
+  35 / 35). Note: the adopted count is logged via `tracing::info`
+  beside the existing "matters ready" line — the test instance
+  runs under the default log filter (RUST_LOG unset), so the
+  adoption here is proven by the counts, not by the log line.
+  Also fixed in passing: the matters store test helper now uses
+  a unique temp file per test — parallel tests sharing one
+  backing file could wipe each other's matters from disk, which
+  surfaced as a flaky failure in the Piece 4 regression test.
 
 ### Fixed
 - **Citator misattribution — a named reversal no longer lands on an

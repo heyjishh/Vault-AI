@@ -334,8 +334,9 @@ live round-trip not verified, no credentials in this environment).
   an attribution instruction, and the response carries per-document
   results (title, truncation, citator treatment resolved per
   document). The standalone view is scoped by the active brief
-  (AppShell passes it, as for Ask/Draft) with a This brief / Full
-  vault picker toggle; a brief's own Interact tab is always scoped.
+  (AppShell passes the resolved active brief, as for Ask/Draft);
+  under the brief-only vault model there is no wider scope, and a
+  brief's own Interact tab is scoped to that brief.
   Interact also takes uploads directly — multiple files, a whole
   folder (directory picker or drag-and-drop, folders traversed
   recursively) — through the same vault ingest route (no second
@@ -662,8 +663,16 @@ path config `LEGAL_RAG_FRONTEND_DIR` / `LEGAL_RAG_ADMIN_DIR`).
   Spec: `frontend/DESIGN.md`.
 - **User app** — view-state routing in `AppShell` (Dashboard, Ask, Vault,
   Briefs, Interact, Draft, Research, Agents, Private Vault, Plans & Billing,
-  Graph). Brief selection ("Working in") scopes Ask/Draft/Vault app-wide via
-  a shared active-brief context. History restore rehydrates full results
+  Graph). Brief selection ("Working in") scopes Ask/Draft/Vault/Interact
+  app-wide via a shared active-brief context. **Brief-only vault**: an
+  active brief always exists (the default brief when none is chosen —
+  the same fallback uploads use server-side), the switcher only
+  chooses which brief, and the Vault page and Interact show only the
+  active brief's documents — there is no full-vault view in the user
+  app. Backend invariant: every document is filed in at least one
+  brief (the boot migration adopts unfiled documents into the default
+  brief with the count logged; brief deletion and detach re-file
+  orphans the same way). History restore rehydrates full results
   (answers + citations + sources sidebar) from the activity store.
 - **Source viewer** — shared component (`components/SourceModal.tsx`,
   portal-rendered) used by Ask, Draft, Research, Agents: opens the full source
