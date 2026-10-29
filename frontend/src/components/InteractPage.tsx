@@ -15,7 +15,10 @@ export interface UploadItem {
   key: number
   file: File
   relPath: string
-  status: 'queued' | 'indexing' | 'ready' | 'failed' | 'skipped'
+  status: 'queued' | 'uploading' | 'indexing' | 'ready' | 'failed' | 'skipped'
+  /** Bytes-sent fraction (0..1) during 'uploading'; null when the
+   *  transport cannot measure it (indeterminate bar). */
+  progress?: number | null
   error?: string
   docId?: string
   /** e.g. "selected" / "already selected" / "selection full". */
@@ -256,10 +259,20 @@ export default function InteractPage({ matterId, allowScopeToggle }: { matterId?
       for (;;) {
         const item = uploadsRef.current.find((u) => u.status === 'queued')
         if (!item) break
-        patchUpload(item.key, { status: 'indexing' })
+        patchUpload(item.key, { status: 'uploading', progress: 0 })
         try {
           const title = item.file.name.replace(/\.[^.]+$/, '')
-          const report = await vaultApi.uploadFile(title, item.file, matterRef.current)
+          // Uploading = bytes in flight (progress events). Once the
+          // bytes are sent, the stage flips to Indexing and stays
+          // there until the server's ingest response lands — Ready
+          // means the document is indexed, not just received.
+          const report = await vaultApi.uploadFile(title, item.file, matterRef.current, (fraction) => {
+            if (fraction !== null && fraction >= 1) {
+              patchUpload(item.key, { status: 'indexing', progress: 1 })
+            } else {
+              patchUpload(item.key, { status: 'uploading', progress: fraction })
+            }
+          })
           const docId = report.doc_id ?? undefined
           let note: string | undefined
           if (docId) {
@@ -273,7 +286,7 @@ export default function InteractPage({ matterId, allowScopeToggle }: { matterId?
               note = 'selected'
             }
           }
-          patchUpload(item.key, { status: 'ready', docId, note })
+          patchUpload(item.key, { status: 'ready', docId, note, progress: 1 })
           qc.invalidateQueries({ queryKey: ['vault-docs'] })
         } catch (e) {
           patchUpload(item.key, { status: 'failed', error: (e as Error).message })
@@ -433,20 +446,70 @@ export default function InteractPage({ matterId, allowScopeToggle }: { matterId?
                 Clear list
               </button>
             </div>
-            <ul className="mt-1.5 space-y-1">
+            {(() => {
+              const finished = uploads.filter(
+                (u) => u.status === 'ready' || u.status === 'failed' || u.status === 'skipped',
+              ).length
+              const ready = uploads.filter((u) => u.status === 'ready').length
+              return (
+                <div className="mt-2">
+                  <div className="flex items-baseline justify-between gap-3">
+                    <span className="text-[12px] text-stone-500">
+                      {finished} of {uploads.length} files done · {ready} ready
+                    </span>
+                    <span className="text-[12px] text-stone-400">
+                      {Math.round((finished / uploads.length) * 100)}%
+                    </span>
+                  </div>
+                  <div className="h-1.5 mt-1 rounded-full bg-stone-200 overflow-hidden">
+                    <div
+                      className="h-full bg-stone-700 transition-all duration-300"
+                      style={{ width: `${(finished / uploads.length) * 100}%` }}
+                    />
+                  </div>
+                </div>
+              )
+            })()}
+            <ul className="mt-2 space-y-2">
               {uploads.map((u) => (
-                <li key={u.key} className="flex items-center gap-2 text-[13px]">
-                  <span className="flex-1 truncate">{u.relPath || u.file.name}</span>
-                  {u.status === 'queued' && <span className="text-stone-400">Queued</span>}
-                  {u.status === 'indexing' && <span className="text-stone-500">Indexing…</span>}
-                  {u.status === 'ready' && (
-                    <span className="text-emerald-700">Ready{u.note ? ` · ${u.note}` : ''}</span>
-                  )}
-                  {u.status === 'failed' && (
-                    <span className="text-[#a02c2c]">Failed: {u.error}</span>
-                  )}
-                  {u.status === 'skipped' && (
-                    <span className="text-amber-700">Skipped — {u.error}</span>
+                <li key={u.key} className="text-[13px]">
+                  <div className="flex items-center gap-2">
+                    <span className="flex-1 truncate">{u.relPath || u.file.name}</span>
+                    {u.status === 'queued' && <span className="text-stone-400">Queued</span>}
+                    {u.status === 'uploading' && (
+                      <span className="text-stone-500">
+                        Uploading…{u.progress != null ? ` ${Math.round(u.progress * 100)}%` : ''}
+                      </span>
+                    )}
+                    {u.status === 'indexing' && <span className="text-stone-500">Indexing…</span>}
+                    {u.status === 'ready' && (
+                      <span className="text-emerald-700">Ready{u.note ? ` · ${u.note}` : ''}</span>
+                    )}
+                    {u.status === 'failed' && (
+                      <span className="text-[#a02c2c]">Failed: {u.error}</span>
+                    )}
+                    {u.status === 'skipped' && (
+                      <span className="text-amber-700">Skipped — {u.error}</span>
+                    )}
+                  </div>
+                  {(u.status === 'uploading' || u.status === 'indexing' || u.status === 'ready') && (
+                    <div className="h-1 mt-1 rounded-full bg-stone-200 overflow-hidden">
+                      <div
+                        className={`h-full transition-all duration-300 ${
+                          u.status === 'ready'
+                            ? 'bg-emerald-600'
+                            : u.status === 'indexing'
+                              ? 'bg-stone-400 animate-pulse'
+                              : 'bg-stone-500'
+                        } ${u.status === 'uploading' && u.progress == null ? 'animate-pulse' : ''}`}
+                        style={{
+                          width:
+                            u.status === 'uploading' && u.progress != null
+                              ? `${Math.round(u.progress * 100)}%`
+                              : '100%',
+                        }}
+                      />
+                    </div>
                   )}
                 </li>
               ))}

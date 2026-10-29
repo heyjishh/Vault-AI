@@ -38,10 +38,25 @@ export default function VaultPage() {
     )
   }
 
+  // Upload stage for the dropzone: 'uploading' tracks real bytes
+  // sent; once they are sent the stage is 'indexing' until the
+  // server's ingest response lands (Ready = indexed, confirmed by
+  // the response, not by the send finishing).
+  const [uploadStage, setUploadStage] = useState<
+    { stage: 'uploading' | 'indexing'; fraction: number | null } | null
+  >(null)
   const uploadFile = useMutation({
-    mutationFn: (f: File) => vaultApi.uploadFile(title || f.name.replace(/\.[^.]+$/, ''), f, matterId),
+    mutationFn: (f: File) =>
+      vaultApi.uploadFile(title || f.name.replace(/\.[^.]+$/, ''), f, matterId, (fraction) =>
+        setUploadStage(
+          fraction !== null && fraction >= 1
+            ? { stage: 'indexing', fraction: 1 }
+            : { stage: 'uploading', fraction },
+        ),
+      ),
     onSuccess: (r) => { afterChange(r, r.documents > 0 ? 'Document' : 'File'); setTitle('') },
     onError: (e) => toast('error', (e as Error).message),
+    onSettled: () => setUploadStage(null),
   })
   const uploadText = useMutation({
     mutationFn: () => vaultApi.uploadText(title || 'Pasted document', 'pasted.txt', paste, matterId),
@@ -117,8 +132,27 @@ export default function VaultPage() {
           <FileUp size={26} className="mx-auto text-stone-400" />
         )}
         <p className="font-medium text-[15px] mt-3">
-          {uploadFile.isPending ? 'Indexing your document…' : 'Drop a file here, or click to browse'}
+          {uploadFile.isPending
+            ? uploadStage?.stage === 'indexing'
+              ? 'Indexing your document…'
+              : `Uploading…${uploadStage?.fraction != null ? ` ${Math.round(uploadStage.fraction * 100)}%` : ''}`
+            : 'Drop a file here, or click to browse'}
         </p>
+        {uploadFile.isPending && (
+          <div className="h-1.5 mt-4 max-w-sm mx-auto rounded-full bg-stone-200 overflow-hidden">
+            <div
+              className={`h-full transition-all duration-300 ${
+                uploadStage?.stage === 'indexing' ? 'bg-stone-400 animate-pulse' : 'bg-stone-500'
+              } ${uploadStage?.stage === 'uploading' && uploadStage?.fraction == null ? 'animate-pulse' : ''}`}
+              style={{
+                width:
+                  uploadStage?.stage === 'uploading' && uploadStage?.fraction != null
+                    ? `${Math.round(uploadStage.fraction * 100)}%`
+                    : '100%',
+              }}
+            />
+          </div>
+        )}
         <p className="text-[13px] text-stone-500 mt-1 flex items-center justify-center gap-1.5">
           PDF · TXT · MD <span className="inline-flex items-center gap-1 rounded-full bg-stone-100 border border-stone-200 px-2 py-0.5 text-[11px]"><ScanText size={11} /> scanned pages auto-OCR'd</span>
         </p>

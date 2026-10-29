@@ -15,6 +15,18 @@ live**, what is **built but unverified**, and what is **roadmap**.
 ## [Unreleased]
 
 ### Added
+- **Upload + indexing progress UI (29 Oct 2026)**: uploads now show
+  real stage progress instead of a spinner. Per file: **Uploading**
+  with a determinate byte-progress bar (the transport's upload
+  progress events; indeterminate pulse when the transport cannot
+  measure), then **Indexing** once the bytes are sent, and **Ready**
+  only when the server's ingest response confirms the document is
+  indexed — a file is never shown ready on send alone. The batch
+  header adds an aggregate bar (files done / total with a ready
+  count). The Vault page's dropzone carries the same
+  Uploading → Indexing stages and bar via the shared upload client
+  (`vaultApi.uploadFile` gained an optional progress callback; no
+  new dependencies, existing ivory/ink styling).
 - **Interact: brief-wide working set by default (29 Oct 2026)**: with
   a brief active, Interact's working set is now **all documents
   filed in that brief** — an explicit "All documents in this brief

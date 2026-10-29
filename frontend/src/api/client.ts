@@ -137,14 +137,35 @@ export const vaultApi = {
   async listInMatter(matter_id: string): Promise<DocumentInfo[]> {
     const r = await api.get<DocumentInfo[]>('/vault/documents', { params: { matter_id } }); return r.data
   },
-  async uploadFile(title: string, file: File, matter_id?: string): Promise<IngestReport> {
+  /**
+   * Upload one file through the vault ingest route. `onProgress`
+   * reports the Uploading stage as a 0..1 fraction of the request
+   * body bytes sent (null when the transport cannot measure it);
+   * the promise itself resolves only when the server has finished
+   * ingesting and indexing the document — that gap is the Indexing
+   * stage, so a file is never "ready" before the server confirms it.
+   */
+  async uploadFile(
+    title: string,
+    file: File,
+    matter_id?: string,
+    onProgress?: (fraction: number | null) => void,
+  ): Promise<IngestReport> {
     const buf = await file.arrayBuffer()
     let binary = ''
     const bytes = new Uint8Array(buf)
     for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i])
     const content_base64 = btoa(binary)
     try {
-      const r = await api.post<IngestReport>('/vault/documents', { title, file_name: file.name, content_base64, matter_id })
+      const r = await api.post<IngestReport>(
+        '/vault/documents',
+        { title, file_name: file.name, content_base64, matter_id },
+        {
+          onUploadProgress: onProgress
+            ? (e) => onProgress(e.total ? Math.min(e.loaded / e.total, 1) : null)
+            : undefined,
+        },
+      )
       return r.data
     } catch (e) { throw new Error(err(e)) }
   },
