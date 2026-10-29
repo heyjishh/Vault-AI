@@ -200,7 +200,7 @@ impl QueryService {
             doc_offset += hits.len();
 
             if use_web {
-                let pages: Vec<FetchedPage> = self.gather_web(&h.question, 2).await;
+                let pages: Vec<FetchedPage> = self.gather_web(&h.question, 2).await.pages;
                 for (i, page) in pages.iter().enumerate() {
                     let id = web_offset + i;
                     let text: String = page.text.chars().take(1200).collect();

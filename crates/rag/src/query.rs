@@ -326,6 +326,45 @@ pub struct CitatorContext {
     pub applicant: Option<String>,
 }
 
+/// How a web gather ended. The web leg is failure-isolated — Ask and
+/// Research always proceed on the corpus — but never *silently*: any
+/// outcome other than `Delivered` becomes a user-visible note, so a
+/// corpus-only answer is never mistaken for a web-augmented one.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) enum WebOutcome {
+    /// Pages were fetched and blended into the answer.
+    Delivered,
+    /// Search ran but returned no usable results.
+    NoResults,
+    /// The leg failed (engine error, sidecar crash, timeout, disabled).
+    Failed(String),
+}
+
+impl WebOutcome {
+    /// The user-facing note for a non-delivered outcome.
+    pub(crate) fn note(&self) -> Option<String> {
+        match self {
+            WebOutcome::Delivered => None,
+            WebOutcome::NoResults => Some(
+                "Live web search found no usable sources for this question; \
+                 this answer is based only on your vault."
+                    .to_string(),
+            ),
+            WebOutcome::Failed(reason) => Some(format!(
+                "Live web search was unavailable for this answer ({reason}); \
+                 it is based only on your vault."
+            )),
+        }
+    }
+}
+
+/// Pages plus the leg's outcome — `gather_web`'s return value.
+#[derive(Debug, Clone)]
+pub(crate) struct WebGather {
+    pub pages: Vec<FetchedPage>,
+    pub outcome: WebOutcome,
+}
+
 pub struct QueryService {
     embeddings: Arc<dyn Embeddings>,
     store: Arc<dyn VectorStore>,
@@ -1100,6 +1139,9 @@ impl QueryService {
 
     /// Query with live web augmentation: local retrieval plus stealth-fetched
     /// web pages, cited as `[web:N]` alongside corpus `[doc:N]` citations.
+    /// The web leg is failure-isolated: whatever happens to it, the
+    /// corpus query still runs, and when the leg did not deliver the
+    /// answer carries an explicit note saying so (scope_note).
     pub async fn query_with_web(
         &self,
         question: &str,
@@ -1110,27 +1152,81 @@ impl QueryService {
         strict: bool,
         ctx: CitatorContext,
     ) -> Result<QueryAnswer> {
-        let pages = self.gather_web(question, web_results).await;
+        let gather = self.gather_web(question, web_results).await;
         let scope: Option<DocScope> = scope_docs.map(|docs| docs.into_iter().collect());
-        self.query_inner(question, mode, top_k, &pages, scope, &[], strict, None, &ctx).await
+        let mut ans = self
+            .query_inner(question, mode, top_k, &gather.pages, scope, &[], strict, None, &ctx)
+            .await?;
+        if let Some(note) = gather.outcome.note() {
+            ans.scope_note = Some(match ans.scope_note.take() {
+                Some(existing) => format!("{existing} {note}"),
+                None => note,
+            });
+        }
+        Ok(ans)
     }
 
-    /// Fetch + extract top web pages for a question (best-effort; failures
-    /// are skipped, never fatal). The search sidecar returns up to 2x
-    /// deduped, authority-ranked candidates. Fetching runs in two waves:
-    /// the top-3 candidates (primary sources — court PDFs are slow under
-    /// load) get a protected wave with a full budget, then the rest of
-    /// the window races to fill the remaining slots, keeping the first
-    /// `max_results` successes in ranked order — one bot-guarded site can
-    /// neither stall the leg nor sink it (no fallback candidates).
-    pub(crate) async fn gather_web(&self, question: &str, max_results: usize) -> Vec<FetchedPage> {
-        let results = match self.web.search(question, max_results).await {
-            Ok(r) => r,
-            Err(e) => {
-                warn!(error = %e, "web search failed");
-                return Vec::new();
+    /// Fetch + extract top web pages for a question. The leg is
+    /// failure-isolated (it never returns Err) but never silent: the
+    /// returned [`WebGather`] carries the outcome so callers can tell
+    /// the user when an answer is corpus-only.
+    ///
+    /// THE 502, PINNED (2026-10-29): the web leg itself never produced
+    /// the bare 502 users saw on web-mode Ask. This function always
+    /// swallowed search errors and returned an empty vec, after which
+    /// the corpus query ran and either succeeded (silently corpus-only,
+    /// no note) or failed at a LATER stage — and any `Error::Upstream`
+    /// from that stage (embeddings/LLM: the Cloudflare 429 neuron wall
+    /// in prod, bridge failures on the test instance) is mapped to a
+    /// bare HTTP 502 by the server's error type. Web mode made it the
+    /// visible failure because the dead search leg first burned
+    /// 60–150 s returning nothing (throttled engines, a Bing parser
+    /// broken by a markup change, a Firefox fallback that got the same
+    /// block page), so the user paid full latency for zero web value
+    /// and then met the next flaky stage with no fallback and no
+    /// explanation. The fixes are the three parts of this change: a
+    /// search that actually returns (sidecar rebuild), strict time
+    /// budgets here, and the outcome note surfaced to the user.
+    ///
+    /// Fetching runs in two waves: the top-3 candidates (primary
+    /// sources — court PDFs are slow under load) get a protected wave
+    /// with a full budget, then the rest of the window races to fill
+    /// the remaining slots, keeping the first `max_results` successes
+    /// in ranked order — one bot-guarded site can neither stall the
+    /// leg nor sink it (no fallback candidates).
+    pub(crate) async fn gather_web(&self, question: &str, max_results: usize) -> WebGather {
+        // Search stage: hard 60s cap (the sidecar self-limits to ~40s;
+        // this guards a hung sidecar process). The provider's own
+        // 120s process timeout remains the outer bound for fetches.
+        let results = match tokio::time::timeout(
+            std::time::Duration::from_secs(60),
+            self.web.search(question, max_results),
+        )
+        .await
+        {
+            Ok(Ok(r)) => r,
+            Ok(Err(e)) => {
+                warn!(stage = "search", error = %e, "web leg failed");
+                return WebGather {
+                    pages: Vec::new(),
+                    outcome: WebOutcome::Failed(e.to_string()),
+                };
+            }
+            Err(_) => {
+                warn!(stage = "search", "web leg failed: search timed out after 60s");
+                return WebGather {
+                    pages: Vec::new(),
+                    outcome: WebOutcome::Failed("search timed out".to_string()),
+                };
             }
         };
+        if results.is_empty() {
+            info!(stage = "search", "web leg: search returned no results");
+            return WebGather {
+                pages: Vec::new(),
+                outcome: WebOutcome::NoResults,
+            };
+        }
         let window = (max_results + 3).min(results.len());
         let results: Vec<crate::web::WebResult> =
             results.into_iter().take(window).collect();
@@ -1154,7 +1250,7 @@ impl QueryService {
                 set.spawn(async move { (i, web.fetch(&url).await) });
             }
             let deadline =
-                tokio::time::Instant::now() + std::time::Duration::from_secs(45);
+                tokio::time::Instant::now() + std::time::Duration::from_secs(40);
             while !set.is_empty() {
                 match tokio::time::timeout_at(deadline, set.join_next()).await {
                     Ok(Some(Ok((i, Ok(p))))) => {
@@ -1218,13 +1314,20 @@ impl QueryService {
                 idx.sort_unstable();
                 let cutoff = idx[max_results - 1];
                 if done[..=cutoff].iter().all(|d| *d)
-                    || elapsed > std::time::Duration::from_secs(20)
+                    || elapsed > std::time::Duration::from_secs(15)
                 {
                     set.abort_all();
                     break;
                 }
             }
-            if elapsed > std::time::Duration::from_secs(45) && !ok.is_empty() {
+            if elapsed > std::time::Duration::from_secs(35) && !ok.is_empty() {
+                set.abort_all();
+                break;
+            }
+            if elapsed > std::time::Duration::from_secs(60) {
+                // Absolute cap: even with zero successes the leg must
+                // end — each fetch is bounded by the sidecar timeout,
+                // but the leg's own budget is stricter.
                 set.abort_all();
                 break;
             }
@@ -1232,8 +1335,24 @@ impl QueryService {
         ok.sort_by_key(|(i, _)| *i);
         let pages: Vec<FetchedPage> =
             ok.into_iter().map(|(_, p)| p).take(max_results).collect();
-        info!(pages = pages.len(), "web pages gathered");
-        pages
+        if pages.is_empty() {
+            warn!(
+                stage = "fetch",
+                candidates = window,
+                "web leg failed: no candidate page could be fetched"
+            );
+            return WebGather {
+                pages,
+                outcome: WebOutcome::Failed(format!(
+                    "none of the {window} candidate pages could be fetched"
+                )),
+            };
+        }
+        info!(stage = "fetch", pages = pages.len(), "web pages gathered");
+        WebGather {
+            pages,
+            outcome: WebOutcome::Delivered,
+        }
     }
 
     /// Precision pass: score candidates with the reranker and keep the best
@@ -1746,7 +1865,11 @@ impl QueryService {
             },
         });
         let pages = if web {
-            self.gather_web(question, web_results).await
+            let gather = self.gather_web(question, web_results).await;
+            if let Some(note) = gather.outcome.note() {
+                let _ = tx.send(QueryEvent::Status { message: note });
+            }
+            gather.pages
         } else {
             Vec::new()
         };
@@ -3842,5 +3965,208 @@ mod tests {
     fn pinpoint_is_none_without_support() {
         let text = "The weather in Delhi remained dry throughout the week with mild winds.";
         assert!(best_sentence(text, "What does Section 86 say about income tax?").is_none());
+    }
+
+    // --- Web leg failure isolation (Piece 1b, 2026-10-29) -------------
+
+    struct FailingWeb;
+    #[async_trait::async_trait]
+    impl WebSearch for FailingWeb {
+        fn name(&self) -> &str {
+            "failing-test"
+        }
+        async fn search(
+            &self,
+            _q: &str,
+            _m: usize,
+        ) -> legal_rag_common::Result<Vec<crate::web::WebResult>> {
+            Err(legal_rag_common::Error::Upstream("engine exploded".into()))
+        }
+        async fn fetch(&self, _u: &str) -> legal_rag_common::Result<FetchedPage> {
+            Err(legal_rag_common::Error::Upstream("fetch exploded".into()))
+        }
+    }
+
+    struct EmptyWeb;
+    #[async_trait::async_trait]
+    impl WebSearch for EmptyWeb {
+        fn name(&self) -> &str {
+            "empty-test"
+        }
+        async fn search(
+            &self,
+            _q: &str,
+            _m: usize,
+        ) -> legal_rag_common::Result<Vec<crate::web::WebResult>> {
+            Ok(Vec::new())
+        }
+        async fn fetch(&self, _u: &str) -> legal_rag_common::Result<FetchedPage> {
+            Err(legal_rag_common::Error::Upstream("no fetch expected".into()))
+        }
+    }
+
+    struct OnePageWeb;
+    #[async_trait::async_trait]
+    impl WebSearch for OnePageWeb {
+        fn name(&self) -> &str {
+            "one-page-test"
+        }
+        async fn search(
+            &self,
+            _q: &str,
+            _m: usize,
+        ) -> legal_rag_common::Result<Vec<crate::web::WebResult>> {
+            Ok(vec![crate::web::WebResult {
+                url: "https://indiankanoon.org/doc/1/".into(),
+                title: "Kanoon result".into(),
+                snippet: String::new(),
+            }])
+        }
+        async fn fetch(&self, url: &str) -> legal_rag_common::Result<FetchedPage> {
+            Ok(FetchedPage {
+                url: url.to_string(),
+                title: "Kanoon result".into(),
+                text: "Agricultural income is exempt under section 10(1).".into(),
+                date: None,
+            })
+        }
+    }
+
+    struct UnfetchableWeb;
+    #[async_trait::async_trait]
+    impl WebSearch for UnfetchableWeb {
+        fn name(&self) -> &str {
+            "unfetchable-test"
+        }
+        async fn search(
+            &self,
+            _q: &str,
+            _m: usize,
+        ) -> legal_rag_common::Result<Vec<crate::web::WebResult>> {
+            Ok(vec![crate::web::WebResult {
+                url: "https://example.test/dead".into(),
+                title: "Dead page".into(),
+                snippet: String::new(),
+            }])
+        }
+        async fn fetch(&self, _u: &str) -> legal_rag_common::Result<FetchedPage> {
+            Err(legal_rag_common::Error::Upstream("connection reset".into()))
+        }
+    }
+
+    async fn svc_with_web(web: Arc<dyn WebSearch>) -> QueryService {
+        let rag = Arc::new(RagAnything::new(
+            RagAnythingConfig::default(),
+            Arc::new(MockEmbeddings::new(16)),
+            Arc::new(InMemoryVectorStore::new()),
+            Arc::new(InMemoryGraphStore::new()),
+            Arc::new(MockLlm::new(r#"["Acme"]"#)),
+            500,
+            50,
+        ));
+        rag.process_document_complete(
+            "nda.txt",
+            b"Acme Corp agrees to confidentiality. Acme shall not disclose.",
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+        let rag2 = rag.clone();
+        QueryService::new(
+            rag2.backends().0,
+            rag2.backends().1,
+            rag2.backends().2,
+            Arc::new(MockLlm::new("The answer is grounded [doc:0].")),
+            Arc::new(move |id: &str| rag2.doc_title(id)),
+            web,
+            None,
+        )
+    }
+
+    #[tokio::test]
+    async fn gather_web_outcomes_distinguish_failure_modes() {
+        let svc = svc_with_web(Arc::new(FailingWeb)).await;
+        let g = svc.gather_web("anything", 3).await;
+        assert!(g.pages.is_empty());
+        assert!(
+            matches!(g.outcome, WebOutcome::Failed(ref r) if r.contains("engine exploded")),
+            "got: {:?}",
+            g.outcome
+        );
+
+        let svc = svc_with_web(Arc::new(EmptyWeb)).await;
+        let g = svc.gather_web("anything", 3).await;
+        assert!(g.pages.is_empty());
+        assert_eq!(g.outcome, WebOutcome::NoResults);
+
+        let svc = svc_with_web(Arc::new(UnfetchableWeb)).await;
+        let g = svc.gather_web("anything", 3).await;
+        assert!(g.pages.is_empty());
+        assert!(
+            matches!(g.outcome, WebOutcome::Failed(ref r) if r.contains("candidate pages could be fetched")),
+            "got: {:?}",
+            g.outcome
+        );
+
+        let svc = svc_with_web(Arc::new(OnePageWeb)).await;
+        let g = svc.gather_web("agricultural income", 3).await;
+        assert_eq!(g.pages.len(), 1);
+        assert_eq!(g.outcome, WebOutcome::Delivered);
+    }
+
+    #[tokio::test]
+    async fn query_with_web_failure_answers_corpus_only_with_note() {
+        let svc = svc_with_web(Arc::new(FailingWeb)).await;
+        let ans = svc
+            .query_with_web(
+                "What does Acme agree to?",
+                QueryMode::Mix,
+                5,
+                3,
+                None,
+                false,
+                CitatorContext::default(),
+            )
+            .await
+            .expect("web failure must never fail the ask");
+        assert!(ans.answer.contains("grounded"), "got: {}", ans.answer);
+        let note = ans.scope_note.expect("a web-unavailable note");
+        assert!(
+            note.contains("Live web search was unavailable"),
+            "got: {note}"
+        );
+        assert!(
+            !ans.citations.iter().any(|c| c.doc_id.starts_with("web:")),
+            "no web citations on a failed leg"
+        );
+    }
+
+    #[tokio::test]
+    async fn query_with_web_delivered_blends_without_note() {
+        let svc = svc_with_web(Arc::new(OnePageWeb)).await;
+        let ans = svc
+            .query_with_web(
+                "What does Acme agree to?",
+                QueryMode::Mix,
+                5,
+                3,
+                None,
+                false,
+                CitatorContext::default(),
+            )
+            .await
+            .unwrap();
+        assert!(
+            ans.citations.iter().any(|c| c.doc_id == "web:0"),
+            "web citation blended: {:?}",
+            ans.citations.iter().map(|c| &c.doc_id).collect::<Vec<_>>()
+        );
+        let note = ans.scope_note.unwrap_or_default();
+        assert!(
+            !note.contains("web search was unavailable")
+                && !note.contains("no usable sources"),
+            "no failure note on a delivered leg, got: {note}"
+        );
     }
 }
