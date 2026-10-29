@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { FileText, FileUp, Loader2, Scale, ScanText, Trash2, X } from 'lucide-react'
+import { FileText, FileUp, FolderUp, Loader2, Scale, ScanText, Trash2, X } from 'lucide-react'
 import { mattersApi, vaultApi } from '../api/client'
 import type { DocumentInfo, IngestReport } from '../api/types'
 import { useSession } from '../stores/session'
@@ -10,6 +10,7 @@ import { EmptyState, Pager, Spinner, usePagination } from './ui'
 import {
   UploadProgressList, formatElapsed, isPendingStatus, useNow,
   applyBatchCaps, batchLabelFor, filesFromDataTransfer, UPLOAD_ACCEPT,
+  MAX_BATCH_FILES, MAX_BATCH_FOLDERS,
   type ProgressItemView,
 } from './UploadProgress'
 
@@ -44,6 +45,7 @@ export default function VaultPage() {
   const filteredDocs = (docs ?? []).filter((d) => d.title.toLowerCase().includes(docQuery.trim().toLowerCase()))
   const pagedDocs = usePagination(filteredDocs, 8)
   const fileRef = useRef<HTMLInputElement>(null)
+  const folderRef = useRef<HTMLInputElement>(null)
   const toast = useSession((s) => s.toast)
 
   function afterChange(r: IngestReport, what: string) {
@@ -59,7 +61,9 @@ export default function VaultPage() {
 
   // File uploads (Piece 18): a per-file staged queue — the picker
   // takes multiple files and a drop takes every dropped file (and
-  // traverses dropped folders), all under the shared batch caps,
+  // traverses dropped folders), all under the shared batch caps.
+  // Piece 19 adds the missing folder PICKER (webkitdirectory)
+  // beside the dropzone, feeding the same queue via enqueuePicked,
   // rendered by the shared UploadProgressList. This replaces the
   // single-upload mutation and its Piece 17 failure row: every file
   // gets its own row with stage, byte progress ('uploading' tracks
@@ -278,6 +282,27 @@ export default function VaultPage() {
           }}
         />
       </motion.div>
+
+      <div className="mt-3 flex items-center justify-center gap-3 flex-wrap">
+        <label className="inline-flex items-center gap-1.5 rounded-full border border-stone-300 px-3.5 py-1.5 text-[13px] font-medium cursor-pointer hover:bg-stone-100 transition-colors">
+          <FolderUp size={13} /> Upload a folder
+          <input
+            ref={folderRef} type="file" className="hidden"
+            {...({ webkitdirectory: '' } as Record<string, string>)}
+            onChange={(e) => {
+              const files = Array.from(e.target.files ?? []).map((file) => ({
+                file,
+                relPath: file.webkitRelativePath || '',
+              }))
+              e.target.value = ''
+              enqueuePicked(files)
+            }}
+          />
+        </label>
+        <span className="text-[12.5px] text-stone-400">
+          up to {MAX_BATCH_FILES} files and {MAX_BATCH_FOLDERS} folders per batch
+        </span>
+      </div>
 
       {fileItems.length > 0 && (
         <UploadProgressList
