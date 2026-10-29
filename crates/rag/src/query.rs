@@ -3543,7 +3543,16 @@ mod tests {
     /// "[]", which the expansion/extraction callers degrade on.
     struct FlakyAnswerLlm {
         answer_calls: std::sync::atomic::AtomicUsize,
+        page: &'static str,
     }
+
+    /// The Piece 14 failure page.
+    const FAILURE_PAGE: &str =
+        "Sorry, something went wrong. Please try your request again.";
+    /// The Piece 15 failure page: Gemini's could-not-generate text,
+    /// which the Piece 14 detector missed (no "sorry" opening).
+    const FAILURE_PAGE_VARIANT: &str =
+        "I seem to be encountering an error. Can I try something else for you?";
 
     #[async_trait::async_trait]
     impl LlmClient for FlakyAnswerLlm {
@@ -3553,10 +3562,7 @@ mod tests {
                     .answer_calls
                     .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                 if n == 0 {
-                    return Ok(
-                        "Sorry, something went wrong. Please try your request again."
-                            .to_string(),
-                    );
+                    return Ok(self.page.to_string());
                 }
                 return Ok("Recovered grounded answer [doc:0].".to_string());
             }
@@ -3566,6 +3572,16 @@ mod tests {
 
     /// `seeded()` with the flaky answer LLM wired into the service.
     async fn flaky_seeded() -> QueryService {
+        flaky_seeded_page(FAILURE_PAGE).await
+    }
+
+    /// Same, but the first answer call delivers the Piece 15 failure
+    /// page variant.
+    async fn variant_flaky_seeded() -> QueryService {
+        flaky_seeded_page(FAILURE_PAGE_VARIANT).await
+    }
+
+    async fn flaky_seeded_page(page: &'static str) -> QueryService {
         let rag = Arc::new(RagAnything::new(
             RagAnythingConfig::default(),
             Arc::new(MockEmbeddings::new(16)),
@@ -3590,6 +3606,7 @@ mod tests {
             rag2.backends().2,
             Arc::new(FlakyAnswerLlm {
                 answer_calls: std::sync::atomic::AtomicUsize::new(0),
+                page,
             }),
             Arc::new(move |id: &str| rag2.doc_title(id)),
             Arc::new(crate::web::NoopWebSearch),
@@ -3645,6 +3662,63 @@ mod tests {
             .await;
         assert!(first.is_err(), "streamed failure page must error, not Done");
         while rx.try_recv().is_ok() {}
+        let (tx2, mut rx2) = tokio::sync::mpsc::unbounded_channel::<QueryEvent>();
+        svc.query_stream("What did Acme agree to?", QueryMode::Mix, 3, false, 3, tx2)
+            .await
+            .unwrap();
+        let mut done_answer = None;
+        while let Ok(ev) = rx2.try_recv() {
+            if let QueryEvent::Done { answer, .. } = ev {
+                done_answer = Some(answer);
+            }
+        }
+        let done = done_answer.expect("second stream completes with Done");
+        assert!(done.contains("Recovered grounded answer"), "{done}");
+    }
+
+    #[tokio::test]
+    async fn failure_variant_is_an_error_and_never_cached() {
+        // Piece 15 regression: the SECOND Gemini failure page gets
+        // the Piece 14 contract too — it errors instead of serving,
+        // and the identical retry regenerates rather than replaying
+        // a cached copy of the failure (the :3001 incident: this
+        // exact text was served as an answer, then re-served in 0s).
+        let svc = variant_flaky_seeded().await;
+        let first = svc
+            .query("What did Acme agree to?", QueryMode::Mix, 3, CitatorContext::default())
+            .await;
+        assert!(
+            first.is_err(),
+            "failure variant must not be served as an answer: {:?}",
+            first.map(|a| a.answer)
+        );
+        let second = svc
+            .query("What did Acme agree to?", QueryMode::Mix, 3, CitatorContext::default())
+            .await
+            .unwrap();
+        assert!(
+            second.answer.contains("Recovered grounded answer"),
+            "{}",
+            second.answer
+        );
+    }
+
+    #[tokio::test]
+    async fn failure_variant_stream_is_an_error_and_never_cached() {
+        // Piece 15, streaming composition: a failure variant arriving
+        // over the stream errors the stream (no Done carrying the
+        // failure text, no cache store); the retry streams honestly.
+        let svc = variant_flaky_seeded().await;
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<QueryEvent>();
+        let first = svc
+            .query_stream("What did Acme agree to?", QueryMode::Mix, 3, false, 3, tx)
+            .await;
+        assert!(first.is_err(), "streamed failure variant must error, not Done");
+        while let Ok(ev) = rx.try_recv() {
+            if let QueryEvent::Done { answer, .. } = ev {
+                panic!("failed stream must not emit Done, got: {answer}");
+            }
+        }
         let (tx2, mut rx2) = tokio::sync::mpsc::unbounded_channel::<QueryEvent>();
         svc.query_stream("What did Acme agree to?", QueryMode::Mix, 3, false, 3, tx2)
             .await

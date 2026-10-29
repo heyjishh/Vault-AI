@@ -525,6 +525,27 @@ live**, what is **built but unverified**, and what is **roadmap**.
   surfaced as a flaky failure in the Piece 4 regression test.
 
 ### Fixed
+- **Second Gemini failure page recognised and purged (29 Oct 2026,
+  Piece 15, defect 1).** The bridge has more than one failure page:
+  "I seem to be encountering an error. Can I try something else for
+  you?" — Gemini's could-not-generate text — did not open with the
+  Piece 14 prefix, so it was served as a genuine Ask answer (with the
+  scoped brief's citation attached) and cached, then re-served in 0s.
+  `is_failure_output` now covers both observed pages plus the same
+  UI's other failure phrasings, each a full opening phrase (the
+  trouble page is keyed on its connection-specific opening — a bare
+  "I'm having trouble…" is deliberately NOT matched, because a
+  genuine short answer can open that way; the ≤200-char whole-output
+  cap remains the second guard, and long answers that quote a
+  failure page inside an analysis stay safe). With the extended
+  detector, the standing purge-on-read machinery in both caches
+  evicts the stored poison on first touch, and the Ask generation
+  exits (blocking + streaming) error on the variant instead of
+  polishing it into an answer. **Verified live on :3001**: the exact
+  incident input (Brief vault ON, the probe brief, the royalty
+  question) regenerated an honest grounded result in place of the
+  error text; a control unscoped Ask answered normally (no
+  false-positive on real content).
 - **Provider failure pages are never cached as answers (29 Oct 2026,
   Piece 14).** A web-backed LLM bridge returns its failure page as an
   ordinary HTTP 200 completion ("Sorry, something went wrong. Please

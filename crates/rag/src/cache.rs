@@ -396,6 +396,13 @@ mod tests {
     /// completion (the :3001 poison, 2026-10-29).
     const FAILURE_PAGE: &str = "Sorry, something went wrong. Please try your request again.";
 
+    /// The SECOND failure page the same bridge returns (Piece 15,
+    /// :3001, 2026-10-29): Gemini's could-not-generate text. It does
+    /// not open with "sorry", so the Piece 14 detector missed it and
+    /// it was cached exactly like the first variant.
+    const FAILURE_PAGE_VARIANT: &str =
+        "I seem to be encountering an error. Can I try something else for you?";
+
     /// LLM that plays a fixed script of `Ok` responses and counts how
     /// often it was actually called — a cache serve never increments.
     struct ScriptedLlm {
@@ -528,6 +535,48 @@ mod tests {
         cache.store(qvec.clone(), "scope".to_string(), qa("grounded answer"));
         let hit = cache.lookup(&qvec, "scope").expect("real answer serves");
         assert_eq!(hit.answer, "grounded answer");
+    }
+
+    #[tokio::test]
+    async fn llm_failure_variant_is_never_cached_and_retry_reaches_provider() {
+        // Piece 15: the second Gemini failure page gets the Piece 14
+        // treatment at the completion cache — never written, and a
+        // copy stored by the old detector is purged on read.
+        let inner = Arc::new(ScriptedLlm::new(vec![FAILURE_PAGE_VARIANT, "real answer"]));
+        let cached = CachedLlm::new(inner.clone(), Arc::new(SemanticCache::new(16)));
+        let first = cached.complete("sys", "user").await.unwrap();
+        assert_eq!(first, FAILURE_PAGE_VARIANT, "unguarded text passes through once");
+        let second = cached.complete("sys", "user").await.unwrap();
+        assert_eq!(second, "real answer");
+        assert_eq!(inner.calls(), 2, "retry reached the provider, not the cache");
+
+        let cache = Arc::new(SemanticCache::new(16));
+        let key = format!("llm:{}", hash_key(&["sys2", "user2"]));
+        cache.put(key.clone(), FAILURE_PAGE_VARIANT.as_bytes().to_vec());
+        let inner2 = Arc::new(ScriptedLlm::new(vec!["real answer"]));
+        let cached2 = CachedLlm::new(inner2.clone(), cache);
+        let out = cached2.complete("sys2", "user2").await.unwrap();
+        assert_eq!(out, "real answer");
+        assert_eq!(inner2.calls(), 1, "stored variant purged, provider consulted");
+    }
+
+    #[test]
+    fn answer_cache_purges_the_failure_variant_on_lookup() {
+        // Piece 15: the semantic answer cache's purge-on-read covers
+        // the second failure page too — the :3001 incident entry
+        // (a hard brief-vault answer holding this text) self-heals
+        // on the first lookup after the fix.
+        let cache = SemanticAnswerCache::new(16, 0.97);
+        cache.entries.lock().unwrap().push_back(SemanticAnswerEntry {
+            qvec: vec![1.0, 0.0],
+            scope_key: "scope".to_string(),
+            answer: qa(FAILURE_PAGE_VARIANT),
+        });
+        assert!(cache.lookup(&[1.0, 0.0], "scope").is_none());
+        assert_eq!(cache.stats().entries, 0, "variant entry evicted on read");
+        // And the store side refuses it as well.
+        cache.store(vec![1.0, 0.0], "scope".to_string(), qa(FAILURE_PAGE_VARIANT));
+        assert_eq!(cache.stats().entries, 0, "variant refused at store");
     }
 
     #[test]

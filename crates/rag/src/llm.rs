@@ -38,7 +38,30 @@ pub trait LlmClient: Send + Sync {
 /// real answer and every downstream cache will store and re-serve it
 /// as one (Piece 14, pinned live 2026-10-29: an Interact chat's
 /// one-off bridge failure was cached and replayed in 0s forever).
-const FAILURE_OUTPUT_PREFIXES: &[&str] = &["sorry, something went wrong"];
+/// The Gemini web UI has more than one failure page: Piece 15 (same
+/// evening) caught a second variant — "I seem to be encountering an
+/// error. Can I try something else for you?" — served as an Ask answer
+/// and cached the same way. The list below covers both observed pages
+/// plus the UI's other known failure phrasings; each entry is a full
+/// opening phrase, not a lone keyword, so genuine prose that merely
+/// mentions a failure cannot match (the ≤200-char whole-output cap in
+/// `is_failure_output` is the second guard).
+const FAILURE_OUTPUT_PREFIXES: &[&str] = &[
+    // Observed on :3001 (Piece 14).
+    "sorry, something went wrong",
+    // Observed on :3001 (Piece 15): Gemini's could-not-generate page.
+    "i seem to be encountering an error",
+    "sorry, i seem to be encountering an error",
+    // Gemini web's generic failure pages (same UI family). The
+    // trouble page is keyed on its connection-specific opening —
+    // a bare "I'm having trouble…" is NOT used, because a genuine
+    // short answer can plausibly open that way ("I'm having trouble
+    // locating any royalty clause…") and must never be eaten.
+    "something went wrong. please try again",
+    "something went wrong. try again",
+    "i'm having trouble connecting",
+    "i am having trouble connecting",
+];
 
 /// True when a completion is a provider failure page rather than a
 /// generated answer. Deliberately conservative: the ENTIRE trimmed
@@ -407,6 +430,29 @@ mod tests {
     }
 
     #[test]
+    fn failure_output_detects_the_second_bridge_failure_page() {
+        // Piece 15: the exact text the Gemini web bridge delivered as
+        // an Ask answer on :3001 (2026-10-29) and got cached — the
+        // Piece 14 list missed it because it does not open with
+        // "sorry".
+        assert!(is_failure_output(
+            "I seem to be encountering an error. Can I try something else for you?"
+        ));
+        assert!(is_failure_output(
+            "  i seem to be encountering an error. can i try something else for you?\n"
+        ));
+        assert!(is_failure_output(
+            "Sorry, I seem to be encountering an error."
+        ));
+        // The same UI's other failure phrasings.
+        assert!(is_failure_output("Something went wrong. Please try again."));
+        assert!(is_failure_output("Something went wrong. Try again later."));
+        assert!(is_failure_output(
+            "I'm having trouble connecting right now. Please try again later."
+        ));
+    }
+
+    #[test]
     fn failure_output_ignores_genuine_answers() {
         assert!(!is_failure_output(""));
         assert!(!is_failure_output("   "));
@@ -423,5 +469,24 @@ mod tests {
         );
         assert!(long.chars().count() > 200);
         assert!(!is_failure_output(&long));
+        // Same guard for the Piece 15 variant: a genuine analysis
+        // that quotes the failure page inside a longer answer is an
+        // answer, not a failure page.
+        let long_variant = format!(
+            "I seem to be encountering an error in the premise of the question. {}",
+            "The bye-laws contain no provision for a mining royalty; \
+             the only charges they authorise are the subscription and \
+             the maintenance levy described in the schedule. ".repeat(3)
+        );
+        assert!(long_variant.chars().count() > 200);
+        assert!(!is_failure_output(&long_variant));
+        // Short genuine prose that shares words with the failure
+        // pages but not their exact opening phrasing never matches.
+        assert!(!is_failure_output(
+            "Something went wrong in the negotiation: the draft was never executed."
+        ));
+        assert!(!is_failure_output(
+            "I am having trouble locating any royalty clause in these bye-laws."
+        ));
     }
 }
