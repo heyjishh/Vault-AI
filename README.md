@@ -160,7 +160,7 @@ annotations, hit-test). Full inventory: [docs/ARCHITECTURE.md](docs/ARCHITECTURE
 
 ## Testing & verification status
 
-- Rust workspace test suite: **233 tests green** at last full run (29 Oct 2026).
+- Rust workspace test suite: **238 tests green** at last full run (29 Oct 2026).
 - Retrieval benchmarks (offline, reproducible): hybrid BM25+vector fused
   MRR **0.833** vs 0.815 vector-only; reranker decision layer MRR **0.944**;
   Hindi↔English embedding cosine **0.89–0.92**.
