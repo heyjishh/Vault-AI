@@ -323,6 +323,67 @@ live**, what is **built but unverified**, and what is **roadmap**.
   multi-topic answer with a bare "impugned" sentence could still
   mislink — the mitigation is that real chains carry party-match or
   stored edges, which outrank signal 1.
+- **Web search leg rebuilt + failure-isolated; Research mode hardened
+  (29 Oct 2026).** Ask with Web on ("tell me in detail about
+  agriculture income") met a bare 502 and, when it succeeded, answered
+  silently from the vault alone. Diagnosis, all verified live from
+  this sandbox: the search sidecar returned `[]` after 62s — DDG HTML
+  anomaly-blocks the egress IP (HTTP 202; the stealth Firefox gets
+  the same block page), Bing's SERP for this IP degenerated into
+  location/dictionary junk (an electoral-bonds query returned US
+  Electoral College entries), Brave 429s, Mojeek captchas, and Indian
+  Kanoon is Cloudflare-walled (HTTP connection reset; Firefox stops
+  at "Just a moment…"). The 502 itself never came from the web leg —
+  `gather_web` always swallowed its errors; the bare 502 is
+  `Error::Upstream` → HTTP 502 from a later stage (embeddings/LLM)
+  after the dead leg had burned 60–150s, and a successful corpus-only
+  answer carried no hint that web had failed (mechanism pinned in a
+  `gather_web` doc comment). Fixes:
+  - `websearch.py` rewritten: sources run concurrently under a 40s
+    deadline — Indian Kanoon's own search and DDG HTML, both read
+    through the r.jina.ai reader proxy (which fetches from its own
+    infrastructure, bypassing per-site egress blocks), plus `site:`
+    probes (sci.gov.in / indiacode / legislative / incometaxindia)
+    through the same DDG path, plus one fast direct DDG/Brave attempt
+    each. Bing and the Firefox search fallback dropped. Tier ranking
+    kept; a per-engine diversity cap stops one engine's tier-1 sweep
+    crowding official explainer pages out of the fetch window. Every
+    source logs count or failure reason to stderr. Agriculture query:
+    62s/`[]` → ~8s with Kanoon case law + India Code Acts +
+    incometaxindia.gov.in official pages; electoral-bonds query
+    returns the actual SCI judgment PDF. `webfetch.py`: reader proxy
+    is now the universal second path (HTTP → proxy → Firefox) and
+    leads for Kanoon.
+  - `gather_web` returns an outcome (Delivered / NoResults / Failed)
+    under strict budgets (search 60s cap; fetch waves 40s/35s/60s);
+    every failure logs stage + reason. Ask (blocking + streaming) and
+    Research surface a non-delivered leg as an explicit "web search
+    unavailable / no usable sources — based only on your vault" note.
+    The web leg can still never fail a request; `LEGAL_RAG_WEB_SEARCH=0`
+    remains the kill switch.
+  - Research (`research.rs`, the clearai-dsh epistemic loop): frame,
+    per-hypothesis retrieval, and adjudication failures now degrade
+    the report instead of erroring the whole request (the 2026-10-25
+    BNS 502 shape). Verdicts are enforced against delivered evidence
+    in code — claims may only cite delivered citation ids, a
+    hypothesis with no delivered evidence is forced inconclusive,
+    and with zero delivered evidence the conclusion is replaced by an
+    insufficiency statement. Refuted hypotheses stay (test-pinned).
+    Report gains the fourth answer part, `decisions` (adjudicator's
+    plus one per conflict), a `web_note`, and a
+    predictions-don't-discriminate open point. Workspace 190 green
+    (was 181; +9 tests: web outcome taxonomy, corpus-only-with-note,
+    frame/adjudicate degradation, evidence enforcement, refuted
+    retention, web noting, discrimination flag). Production :3000
+    untouched. Live-verified on :3001 (29 Oct): Ask web=true on the
+    agriculture-income question → HTTP 200 with Indian Kanoon +
+    incometaxindia.gov.in citations and a Section 10(1)-grounded
+    answer; Ask with the kill switch on → HTTP 200 in 15s, corpus-only,
+    scope_note "Live web search was unavailable (configuration error:
+    web search not configured)"; Research web=true → HTTP 200,
+    hypotheses adjudicated with decisions + open points and 6 web
+    citations; Research with web broken → HTTP 200 corpus-only with
+    web_note and inconclusive verdicts.
 
 ## [1.8.0] — 2026-10-25
 

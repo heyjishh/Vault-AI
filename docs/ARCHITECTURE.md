@@ -76,7 +76,7 @@ External dependencies and their failure behaviour:
 | Embeddings endpoint (today Cloudflare; local sidecar exists) | Ingest + query vectors | Same retry policy; cache hits unaffected |
 | SereneDB (optional) | Persistent vector store | Falls back to in-memory index with a warning at boot |
 | YouPI-PG (or mock) | UPI checkout | Checkout unavailable; metering/quota unaffected |
-| Public web (DDG/Bing HTML + stealth browser fallback) | Web blending, research evidence | Web leg returns vault-only answers; per-source failures tolerated |
+| Public web (DDG HTML + Indian Kanoon site search, read through the r.jina.ai reader proxy; direct DDG/Brave as lottery tickets) | Web blending, research evidence | Web leg is failure-isolated: vault-only answers **with an explicit web-unavailable note**; per-source failures tolerated and logged with stage + reason |
 | AWS S3 | Bulk document import | Import endpoint errors; uploads via UI unaffected |
 
 ## 3. Container & component architecture
@@ -90,7 +90,7 @@ External dependencies and their failure behaviour:
 | C3 | Admin SPA ("Command Center") | React 19.2 · separate Vite app | served by C1 at `/admin` | Users, corpus, settings/prompts, billing, insights, golden rules, Verified Answers, hit-test |
 | C4 | Reranker sidecar | Python (sentence-transformers), bge-reranker-v2-m3 | **8081** | Cross-encoder scoring of the fused retrieval pool |
 | C5 | OCR sidecar | Python, Surya 0.22 (+ llama.cpp backend) | subprocess | OCR for scanned PDF pages (text layer first; OCR only where needed) |
-| C6 | Web sidecars | Python (`tools/web/websearch.py`, `webfetch.py`) + stealth Firefox fallback | subprocess | Search, primary-source probes, page/PDF fetching and extraction |
+| C6 | Web sidecars | Python (`tools/web/websearch.py`, `webfetch.py`) + stealth Firefox fallback | subprocess | Search (DDG + Kanoon via reader proxy — direct engines are throttled/blocked from the sandbox egress; `site:` primary-source probes), page/PDF fetching and extraction (HTTP → reader proxy → Firefox) |
 | C7 | SereneDB (optional) | `serenedb/serenedb` image | **7890** | Vector store over Postgres wire protocol (`FLOAT[N]`, `<=>`, IVF index) |
 | C8 | Embeddings sidecar (test/local) | Python, bge-m3 fp16, OpenAI-compatible | **8083** | Local embeddings — removes provider dependency; test stack uses it by default |
 | C9 | Gemini bridge (TEST ONLY) | gemini-web2api, anonymous mode | **8082** | Lets the isolated test instance use Gemini Flash as its LLM; **never** in the production path |
@@ -301,10 +301,18 @@ live round-trip not verified, no credentials in this environment).
 
 ### 5.3 Research & workflows
 
-- **Research** (`research.rs`): frame hypotheses from the question → gather
-  evidence per hypothesis (vault ± web) → adjudicate (IN FAVOUR / AGAINST /
-  OPEN with rationale) → verdict-first report with citations. Prompts are
-  admin-editable; overrides must preserve the JSON verdict contract.
+- **Research** (`research.rs`): frame hypotheses from the question (each
+  with a prediction written *before* evidence) → gather evidence per
+  hypothesis (vault ± web) → adjudicate (supported / refuted /
+  inconclusive) → report in the clearai-dsh shape: conclusion / basis /
+  open points / decisions, with conflicts recorded as findings and
+  refuted hypotheses kept. Verdicts are enforced against the delivered
+  evidence in code (claims may only cite delivered citation ids; no
+  delivered evidence ⇒ inconclusive; none at all ⇒ no conclusion).
+  Every leg is failure-isolated — a dead frame/retrieval/adjudication
+  leg degrades the report (recorded in open points), never the request.
+  Prompts are admin-editable; overrides must preserve the JSON verdict
+  contract.
 - **Workflows** (`agent.rs`): fixed step pipelines — `contract_review` (5),
   `due_diligence` (4, incl. web), `memo_draft` (4, IRAC). Each step retrieves,
   generates, and cites; a final report synthesizes.
