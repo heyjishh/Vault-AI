@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, FileText, Paperclip, X } from 'lucide-react'
+import { ArrowLeft, FileText, FolderUp, Paperclip, X } from 'lucide-react'
 import { mattersApi, vaultApi } from '../api/client'
 import { useSession } from '../stores/session'
 import { EmptyState, Spinner, StatCard } from './ui'
@@ -8,7 +8,10 @@ import { StatusPill } from './MattersPage'
 import AssistantPage from './AssistantPage'
 import InteractPage from './InteractPage'
 import DraftPage from './DraftPage'
-import { UploadProgressList, type ProgressItemView } from './UploadProgress'
+import {
+  UploadProgressList, applyBatchCaps, batchLabelFor,
+  MAX_BATCH_FILES, MAX_BATCH_FOLDERS, type ProgressItemView,
+} from './UploadProgress'
 
 const TABS = ['Overview', 'Documents', 'Ask', 'Interact', 'Draft', 'History', 'Notes'] as const
 type Tab = (typeof TABS)[number]
@@ -260,6 +263,26 @@ function Documents({ matterId }: { matterId: string }) {
     setAddItems([...addItemsRef.current, item])
     void processAddQueue()
   }
+  // ---- Multi-file intake (Piece 18): the file picker (multiple)
+  // and the folder picker enqueue EVERY selected file into the same
+  // staged queue, under the shared batch caps — overflow stays in
+  // the list as 'skipped' with the reason, never silently dropped.
+  // Each file's document title is its own name (the paste-title
+  // field belongs to pasted text only).
+  const [addBatchLabel, setAddBatchLabel] = useState<string | null>(null)
+  const enqueueFiles = (files: { file: File; relPath: string }[]) => {
+    if (files.length === 0) return
+    const items: AddItem[] = applyBatchCaps(files).map(({ file, relPath, skipReason }) => ({
+      key: ++addKeyRef.current,
+      name: relPath || file.name,
+      status: skipReason ? ('skipped' as const) : ('queued' as const),
+      error: skipReason,
+      payload: { kind: 'file', file, title: file.name.replace(/\.[^.]+$/, '') },
+    }))
+    setAddBatchLabel(batchLabelFor(files))
+    setAddItems([...addItemsRef.current, ...items])
+    void processAddQueue()
+  }
   const attach = useMutation({
     mutationFn: () => mattersApi.attach(matterId, attachId),
     onSuccess: () => { invalidate(); setAttachId(''); toast('success', 'Document filed in this brief') },
@@ -309,16 +332,34 @@ function Documents({ matterId }: { matterId: string }) {
         <p className="text-[11px] uppercase tracking-wider text-stone-400 font-medium">Add documents</p>
         <div className="mt-3 flex flex-wrap items-center gap-3">
           <label className="rounded-lex bg-ink text-ivory px-3.5 py-2 text-[13px] font-medium cursor-pointer hover:bg-ink-900 transition-colors">
-            Upload a file
+            Upload files
             <input
-              type="file" className="hidden"
+              type="file" multiple className="hidden"
               onChange={(e) => {
-                const f = e.target.files?.[0]
-                if (f) enqueueAdd({ kind: 'file', file: f, title: pasteTitle || f.name.replace(/\.[^.]+$/, '') }, f.name)
+                const files = Array.from(e.target.files ?? []).map((file) => ({ file, relPath: '' }))
                 e.target.value = ''
+                enqueueFiles(files)
               }}
             />
           </label>
+          <label className="rounded-lex border border-stone-300 px-3.5 py-2 text-[13px] font-medium cursor-pointer hover:bg-stone-100 transition-colors flex items-center gap-1.5">
+            <FolderUp size={13} /> Upload folder
+            <input
+              type="file" className="hidden"
+              {...({ webkitdirectory: '' } as Record<string, string>)}
+              onChange={(e) => {
+                const files = Array.from(e.target.files ?? []).map((file) => ({
+                  file,
+                  relPath: file.webkitRelativePath || '',
+                }))
+                e.target.value = ''
+                enqueueFiles(files)
+              }}
+            />
+          </label>
+          <span className="text-[12.5px] text-stone-400">
+            up to {MAX_BATCH_FILES} files and {MAX_BATCH_FOLDERS} folders per batch
+          </span>
           {unfiled.length > 0 && (
             <div className="flex items-center gap-2">
               <select
@@ -364,6 +405,8 @@ function Documents({ matterId }: { matterId: string }) {
         </button>
         <UploadProgressList
           items={addItems}
+          headerLabel={addBatchLabel ?? undefined}
+          onClear={() => { setAddItems([]); setAddBatchLabel(null) }}
           onRetry={(key) => {
             patchAddItem(key, { status: 'queued', error: undefined, progress: null })
             void processAddQueue()

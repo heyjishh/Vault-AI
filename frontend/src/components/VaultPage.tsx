@@ -7,7 +7,11 @@ import type { DocumentInfo, IngestReport } from '../api/types'
 import { useSession } from '../stores/session'
 import { useMatter } from '../stores/matter'
 import { EmptyState, Pager, Spinner, usePagination } from './ui'
-import { UploadProgressList, formatElapsed, isPendingStatus, useNow, type ProgressItemView } from './UploadProgress'
+import {
+  UploadProgressList, formatElapsed, isPendingStatus, useNow,
+  applyBatchCaps, batchLabelFor, filesFromDataTransfer, UPLOAD_ACCEPT,
+  type ProgressItemView,
+} from './UploadProgress'
 
 export default function VaultPage() {
   const qc = useQueryClient()
@@ -53,38 +57,87 @@ export default function VaultPage() {
     )
   }
 
-  // Upload stage for the dropzone: 'uploading' tracks real bytes
-  // sent; once they are sent the stage is 'indexing' until the
-  // server's ingest response lands (Ready = indexed, confirmed by
-  // the response, not by the send finishing).
-  const [uploadStage, setUploadStage] = useState<
-    { stage: 'uploading' | 'indexing'; fraction: number | null } | null
-  >(null)
-  // Piece 17: a failed dropzone upload also leaves a persistent
-  // inline row (server error + Retry/Dismiss) under the dropzone —
-  // previously the failure existed only as a transient toast.
-  const uploadStartRef = useRef(0)
-  const [fileError, setFileError] = useState<{ file: File; title: string; error: string } | null>(null)
-  const uploadFile = useMutation({
-    mutationFn: (v: { file: File; title: string }) => {
-      uploadStartRef.current = Date.now()
-      setFileError(null)
-      return vaultApi.uploadFile(v.title, v.file, matterId, (fraction) =>
-        setUploadStage(
-          fraction !== null && fraction >= 1
-            ? { stage: 'indexing', fraction: 1 }
-            : { stage: 'uploading', fraction },
-        ),
-      )
-    },
-    onSuccess: (r) => { afterChange(r, r.documents > 0 ? 'Document' : 'File'); setTitle('') },
-    onError: (e, v) => {
-      toast('error', (e as Error).message)
-      setFileError({ file: v.file, title: v.title, error: (e as Error).message })
-    },
-    onSettled: () => setUploadStage(null),
-  })
-  const uploadNow = useNow(uploadFile.isPending)
+  // File uploads (Piece 18): a per-file staged queue — the picker
+  // takes multiple files and a drop takes every dropped file (and
+  // traverses dropped folders), all under the shared batch caps,
+  // rendered by the shared UploadProgressList. This replaces the
+  // single-upload mutation and its Piece 17 failure row: every file
+  // gets its own row with stage, byte progress ('uploading' tracks
+  // real bytes sent; once sent, 'indexing' until the server's ingest
+  // response lands — Ready = indexed, confirmed by the response),
+  // elapsed, and inline Retry/Dismiss on failure. Items process
+  // sequentially (ingest is LLM-backed); one failure never blocks
+  // the rest.
+  interface FileItem extends ProgressItemView { file: File; fileTitle: string }
+  const [fileItems, setFileItemsState] = useState<FileItem[]>([])
+  const fileItemsRef = useRef<FileItem[]>([])
+  const fileKeyRef = useRef(0)
+  const fileProcessingRef = useRef(false)
+  const [fileBatchLabel, setFileBatchLabel] = useState<string | null>(null)
+  const matterRef = useRef(matterId)
+  matterRef.current = matterId
+  const setFileItems = (next: FileItem[]) => {
+    fileItemsRef.current = next
+    setFileItemsState(next)
+  }
+  const patchFileItem = (key: number, patch: Partial<FileItem>) =>
+    setFileItems(fileItemsRef.current.map((i) => (i.key === key ? { ...i, ...patch } : i)))
+  const processFileQueue = async () => {
+    if (fileProcessingRef.current) return
+    fileProcessingRef.current = true
+    try {
+      for (;;) {
+        const item = fileItemsRef.current.find((i) => i.status === 'queued')
+        if (!item) break
+        patchFileItem(item.key, { status: 'uploading', progress: 0, startedAt: Date.now() })
+        try {
+          const r = await vaultApi.uploadFile(item.fileTitle, item.file, matterRef.current, (fraction) => {
+            if (fraction !== null && fraction >= 1) {
+              patchFileItem(item.key, { status: 'indexing', progress: 1 })
+            } else {
+              patchFileItem(item.key, { status: 'uploading', progress: fraction })
+            }
+          })
+          patchFileItem(item.key, { status: 'ready', progress: 1, note: `${r.chunks} chunks indexed` })
+          afterChange(r, 'Document')
+        } catch (e) {
+          patchFileItem(item.key, { status: 'failed', error: (e as Error).message })
+          toast('error', (e as Error).message)
+        }
+      }
+    } finally {
+      fileProcessingRef.current = false
+    }
+  }
+  const enqueueFiles = (files: { file: File; relPath: string }[], titleOverride?: string) => {
+    if (files.length === 0) return
+    const items: FileItem[] = applyBatchCaps(files).map(({ file, relPath, skipReason }) => ({
+      key: ++fileKeyRef.current,
+      name: relPath || file.name,
+      status: skipReason ? ('skipped' as const) : ('queued' as const),
+      error: skipReason,
+      file,
+      fileTitle: titleOverride ?? file.name.replace(/\.[^.]+$/, ''),
+    }))
+    setFileBatchLabel(batchLabelFor(files))
+    setFileItems([...fileItemsRef.current, ...items])
+    void processFileQueue()
+  }
+  // A lone file picked/dropped while the Title field is filled keeps
+  // the long-standing behavior of using that title (the field is
+  // shared with the Paste card); with several files, each is titled
+  // by its own name — one title cannot name many documents.
+  const enqueuePicked = (files: { file: File; relPath: string }[]) => {
+    if (files.length === 1 && title.trim()) {
+      enqueueFiles(files, title.trim())
+      setTitle('')
+    } else {
+      enqueueFiles(files)
+    }
+  }
+  const filesBusy = fileItems.some((i) => isPendingStatus(i.status))
+  const activeFileItem = fileItems.find((i) => i.status === 'uploading' || i.status === 'indexing')
+  const fileNow = useNow(filesBusy)
   // Piece 17: pasted text gets the same staged progress as every
   // other ingest surface (shared UploadProgressList) instead of a
   // bare "Indexing…" button label. A text post has no measurable
@@ -150,14 +203,13 @@ export default function VaultPage() {
     onError: (e) => toast('error', (e as Error).message),
   })
 
-  function handleDrop(e: React.DragEvent) {
+  async function handleDrop(e: React.DragEvent) {
     e.preventDefault()
     setDragging(false)
-    const f = e.dataTransfer.files?.[0]
-    if (f) uploadFile.mutate({ file: f, title: title || f.name.replace(/\.[^.]+$/, '') })
+    enqueuePicked(await filesFromDataTransfer(e.dataTransfer))
   }
 
-  const busy = uploadFile.isPending || pasteBusy || ingest.isPending
+  const busy = filesBusy || pasteBusy || ingest.isPending
 
   return (
     <div className="max-w-4xl mx-auto px-6 py-10">
@@ -181,29 +233,33 @@ export default function VaultPage() {
         }`}
         onClick={() => fileRef.current?.click()}
       >
-        {uploadFile.isPending ? (
+        {filesBusy ? (
           <Loader2 size={26} className="animate-spin mx-auto text-ink" />
         ) : (
           <FileUp size={26} className="mx-auto text-stone-400" />
         )}
         <p className="font-medium text-[15px] mt-3">
-          {uploadFile.isPending
-            ? (uploadStage?.stage === 'indexing'
-                ? 'Indexing your document…'
-                : `Uploading…${uploadStage?.fraction != null ? ` ${Math.round(uploadStage.fraction * 100)}%` : ''}`)
-              + ` · ${formatElapsed(uploadNow - uploadStartRef.current)}`
-            : 'Drop a file here, or click to browse'}
+          {filesBusy && activeFileItem
+            ? `${activeFileItem.status === 'indexing' ? 'Indexing' : 'Uploading'} — ${activeFileItem.name}`
+              + (activeFileItem.status === 'uploading' && activeFileItem.progress != null
+                  ? ` ${Math.round(activeFileItem.progress * 100)}%` : '')
+              + (activeFileItem.startedAt != null ? ` · ${formatElapsed(fileNow - activeFileItem.startedAt)}` : '')
+              + (fileItems.filter((i) => isPendingStatus(i.status)).length > 1
+                  ? ` · ${fileItems.filter((i) => isPendingStatus(i.status)).length} in queue` : '')
+            : filesBusy
+              ? 'Adding documents…'
+              : 'Drop files here, or click to browse'}
         </p>
-        {uploadFile.isPending && (
+        {filesBusy && activeFileItem && (
           <div className="h-1.5 mt-4 max-w-sm mx-auto rounded-full bg-stone-200 overflow-hidden">
             <div
               className={`h-full transition-all duration-300 ${
-                uploadStage?.stage === 'indexing' ? 'bg-stone-400 animate-pulse' : 'bg-stone-500'
-              } ${uploadStage?.stage === 'uploading' && uploadStage?.fraction == null ? 'animate-pulse' : ''}`}
+                activeFileItem.status === 'indexing' ? 'bg-stone-400 animate-pulse' : 'bg-stone-500'
+              } ${activeFileItem.status === 'uploading' && activeFileItem.progress == null ? 'animate-pulse' : ''}`}
               style={{
                 width:
-                  uploadStage?.stage === 'uploading' && uploadStage?.fraction != null
-                    ? `${Math.round(uploadStage.fraction * 100)}%`
+                  activeFileItem.status === 'uploading' && activeFileItem.progress != null
+                    ? `${Math.round(activeFileItem.progress * 100)}%`
                     : '100%',
               }}
             />
@@ -213,22 +269,27 @@ export default function VaultPage() {
           PDF · TXT · MD <span className="inline-flex items-center gap-1 rounded-full bg-stone-100 border border-stone-200 px-2 py-0.5 text-[11px]"><ScanText size={11} /> scanned pages auto-OCR'd</span>
         </p>
         <input
-          ref={fileRef} type="file" className="hidden"
-          accept=".pdf,.txt,.md,.doc,.docx"
+          ref={fileRef} type="file" multiple className="hidden"
+          accept={UPLOAD_ACCEPT}
           onChange={(e) => {
-            const f = e.target.files?.[0]
-            if (f) uploadFile.mutate({ file: f, title: title || f.name.replace(/\.[^.]+$/, '') })
+            const files = Array.from(e.target.files ?? []).map((file) => ({ file, relPath: '' }))
             e.target.value = ''
+            enqueuePicked(files)
           }}
         />
       </motion.div>
 
-      {fileError && (
+      {fileItems.length > 0 && (
         <UploadProgressList
           className="mt-4"
-          items={[{ key: 1, name: fileError.file.name, status: 'failed', error: fileError.error }]}
-          onRetry={() => uploadFile.mutate({ file: fileError.file, title: fileError.title })}
-          onDismiss={() => setFileError(null)}
+          items={fileItems}
+          headerLabel={fileBatchLabel ?? undefined}
+          onClear={() => { setFileItems([]); setFileBatchLabel(null) }}
+          onRetry={(key) => {
+            patchFileItem(key, { status: 'queued', error: undefined, progress: null })
+            void processFileQueue()
+          }}
+          onDismiss={(key) => setFileItems(fileItemsRef.current.filter((i) => i.key !== key))}
         />
       )}
 
