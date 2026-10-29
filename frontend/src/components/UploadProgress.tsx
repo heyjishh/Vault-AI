@@ -45,6 +45,82 @@ export function formatElapsed(ms: number): string {
   return `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, '0')}s`
 }
 
+/** The accept set shared by every vault-ingest picker — the file
+ *  pickers feed the one vault ingest pipeline, not separate paths. */
+export const UPLOAD_ACCEPT = '.pdf,.txt,.md,.doc,.docx'
+
+/** Per-batch upload intake caps: at most 20 files and at most 10
+ *  folders in one batch (one picker/drop action). Items beyond a cap
+ *  stay in the batch list as 'skipped' with the reason shown — never
+ *  silently dropped. (Moved here from InteractPage in Piece 18 so
+ *  every upload surface applies the SAME caps — no divergent copies.) */
+export const MAX_BATCH_FILES = 20
+export const MAX_BATCH_FOLDERS = 10
+
+/** Top-level folder a batch item belongs to ('' for loose files). */
+export function topFolderOf(relPath: string): string {
+  return relPath.includes('/') ? relPath.split('/')[0] : ''
+}
+
+/** Apply the per-batch caps in arrival order: the first 20 files
+ *  from the first 10 distinct folders are accepted; everything else
+ *  is marked skipped with the cap that stopped it. */
+export function applyBatchCaps(
+  files: { file: File; relPath: string }[],
+): { file: File; relPath: string; skipReason?: string }[] {
+  const folders = new Set<string>()
+  let accepted = 0
+  return files.map(({ file, relPath }) => {
+    const folder = topFolderOf(relPath)
+    if (folder && !folders.has(folder) && folders.size >= MAX_BATCH_FOLDERS) {
+      return { file, relPath, skipReason: `batch limit of ${MAX_BATCH_FOLDERS} folders reached` }
+    }
+    if (accepted >= MAX_BATCH_FILES) {
+      return { file, relPath, skipReason: `batch limit of ${MAX_BATCH_FILES} files reached` }
+    }
+    if (folder) folders.add(folder)
+    accepted += 1
+    return { file, relPath }
+  })
+}
+
+/** "Folder: Smith-case (12 files)" when the batch came from a folder
+ *  (any relative path with a directory part), else "N files". */
+export function batchLabelFor(items: { relPath: string }[]): string {
+  const foldered = items.find((i) => i.relPath.includes('/'))
+  if (foldered) return `Folder: ${foldered.relPath.split('/')[0]} (${items.length} files)`
+  return `${items.length} file${items.length === 1 ? '' : 's'}`
+}
+
+/** Flatten a drop into files, traversing dropped folders via the
+ *  FileSystem entries API (readEntries pages at ~100 entries, so it
+ *  is drained in a loop). */
+export async function filesFromDataTransfer(dt: DataTransfer): Promise<{ file: File; relPath: string }[]> {
+  const out: { file: File; relPath: string }[] = []
+  const entries = Array.from(dt.items)
+    .filter((i) => i.kind === 'file')
+    .map((i) => i.webkitGetAsEntry())
+    .filter((e): e is FileSystemEntry => e !== null)
+  if (entries.length === 0) {
+    return Array.from(dt.files).map((file) => ({ file, relPath: '' }))
+  }
+  async function walk(entry: FileSystemEntry, path: string): Promise<void> {
+    if (entry.isFile) {
+      const file = await new Promise<File>((res, rej) => (entry as FileSystemFileEntry).file(res, rej))
+      out.push({ file, relPath: path })
+    } else if (entry.isDirectory) {
+      const reader = (entry as FileSystemDirectoryEntry).createReader()
+      for (;;) {
+        const children = await new Promise<FileSystemEntry[]>((res, rej) => reader.readEntries(res, rej))
+        if (children.length === 0) break
+        for (const child of children) await walk(child, `${path}/${child.name}`)
+      }
+    }
+  }
+  for (const entry of entries) await walk(entry, entry.name)
+  return out
+}
+
 /** A clock that ticks while `active`, for elapsed readouts. */
 export function useNow(active: boolean, intervalMs = 500): number {
   const [now, setNow] = useState(() => Date.now())
