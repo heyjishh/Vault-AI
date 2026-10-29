@@ -332,24 +332,27 @@ def main() -> None:
                 merged[key] = (sort_key, engine_rank, r)
     ranked = [(eng, r) for _, eng, r in
               sorted(merged.values(), key=lambda kv: -kv[0])]
-    # Diversity cap: no single engine may fill more than half the
-    # window. Without it the Kanoon sweep (10 tier-1 hits) crowds out
-    # the official explainer pages (Income Tax Dept, India Code) that
-    # sit in another engine at the same tier — the fetch stage then
-    # never sees them. Deferred results backfill if slots remain.
-    cap = max(2, (want + 1) // 2)
-    out, deferred, counts = [], [], {}
+    # Round-robin interleave within each tier: the caller's fetch
+    # window takes the head of this list, and a single engine's sweep
+    # (e.g. 10 Kanoon hits, all tier-1) would otherwise fill the whole
+    # window, so the fetch stage never sees the official explainer
+    # pages (Income Tax Dept, India Code) sitting in another engine at
+    # the same tier. Interleaving keeps the head a mix — one result
+    # per engine per round — while tier still dominates across rounds.
+    from collections import defaultdict
+    queues_by_tier = defaultdict(lambda: defaultdict(list))
     for eng, r in ranked:
-        if counts.get(eng, 0) < cap:
-            out.append(r)
-            counts[eng] = counts.get(eng, 0) + 1
-        else:
-            deferred.append(r)
-        if len(out) >= want:
-            break
-    if len(out) < want:
-        out += deferred[:want - len(out)]
-    print(json.dumps(out))
+        queues_by_tier[tier_of(r["url"])][eng].append(r)
+    ordered = []
+    for tier in (2, 1, 0):
+        queues = [queues_by_tier[tier][e] for e in sorted(queues_by_tier[tier])]
+        i = 0
+        while any(i < len(q) for q in queues):
+            for q in queues:
+                if i < len(q):
+                    ordered.append(q[i])
+            i += 1
+    print(json.dumps(ordered[:want]))
 
 
 if __name__ == "__main__":
