@@ -242,7 +242,10 @@ pub async fn update_matter(
         .ok_or_else(|| not_found("brief not found"))
 }
 
-/// Delete a matter workspace. Its documents stay in the vault, unfiled.
+/// Delete a matter workspace. Its documents stay in the vault: any
+/// document that was filed ONLY here is re-filed into the default
+/// brief (the brief-only vault has no unfiled state — a document
+/// must always be reachable inside some brief).
 pub async fn delete_matter(
     State(state): State<AppState>,
     AuthUser(user): AuthUser,
@@ -256,7 +259,16 @@ pub async fn delete_matter(
         )
         .into());
     }
+    let filed = matter.document_ids.clone();
     state.matters.delete(&id);
+    let adopted = state.matters.adopt_unfiled(&filed);
+    if adopted > 0 {
+        tracing::info!(
+            adopted,
+            brief = %id,
+            "deleted brief: re-filed its orphaned documents into the default brief"
+        );
+    }
     Ok(Json(serde_json::json!({ "deleted": true })))
 }
 
@@ -284,7 +296,12 @@ pub async fn attach_document(
         .ok_or_else(|| not_found("brief not found"))
 }
 
-/// Remove a document from this matter (the document itself is kept).
+/// Remove a document from this matter (the document itself is
+/// kept). If this was the document's only filing, it is re-filed
+/// into the default brief — the brief-only vault has no unfiled
+/// state, so detaching can never make a document unreachable.
+/// (Detaching from the default brief itself is therefore a no-op
+/// for the filing: the document stays in the default brief.)
 pub async fn detach_document(
     State(state): State<AppState>,
     AuthUser(user): AuthUser,
@@ -295,6 +312,13 @@ pub async fn detach_document(
     state
         .matters
         .remove_document(&id, &doc_id)
+        .ok_or_else(|| not_found("brief not found"))?;
+    state.matters.adopt_unfiled(std::slice::from_ref(&doc_id));
+    // Return the post-state brief (re-filing may have restored the
+    // document to this very brief, when it is the default).
+    state
+        .matters
+        .get(&id)
         .map(Json)
         .ok_or_else(|| not_found("brief not found"))
 }

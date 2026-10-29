@@ -263,6 +263,29 @@ impl MatterStore {
             .collect()
     }
 
+    /// File every document in `doc_ids` that currently belongs to no
+    /// brief into the default brief; returns how many were adopted.
+    /// The brief-only vault has no unfiled state: a document that
+    /// loses its last filing (its brief was deleted, or it was
+    /// detached from its only brief) lands in the default brief
+    /// instead of becoming unreachable. Idempotent — documents filed
+    /// in ANY brief (including the default) are left exactly where
+    /// they are.
+    pub fn adopt_unfiled(&self, doc_ids: &[String]) -> usize {
+        let Some(default_id) = self.default_id() else {
+            return 0;
+        };
+        let mut adopted = 0;
+        for doc_id in doc_ids {
+            if self.matter_of_document(doc_id).is_none()
+                && self.add_document(&default_id, doc_id).is_some()
+            {
+                adopted += 1;
+            }
+        }
+        adopted
+    }
+
     /// Boot migration: guarantee a default matter exists and adopt every
     /// already-indexed document that belongs to no matter. Returns the
     /// default matter id.
@@ -291,10 +314,13 @@ impl MatterStore {
                 id
             }
         };
-        for doc_id in existing_doc_ids {
-            if self.matter_of_document(doc_id).is_none() {
-                self.add_document(&default_id, doc_id);
-            }
+        let adopted = self.adopt_unfiled(existing_doc_ids);
+        if adopted > 0 {
+            tracing::info!(
+                adopted,
+                default_matter = %default_id,
+                "boot migration: adopted unfiled documents into the default brief"
+            );
         }
         self.save();
         default_id
@@ -306,9 +332,13 @@ mod tests {
     use super::*;
 
     fn temp_store() -> (MatterStore, PathBuf) {
+        // Unique file per call: tests in this module run in parallel
+        // threads of one process, and a shared backing file lets one
+        // test's save wipe another test's matters from disk.
         let path = std::env::temp_dir().join(format!(
-            "matters-test-{}.json",
-            std::process::id()
+            "matters-test-{}-{}.json",
+            std::process::id(),
+            legal_rag_common::new_id()
         ));
         let _ = std::fs::remove_file(&path);
         (MatterStore::load(path.clone()), path)
@@ -382,6 +412,90 @@ mod tests {
         // Briefs survive; a second pass is a no-op.
         assert_eq!(store.unfile_document_everywhere("doc-shared"), 0);
         assert_eq!(store.list().len(), 2);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// Brief-only vault invariant (Piece 11): the boot migration
+    /// files every unfiled document into the default brief, leaves
+    /// documents filed in other briefs exactly where they are, and
+    /// is idempotent — a second pass adopts nothing and changes no
+    /// filing, so nothing can become invisible across restarts.
+    #[test]
+    fn ensure_default_adopts_unfiled_once_and_leaves_filed_docs_alone() {
+        let (store, path) = temp_store();
+        let other = store.create("Brief B", "", "", "", "user-1", None);
+        store.add_document(&other.id, "doc-in-b");
+
+        let default_id = store.ensure_default(&[
+            "doc-in-b".to_string(),
+            "doc-loose-1".to_string(),
+            "doc-loose-2".to_string(),
+        ]);
+        let default = store.get(&default_id).expect("default brief exists");
+        assert!(default.is_default);
+        assert_eq!(
+            default.document_ids,
+            vec!["doc-loose-1".to_string(), "doc-loose-2".to_string()]
+        );
+        // The document filed only in brief B is NOT in the default
+        // brief's list (and brief B's own list is untouched) — the
+        // brief-scoped vault list data path filters on exactly these
+        // per-brief filing sets.
+        assert!(!default.document_ids.contains(&"doc-in-b".to_string()));
+        assert_eq!(
+            store.get(&other.id).unwrap().document_ids,
+            vec!["doc-in-b".to_string()]
+        );
+
+        // Idempotent: re-running the migration adopts nothing and the
+        // filings are byte-identical afterwards, on disk too.
+        assert_eq!(
+            store.adopt_unfiled(&[
+                "doc-in-b".to_string(),
+                "doc-loose-1".to_string(),
+                "doc-loose-2".to_string(),
+            ]),
+            0
+        );
+        let again = store.ensure_default(&["doc-loose-1".to_string()]);
+        assert_eq!(again, default_id);
+        let reloaded = MatterStore::load(path.clone());
+        assert_eq!(
+            reloaded.get(&default_id).unwrap().document_ids,
+            vec!["doc-loose-1".to_string(), "doc-loose-2".to_string()]
+        );
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// The runtime half of the invariant: when a brief is deleted,
+    /// documents that were filed ONLY there are re-filed into the
+    /// default brief (the delete route calls `adopt_unfiled` with
+    /// the deleted brief's documents), while documents also filed
+    /// elsewhere keep that filing and are not duplicated into the
+    /// default brief.
+    #[test]
+    fn adopt_unfiled_rehomes_documents_orphaned_by_brief_deletion() {
+        let (store, path) = temp_store();
+        let default_id = store.ensure_default(&[]);
+        let brief_b = store.create("Brief B", "", "", "", "user-1", None);
+        let brief_c = store.create("Brief C", "", "", "", "user-1", None);
+        store.add_document(&brief_b.id, "doc-only-b");
+        store.add_document(&brief_b.id, "doc-b-and-c");
+        store.add_document(&brief_c.id, "doc-b-and-c");
+        let orphans = store.get(&brief_b.id).unwrap().document_ids;
+
+        assert!(store.delete(&brief_b.id));
+        assert_eq!(store.adopt_unfiled(&orphans), 1);
+        let default = store.get(&default_id).unwrap();
+        assert_eq!(default.document_ids, vec!["doc-only-b".to_string()]);
+        assert_eq!(
+            store.get(&brief_c.id).unwrap().document_ids,
+            vec!["doc-b-and-c".to_string()]
+        );
+        // Every document is filed in at least one brief afterwards.
+        for doc in ["doc-only-b", "doc-b-and-c"] {
+            assert!(store.matter_of_document(doc).is_some(), "{doc} unfiled");
+        }
         let _ = std::fs::remove_file(&path);
     }
 }
