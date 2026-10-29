@@ -336,6 +336,15 @@ live round-trip not verified, no credentials in this environment).
   document). The standalone view is scoped by the active brief
   (AppShell passes it, as for Ask/Draft) with a This brief / Full
   vault picker toggle; a brief's own Interact tab is always scoped.
+  Interact also takes uploads directly — multiple files, a whole
+  folder (directory picker or drag-and-drop, folders traversed
+  recursively) — through the same vault ingest route (no second
+  pipeline; same accepted types and limits), processed sequentially
+  with per-file queued/indexing/ready/failed states under a batch
+  label ("Folder: <name> (N files)"); each success is filed into
+  the scoped brief when one is active and auto-selected into the
+  Interact selection (up to the 5-document cap; overflow uploads
+  are labelled as not auto-selected, never silently dropped).
 - **Workflows** (`agent.rs`): fixed step pipelines — `contract_review` (5),
   `due_diligence` (4, incl. web), `memo_draft` (4, IRAC). Each step retrieves,
   generates, and cites; a final report synthesizes.

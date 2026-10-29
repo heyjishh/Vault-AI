@@ -15,6 +15,25 @@ live**, what is **built but unverified**, and what is **roadmap**.
 ## [Unreleased]
 
 ### Added
+- **Interact: upload files and folders in place (29 Oct 2026)**: the
+  Interact page gains Upload files / Upload folder controls plus
+  drag-and-drop of files and folders (dropped folders are traversed
+  recursively). Everything goes through the existing vault ingest
+  route — same accepted types (.pdf incl. scanned/password, .txt,
+  .md, .doc, .docx) and limits, no second pipeline — so uploads are
+  normal vault documents (owned by the uploader, Brief-fileable;
+  in brief scope they file into the active brief). The queue runs
+  sequentially with per-file states (queued / indexing / ready /
+  failed with the server's reason — one bad file never fails the
+  batch) under a batch label ("Folder: Smith-case (12 files)").
+  Each successful upload is auto-selected into the Interact
+  selection up to the 5-document cap; beyond the cap the file is
+  labelled "uploaded, not auto-selected" rather than dropped.
+  Live-verified on :3001 in the UI's per-file pattern (PDF fixture
+  + txt ingested and immediately interacted over as a set; an
+  unsupported .xyz rejected with a clean per-file 400; a
+  folder-shaped pair ingested). Pipeline test added for mixed-batch
+  failure isolation. Workspace tests 201 → 202.
 - **Admin: permanent delete of a user's uploaded documents + history
   (29 Oct 2026)** — Command Center → Users → "Delete data": shows the
   pre-delete counts, requires typing the user's email to confirm,

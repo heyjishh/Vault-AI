@@ -1,11 +1,63 @@
 import { useEffect, useRef, useState } from 'react'
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { CalendarClock, FileSearch, ListTree, ScanSearch, ShieldAlert } from 'lucide-react'
+import { CalendarClock, FileSearch, FolderUp, ListTree, ScanSearch, ShieldAlert, Upload } from 'lucide-react'
 import { createApi, vaultApi, type InteractResponse } from '../api/client'
 import { useSession } from '../stores/session'
 import { EmptyState, Spinner } from './ui'
+
+/** Same accept set as the Vault page — Interact upload is the vault
+ *  ingest pipeline, not a second path. */
+const UPLOAD_ACCEPT = '.pdf,.txt,.md,.doc,.docx'
+
+export interface UploadItem {
+  key: number
+  file: File
+  relPath: string
+  status: 'queued' | 'indexing' | 'ready' | 'failed'
+  error?: string
+  docId?: string
+  /** e.g. "selected" / "already selected" / "selection full". */
+  note?: string
+}
+
+/** "Folder: Smith-case (12 files)" when the batch came from a folder
+ *  (any relative path with a directory part), else "N files". */
+export function batchLabelFor(items: { relPath: string }[]): string {
+  const foldered = items.find((i) => i.relPath.includes('/'))
+  if (foldered) return `Folder: ${foldered.relPath.split('/')[0]} (${items.length} files)`
+  return `${items.length} file${items.length === 1 ? '' : 's'}`
+}
+
+/** Flatten a drop into files, traversing dropped folders via the
+ *  FileSystem entries API (readEntries pages at ~100 entries, so it
+ *  is drained in a loop). */
+export async function filesFromDataTransfer(dt: DataTransfer): Promise<{ file: File; relPath: string }[]> {
+  const out: { file: File; relPath: string }[] = []
+  const entries = Array.from(dt.items)
+    .filter((i) => i.kind === 'file')
+    .map((i) => i.webkitGetAsEntry())
+    .filter((e): e is FileSystemEntry => e !== null)
+  if (entries.length === 0) {
+    return Array.from(dt.files).map((file) => ({ file, relPath: '' }))
+  }
+  async function walk(entry: FileSystemEntry, path: string): Promise<void> {
+    if (entry.isFile) {
+      const file = await new Promise<File>((res, rej) => (entry as FileSystemFileEntry).file(res, rej))
+      out.push({ file, relPath: path })
+    } else if (entry.isDirectory) {
+      const reader = (entry as FileSystemDirectoryEntry).createReader()
+      for (;;) {
+        const children = await new Promise<FileSystemEntry[]>((res, rej) => reader.readEntries(res, rej))
+        if (children.length === 0) break
+        for (const child of children) await walk(child, `${path}/${child.name}`)
+      }
+    }
+  }
+  for (const entry of entries) await walk(entry, entry.name)
+  return out
+}
 
 const ACTIONS = [
   { id: 'summary', label: 'Summary', icon: FileSearch, hint: 'Parties, key terms, dates, outcomes' },
@@ -27,6 +79,7 @@ function treatmentChip(status: string) {
 
 export default function InteractPage({ matterId, allowScopeToggle }: { matterId?: string; allowScopeToggle?: boolean } = {}) {
   const toast = useSession((s) => s.toast)
+  const qc = useQueryClient()
   // History restore: reopen the exact analysis on its document set.
   const restore = useSession((s) => s.restore)
   const consumeRestore = useSession((s) => s.consumeRestore)
@@ -108,8 +161,92 @@ export default function InteractPage({ matterId, allowScopeToggle }: { matterId?
 
   const hasSelection = selectedIds.length > 0
 
+  // ---- Upload (Piece 7): files/folders land in the vault through
+  // the normal ingest route and are auto-selected on success. The
+  // queue processes sequentially (the box is small and ingest is
+  // LLM-backed); each file carries its own status, and one failure
+  // never blocks the rest.
+  const [uploads, setUploadsState] = useState<UploadItem[]>([])
+  const [batchLabel, setBatchLabel] = useState<string | null>(null)
+  const [dragging, setDragging] = useState(false)
+  const uploadsRef = useRef<UploadItem[]>([])
+  const selectedRef = useRef<string[]>([])
+  const matterRef = useRef<string | undefined>(undefined)
+  const keyRef = useRef(0)
+  const processingRef = useRef(false)
+  selectedRef.current = selectedIds
+  matterRef.current = effectiveMatterId
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const folderInputRef = useRef<HTMLInputElement>(null)
+
+  const setUploads = (next: UploadItem[]) => {
+    uploadsRef.current = next
+    setUploadsState(next)
+  }
+  const patchUpload = (key: number, patch: Partial<UploadItem>) =>
+    setUploads(uploadsRef.current.map((u) => (u.key === key ? { ...u, ...patch } : u)))
+
+  const processQueue = async () => {
+    if (processingRef.current) return
+    processingRef.current = true
+    try {
+      for (;;) {
+        const item = uploadsRef.current.find((u) => u.status === 'queued')
+        if (!item) break
+        patchUpload(item.key, { status: 'indexing' })
+        try {
+          const title = item.file.name.replace(/\.[^.]+$/, '')
+          const report = await vaultApi.uploadFile(title, item.file, matterRef.current)
+          const docId = report.doc_id ?? undefined
+          let note: string | undefined
+          if (docId) {
+            if (selectedRef.current.includes(docId)) {
+              note = 'already selected'
+            } else if (selectedRef.current.length >= MAX_INTERACT_DOCS) {
+              note = `selection full (max ${MAX_INTERACT_DOCS}) — uploaded, not auto-selected`
+            } else {
+              selectedRef.current = [...selectedRef.current, docId]
+              setSelectedIds(selectedRef.current)
+              note = 'selected'
+            }
+          }
+          patchUpload(item.key, { status: 'ready', docId, note })
+          qc.invalidateQueries({ queryKey: ['vault-docs'] })
+        } catch (e) {
+          patchUpload(item.key, { status: 'failed', error: (e as Error).message })
+        }
+      }
+    } finally {
+      processingRef.current = false
+    }
+  }
+
+  const addFiles = (files: { file: File; relPath: string }[]) => {
+    if (files.length === 0) return
+    const items: UploadItem[] = files.map(({ file, relPath }) => ({
+      key: ++keyRef.current,
+      file,
+      relPath,
+      status: 'queued' as const,
+    }))
+    setBatchLabel(batchLabelFor(items))
+    setUploads([...uploadsRef.current, ...items])
+    void processQueue()
+  }
+
+  const onDrop = async (e: React.DragEvent) => {
+    e.preventDefault()
+    setDragging(false)
+    addFiles(await filesFromDataTransfer(e.dataTransfer))
+  }
+
   return (
-    <div className="max-w-5xl mx-auto px-6 py-8">
+    <div
+      className={`max-w-5xl mx-auto px-6 py-8 ${dragging ? 'outline-dashed outline-2 outline-stone-400 outline-offset-[-8px]' : ''}`}
+      onDragOver={(e) => { e.preventDefault(); setDragging(true) }}
+      onDragLeave={() => setDragging(false)}
+      onDrop={onDrop}
+    >
       <h1 className="font-display text-[2rem] tracking-tight">Interact</h1>
       <p className="text-stone-500 mt-1.5 text-[15px]">
         Work one document or a set of up to {MAX_INTERACT_DOCS}: summarise them, pull their chronology, map their clauses, or interrogate them together.
@@ -143,6 +280,78 @@ export default function InteractPage({ matterId, allowScopeToggle }: { matterId?
               ? 'Showing this brief’s filed documents. Switching scope keeps only selected documents that are in the new list.'
               : 'Showing the whole vault. Switching scope keeps only selected documents that are in the new list.'}
           </p>
+        )}
+        <div className="flex items-center gap-2 mt-4 flex-wrap">
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="inline-flex items-center gap-1.5 rounded-lex border border-stone-300 px-3 py-1.5 text-[13px] font-medium hover:bg-stone-100"
+          >
+            <Upload size={14} /> Upload files
+          </button>
+          <button
+            onClick={() => folderInputRef.current?.click()}
+            className="inline-flex items-center gap-1.5 rounded-lex border border-stone-300 px-3 py-1.5 text-[13px] font-medium hover:bg-stone-100"
+          >
+            <FolderUp size={14} /> Upload folder
+          </button>
+          <span className="text-[12.5px] text-stone-400">
+            or drop files/folders anywhere here — uploads join the vault and are selected automatically
+          </span>
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            accept={UPLOAD_ACCEPT}
+            className="hidden"
+            onChange={(e) => {
+              const files = Array.from(e.target.files ?? []).map((file) => ({ file, relPath: '' }))
+              e.target.value = ''
+              addFiles(files)
+            }}
+          />
+          <input
+            ref={folderInputRef}
+            type="file"
+            accept={UPLOAD_ACCEPT}
+            className="hidden"
+            {...({ webkitdirectory: '' } as Record<string, string>)}
+            onChange={(e) => {
+              const files = Array.from(e.target.files ?? []).map((file) => ({
+                file,
+                relPath: file.webkitRelativePath || '',
+              }))
+              e.target.value = ''
+              addFiles(files)
+            }}
+          />
+        </div>
+        {uploads.length > 0 && (
+          <div className="mt-3 rounded-lex border border-stone-200 px-3 py-2.5">
+            <div className="flex items-baseline justify-between gap-3">
+              <p className="text-[13px] font-medium">{batchLabel}</p>
+              <button
+                onClick={() => { setUploads([]); setBatchLabel(null) }}
+                className="text-[12px] text-stone-400 hover:text-stone-600"
+              >
+                Clear list
+              </button>
+            </div>
+            <ul className="mt-1.5 space-y-1">
+              {uploads.map((u) => (
+                <li key={u.key} className="flex items-center gap-2 text-[13px]">
+                  <span className="flex-1 truncate">{u.relPath || u.file.name}</span>
+                  {u.status === 'queued' && <span className="text-stone-400">Queued</span>}
+                  {u.status === 'indexing' && <span className="text-stone-500">Indexing…</span>}
+                  {u.status === 'ready' && (
+                    <span className="text-emerald-700">Ready{u.note ? ` · ${u.note}` : ''}</span>
+                  )}
+                  {u.status === 'failed' && (
+                    <span className="text-[#a02c2c]">Failed: {u.error}</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
         <div className="mt-2.5 max-h-64 overflow-y-auto rounded-lex border border-stone-200 divide-y divide-stone-100">
           {(docs.data ?? []).map((d) => (

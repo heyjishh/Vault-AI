@@ -148,4 +148,53 @@ mod tests {
         assert!(results.iter().all(|r| r.success));
         assert!(results.iter().all(|r| r.chunks > 0));
     }
+
+    /// The Interact upload loop's contract at the pipeline level: a
+    /// batch mixing a good text file, a corrupt PDF and a good
+    /// markdown file yields per-item results — the corrupt file
+    /// fails with its own error and does not block the others, and
+    /// both good documents land in the corpus, immediately usable.
+    #[tokio::test]
+    async fn batch_mixed_types_isolate_failures() {
+        let rag = Arc::new(RagAnything::new(
+            RagAnythingConfig::default(),
+            Arc::new(MockEmbeddings::new(8)),
+            Arc::new(InMemoryVectorStore::new()),
+            Arc::new(InMemoryGraphStore::new()),
+            Arc::new(MockLlm::new(r#"{"entities":[],"relations":[]}"#)),
+            200,
+            20,
+        ));
+        let items = vec![
+            (
+                "notes.txt".to_string(),
+                b"Plain text about limitation periods in contract claims.".to_vec(),
+                None,
+            ),
+            (
+                "broken.pdf".to_string(),
+                b"this is not a pdf at all, just garbage bytes".to_vec(),
+                None,
+            ),
+            (
+                "memo.md".to_string(),
+                b"# Memo\n\nMarkdown about stamp duty on agreements.".to_vec(),
+                None,
+            ),
+        ];
+        let results = rag.process_documents_batch(items).await;
+        assert_eq!(results.len(), 3);
+        let by_name = |n: &str| results.iter().find(|r| r.file_name == n).unwrap();
+        assert!(by_name("notes.txt").success, "{:?}", by_name("notes.txt").error);
+        assert!(by_name("memo.md").success, "{:?}", by_name("memo.md").error);
+        let broken = by_name("broken.pdf");
+        assert!(!broken.success);
+        assert!(broken.error.is_some(), "the failed file carries its own error");
+        assert!(broken.doc_id.is_none());
+        // Both good documents are in the corpus with readable text.
+        assert_eq!(rag.list_documents().len(), 2);
+        let txt_id = by_name("notes.txt").doc_id.clone().unwrap();
+        let text = rag.document_text(&txt_id, 10_000).await.unwrap();
+        assert!(text.contains("limitation periods"));
+    }
 }
