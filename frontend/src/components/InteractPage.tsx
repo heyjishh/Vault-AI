@@ -118,6 +118,9 @@ export default function InteractPage({ matterId, allowScopeToggle }: { matterId?
   const restore = useSession((s) => s.restore)
   const consumeRestore = useSession((s) => s.consumeRestore)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
+  // Brief-wide working set (Piece 9): in brief scope the default
+  // selection is every document filed in the brief, up to the cap.
+  const [briefWide, setBriefWide] = useState(true)
   useEffect(() => {
     if (!restore || restore.kind !== 'interact') return
     const p = consumeRestore('interact')
@@ -125,6 +128,7 @@ export default function InteractPage({ matterId, allowScopeToggle }: { matterId?
     const ids = Array.isArray(p.document_ids) && p.document_ids.length > 0
       ? p.document_ids.map(String)
       : [String(p.document_id ?? '')].filter(Boolean)
+    setBriefWide(false)
     setSelectedIds(ids)
     setResult({
       document_id: String(p.document_id ?? ''),
@@ -162,12 +166,35 @@ export default function InteractPage({ matterId, allowScopeToggle }: { matterId?
     setScope(next)
   }
 
+  // Brief-wide derivation: whenever the shown brief (or its document
+  // list) changes, the working set re-derives to the brief's first
+  // MAX_INTERACT_DOCS documents. Any manual checkbox change leaves
+  // brief-wide mode; the "All documents in this brief" row re-enters
+  // it. Over-cap briefs are covered partially and the UI says so —
+  // the derivation never silently truncates.
+  const appliedWideKey = useRef<string | null>(null)
+  useEffect(() => {
+    // Entering a (new) brief scope resets to the brief-wide default.
+    setBriefWide(true)
+    appliedWideKey.current = null
+  }, [effectiveMatterId])
+  const briefWideKey = effectiveMatterId && docs.data
+    ? `${effectiveMatterId}|${docs.data.map((d) => d.id).join(',')}`
+    : null
+  useEffect(() => {
+    if (!briefWide || !briefWideKey || !docs.data) return
+    if (appliedWideKey.current === briefWideKey) return
+    appliedWideKey.current = briefWideKey
+    setSelectedIds(docs.data.slice(0, MAX_INTERACT_DOCS).map((d) => d.id))
+  }, [briefWide, briefWideKey, docs.data])
+
   useEffect(() => {
     // Arriving from document search? Select that document directly;
     // widen to the full vault so it is visible in the picker.
     const fromSearch = sessionStorage.getItem('jurisvault.interactDoc')
     if (!fromSearch) return
     sessionStorage.removeItem('jurisvault.interactDoc')
+    setBriefWide(false)
     setSelectedIds([fromSearch])
     if (canToggle) setScope('vault')
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -183,6 +210,8 @@ export default function InteractPage({ matterId, allowScopeToggle }: { matterId?
 
   const toggleDoc = (id: string) => {
     setResult(null)
+    // A manual pick narrows the brief-wide default into a manual set.
+    setBriefWide(false)
     setSelectedIds((prev) => {
       if (prev.includes(id)) return prev.filter((x) => x !== id)
       if (prev.length >= MAX_INTERACT_DOCS) {
@@ -291,6 +320,7 @@ export default function InteractPage({ matterId, allowScopeToggle }: { matterId?
         <div className="flex items-baseline justify-between gap-3 flex-wrap">
           <span className="text-meta uppercase tracking-wider text-stone-500 font-medium">
             Documents — {selectedIds.length} selected (max {MAX_INTERACT_DOCS})
+            {effectiveMatterId && briefWide ? ' · all of this brief' : ''}
           </span>
           {canToggle && (
             <div className="flex items-center gap-1.5">
@@ -315,6 +345,38 @@ export default function InteractPage({ matterId, allowScopeToggle }: { matterId?
               ? 'Showing this brief’s filed documents. Switching scope keeps only selected documents that are in the new list.'
               : 'Showing the whole vault. Switching scope keeps only selected documents that are in the new list.'}
           </p>
+        )}
+        {effectiveMatterId && docs.data && (
+          <div className="mt-3 rounded-lex border border-stone-200 bg-stone-50 px-3 py-2.5">
+            <label className="flex items-start gap-2.5 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={briefWide}
+                onChange={(e) => {
+                  setBriefWide(e.target.checked)
+                  if (e.target.checked) appliedWideKey.current = null
+                }}
+                className="accent-stone-800 mt-0.5"
+              />
+              <span>
+                <span className="text-[13.5px] font-medium">
+                  All documents in this brief ({docs.data.length})
+                </span>
+                {docs.data.length > MAX_INTERACT_DOCS && (
+                  <span className="block text-[12px] text-amber-700 mt-0.5">
+                    Interact covers the first {MAX_INTERACT_DOCS} of {docs.data.length} —{' '}
+                    {docs.data.length - MAX_INTERACT_DOCS} document
+                    {docs.data.length - MAX_INTERACT_DOCS === 1 ? ' is' : 's are'} not covered.
+                  </span>
+                )}
+                <span className="block text-[12px] text-stone-400 mt-0.5">
+                  {briefWide
+                    ? 'Interact works across the whole brief. Untick any document below to narrow the set manually.'
+                    : 'Manual selection — tick this to return to the whole brief.'}
+                </span>
+              </span>
+            </label>
+          </div>
         )}
         <div className="flex items-center gap-2 mt-4 flex-wrap">
           <button

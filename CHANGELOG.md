@@ -15,6 +15,22 @@ live**, what is **built but unverified**, and what is **roadmap**.
 ## [Unreleased]
 
 ### Added
+- **Interact: brief-wide working set by default (29 Oct 2026)**: with
+  a brief active, Interact's working set is now **all documents
+  filed in that brief** — an explicit "All documents in this brief
+  (N)" state in the picker, on both the brief page's Interact tab
+  and the standalone view in brief scope. The set re-derives when
+  the brief or its documents change (including uploads filed into
+  the brief); any manual checkbox change narrows it into a manual
+  selection, and the row re-enters brief-wide mode. If a brief
+  holds more than the 20-document cap, Interact covers the first 20
+  and the picker says so plainly ("N documents are not covered") —
+  no silent truncation. Cross-document questions run across the
+  brief set; single-document and manual-selection behaviour is
+  unchanged. This also firms up the brief as the vault boundary in
+  Interact: brief scope shows only the brief's own filed documents
+  (the standalone full-vault listing remains available only through
+  the explicit This brief / Full vault toggle).
 - **Interact + upload caps raised (29 Oct 2026)**: the Interact
   multi-document cap rises 5 → **20 documents at a time**
   (server-enforced `MAX_INTERACT_DOCS`, same clean 400 over the cap;
