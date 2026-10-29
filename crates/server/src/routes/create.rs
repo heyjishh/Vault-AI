@@ -16,6 +16,12 @@ use crate::state::AppState;
 
 const DOC_CHAR_BUDGET: usize = 24_000;
 
+/// Total analysis-budget ceiling for multi-document Interact runs
+/// (5 × the legacy single-document budget). Selections up to the cap
+/// share this ceiling, so a document in a small set keeps its full
+/// legacy share and only large sets divide the ceiling.
+const MULTI_DOC_TOTAL_CEILING: usize = 120_000;
+
 pub(crate) const ANALYST_SYSTEM: &str = "You are a precise legal document analyst. Work ONLY from the \
 document text provided. If the text does not contain something, say so explicitly — never \
 invent names, dates, or clauses. Respond in clean markdown.";
@@ -60,9 +66,10 @@ fn interact_instruction(action: &str, question: Option<&str>) -> Result<String, 
 }
 
 /// Maximum documents one Interact run may cover. The total analysis
-/// budget (DOC_CHAR_BUDGET) is split across the selection, so the cap
-/// keeps every document's share usable; the UI states the same cap.
-pub(crate) const MAX_INTERACT_DOCS: usize = 5;
+/// budget grows with the selection up to MULTI_DOC_TOTAL_CEILING and
+/// is split across it, so the cap keeps every document's share
+/// usable; the UI states the same cap.
+pub(crate) const MAX_INTERACT_DOCS: usize = 20;
 
 #[derive(Deserialize)]
 pub struct InteractRequest {
@@ -115,8 +122,16 @@ fn resolve_selection(body: &InteractRequest) -> Result<Vec<String>, ApiError> {
 
 /// Per-document share of the analysis budget. A single document gets
 /// the full historical budget, so single-doc behaviour is unchanged.
+/// Larger selections keep the full per-document share until the
+/// total would pass MULTI_DOC_TOTAL_CEILING; beyond that point the
+/// ceiling is split evenly (20 documents → 6,000 chars each), so the
+/// prompt never exceeds the ceiling however wide the selection is.
 fn doc_budget(selection_len: usize) -> usize {
-    DOC_CHAR_BUDGET / selection_len.max(1)
+    let n = selection_len.max(1);
+    if n == 1 {
+        return DOC_CHAR_BUDGET;
+    }
+    DOC_CHAR_BUDGET.min(MULTI_DOC_TOTAL_CEILING / n)
 }
 
 /// Assemble the analysis prompt. One document keeps the exact legacy
@@ -510,26 +525,40 @@ mod tests {
 
     #[test]
     fn over_cap_selection_rejected() {
-        let six: Vec<&str> = vec!["1", "2", "3", "4", "5", "6"];
-        match resolve_selection(&req(None, Some(six))) {
-            Ok(_) => panic!("six documents must be rejected"),
+        let over: Vec<String> = (1..=21).map(|i| i.to_string()).collect();
+        let over_refs: Vec<&str> = over.iter().map(String::as_str).collect();
+        match resolve_selection(&req(None, Some(over_refs))) {
+            Ok(_) => panic!("21 documents must be rejected"),
             Err(e) => assert!(e.0.to_string().contains("at most"), "{}", e.0),
         }
-        let five: Vec<&str> = vec!["1", "2", "3", "4", "5"];
+        let at_cap: Vec<String> = (1..=20).map(|i| i.to_string()).collect();
+        let at_cap_refs: Vec<&str> = at_cap.iter().map(String::as_str).collect();
         assert_eq!(
-            resolve_selection(&req(None, Some(five)))
+            resolve_selection(&req(None, Some(at_cap_refs)))
                 .ok()
-                .expect("five documents allowed")
+                .expect("20 documents allowed")
                 .len(),
-            5
+            20
         );
     }
 
     #[test]
-    fn budget_splits_and_single_doc_keeps_full_budget() {
+    fn budget_scales_to_the_ceiling_and_single_doc_keeps_full_budget() {
+        // Single document: the exact legacy budget.
         assert_eq!(doc_budget(1), DOC_CHAR_BUDGET);
-        assert_eq!(doc_budget(2), DOC_CHAR_BUDGET / 2);
-        assert_eq!(doc_budget(5), DOC_CHAR_BUDGET / 5);
+        // Small selections keep the full per-document share...
+        assert_eq!(doc_budget(2), DOC_CHAR_BUDGET);
+        assert_eq!(doc_budget(5), DOC_CHAR_BUDGET);
+        // ...until the ceiling binds, then it splits evenly.
+        assert_eq!(doc_budget(10), MULTI_DOC_TOTAL_CEILING / 10);
+        assert_eq!(doc_budget(20), MULTI_DOC_TOTAL_CEILING / 20);
+        // The total prompt never exceeds the ceiling at any width.
+        for n in 1..=MAX_INTERACT_DOCS {
+            assert!(
+                doc_budget(n) * n <= MULTI_DOC_TOTAL_CEILING.max(DOC_CHAR_BUDGET),
+                "n={n}"
+            );
+        }
     }
 
     #[test]

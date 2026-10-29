@@ -15,6 +15,23 @@ live**, what is **built but unverified**, and what is **roadmap**.
 ## [Unreleased]
 
 ### Added
+- **Interact + upload caps raised (29 Oct 2026)**: the Interact
+  multi-document cap rises 5 → **20 documents at a time**
+  (server-enforced `MAX_INTERACT_DOCS`, same clean 400 over the cap;
+  UI copy derives from the same number). The analysis budget now
+  scales with the selection instead of splitting a fixed pot: a
+  document keeps its full legacy 24,000-char share until the total
+  would pass a **120,000-char ceiling**, which then splits evenly
+  (20 documents → 6,000 chars each); per-document truncation flags
+  stay exact, and single-document runs are byte-identical to before.
+  Upload batches gain intake caps — **20 files and 10 folders per
+  batch** — applied in arrival order across file picks, folder picks
+  and drag-and-drop: items beyond a cap stay in the batch list as
+  "Skipped — batch limit of N files/folders reached", never silently
+  dropped. Auto-select after upload rises to the 20 cap with it.
+  Server cap/budget tests updated to the new numbers (workspace
+  tests unchanged at 202). Live verification on :3001 recorded with
+  the arc's final entry below.
 - **Interact: upload files and folders in place (29 Oct 2026)**: the
   Interact page gains Upload files / Upload folder controls plus
   drag-and-drop of files and folders (dropped folders are traversed

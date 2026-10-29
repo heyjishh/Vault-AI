@@ -15,7 +15,7 @@ export interface UploadItem {
   key: number
   file: File
   relPath: string
-  status: 'queued' | 'indexing' | 'ready' | 'failed'
+  status: 'queued' | 'indexing' | 'ready' | 'failed' | 'skipped'
   error?: string
   docId?: string
   /** e.g. "selected" / "already selected" / "selection full". */
@@ -69,7 +69,41 @@ const ACTIONS = [
 
 /** Mirrors the server cap (MAX_INTERACT_DOCS in routes/create.rs):
  *  the analysis budget is split across the selected documents. */
-export const MAX_INTERACT_DOCS = 5
+export const MAX_INTERACT_DOCS = 20
+
+/** Per-batch upload intake caps: at most 20 files and at most 10
+ *  folders in one batch (one picker/drop action). Items beyond a cap
+ *  stay in the batch list as 'skipped' with the reason shown — never
+ *  silently dropped. */
+export const MAX_BATCH_FILES = 20
+export const MAX_BATCH_FOLDERS = 10
+
+/** Top-level folder a batch item belongs to ('' for loose files). */
+export function topFolderOf(relPath: string): string {
+  return relPath.includes('/') ? relPath.split('/')[0] : ''
+}
+
+/** Apply the per-batch caps in arrival order: the first 20 files
+ *  from the first 10 distinct folders are accepted; everything else
+ *  is marked skipped with the cap that stopped it. */
+export function applyBatchCaps(
+  files: { file: File; relPath: string }[],
+): { file: File; relPath: string; skipReason?: string }[] {
+  const folders = new Set<string>()
+  let accepted = 0
+  return files.map(({ file, relPath }) => {
+    const folder = topFolderOf(relPath)
+    if (folder && !folders.has(folder) && folders.size >= MAX_BATCH_FOLDERS) {
+      return { file, relPath, skipReason: `batch limit of ${MAX_BATCH_FOLDERS} folders reached` }
+    }
+    if (accepted >= MAX_BATCH_FILES) {
+      return { file, relPath, skipReason: `batch limit of ${MAX_BATCH_FILES} files reached` }
+    }
+    if (folder) folders.add(folder)
+    accepted += 1
+    return { file, relPath }
+  })
+}
 
 function treatmentChip(status: string) {
   if (status === 'overruled') return 'bg-rose-100 text-rose-800'
@@ -223,11 +257,12 @@ export default function InteractPage({ matterId, allowScopeToggle }: { matterId?
 
   const addFiles = (files: { file: File; relPath: string }[]) => {
     if (files.length === 0) return
-    const items: UploadItem[] = files.map(({ file, relPath }) => ({
+    const items: UploadItem[] = applyBatchCaps(files).map(({ file, relPath, skipReason }) => ({
       key: ++keyRef.current,
       file,
       relPath,
-      status: 'queued' as const,
+      status: skipReason ? ('skipped' as const) : ('queued' as const),
+      error: skipReason,
     }))
     setBatchLabel(batchLabelFor(items))
     setUploads([...uploadsRef.current, ...items])
@@ -295,7 +330,7 @@ export default function InteractPage({ matterId, allowScopeToggle }: { matterId?
             <FolderUp size={14} /> Upload folder
           </button>
           <span className="text-[12.5px] text-stone-400">
-            or drop files/folders anywhere here — uploads join the vault and are selected automatically
+            or drop files/folders anywhere here — up to {MAX_BATCH_FILES} files and {MAX_BATCH_FOLDERS} folders per batch; uploads join the vault and are selected automatically
           </span>
           <input
             ref={fileInputRef}
@@ -347,6 +382,9 @@ export default function InteractPage({ matterId, allowScopeToggle }: { matterId?
                   )}
                   {u.status === 'failed' && (
                     <span className="text-[#a02c2c]">Failed: {u.error}</span>
+                  )}
+                  {u.status === 'skipped' && (
+                    <span className="text-amber-700">Skipped — {u.error}</span>
                   )}
                 </li>
               ))}
