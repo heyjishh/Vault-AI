@@ -15,6 +15,45 @@ live**, what is **built but unverified**, and what is **roadmap**.
 ## [Unreleased]
 
 ### Added
+- **Universal upload intake — multi-file and folder pickers on
+  every surface (30 Oct 2026)**: the user's directive was
+  explicit — multi-file AND folder selection everywhere (through
+  a Brief, direct, Vault, Private Vault), not only where earlier
+  pieces happened to land them. Two gaps remained after
+  Piece 18: the Vault page had a multi-file picker but folder
+  intake only via drag-and-drop traversal (no folder picker),
+  and the Confidential Vault's seal flow was still single-file.
+  Now: the Vault page gains an "Upload a folder" picker
+  (`webkitdirectory`) beside the dropzone, wired through the
+  shared intake (the same caps of 20 files / 10 folders per
+  batch, batch labelling, skipped-with-reason overflow) into its
+  per-file staged queue — drop behavior unchanged. The
+  Confidential Vault's seal section gains "Choose files…"
+  (`multiple`) and "Choose folder…" (`webkitdirectory`) pickers
+  (accept filter unchanged) feeding ONE sequential seal queue:
+  per item, Uploading (the file is read into memory) → Sealing
+  (the per-document seal POST; the shared progress list gains an
+  honest 'sealing' stage for it) → Ready only on the server's
+  confirmation ("N chunks sealed"), or Failed with the server's
+  actual error plus Retry/Dismiss. Pasted text joins the same
+  queue as a one-item job. Title rule: batch files are titled by
+  their own names; a lone file picked while the Title field is
+  filled uses that title (the field's long-standing role).
+  Locked gating is exact: the queue can only start from the seal
+  section, which renders only while the vault is unlocked, and
+  if the vault is locked mid-queue each remaining item fails
+  inline with the server's locked error — never a silent stop.
+  A final sweep re-verified that the admin frontend has no file
+  inputs at all, so no single-pick upload surface remains.
+  Frontend-only — no backend change; the shared frontend dist
+  means prod serves the new pickers immediately. Verified:
+  workspace tests 238 passed / 0 failed, frontend build clean,
+  the served bundle carries `webkitdirectory` for all four
+  folder pickers (Interact, Brief, Vault, Confidential Vault)
+  and `multiple` on all four file pickers, and on the test
+  instance two files sealed back-to-back through the exact
+  per-file seal call both landed in the Confidential Vault's
+  document list (an ordinary vault ingest also returns 200).
 - **Multiple-file selection on the Brief and Vault pages
   (30 Oct 2026)**: the Brief page's and the Vault page's file
   pickers only ever took a single file (`files?.[0]`, no
