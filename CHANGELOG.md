@@ -525,6 +525,30 @@ live**, what is **built but unverified**, and what is **roadmap**.
   surfaced as a flaky failure in the Piece 4 regression test.
 
 ### Fixed
+- **Brief-vault and soft Asks no longer share one cached completion
+  (29 Oct 2026, Piece 15, defect 2).** Piece 12 partitioned the
+  semantic ANSWER cache by mode, but the completion cache below it
+  (`CachedLlm`, the production wiring in `main.rs`) keys only on
+  (system, prompt) — and the brief-vault mode never entered the
+  prompt: it lived only in the scope note and the answer-cache key.
+  A hard ask and a soft ask over the same brief retrieve the same
+  context, so their prompts were byte-identical and the second mode
+  was silently served the first mode's generated text in 0s, with
+  its own mode's annotations stamped on top (observed live on :3001:
+  a soft ask replayed the hard ask's cached completion, scope note
+  None). Piece 12's unit test missed it because its service used a
+  bare mock LLM — the completion cache was not in its path. Fix:
+  brief-vault generations now carry a system-prompt addendum naming
+  the brief and the boundary (also a real instruction to the model),
+  so the modes' prompts — and therefore their completion-cache
+  entries — are distinct in both directions. Regression coverage is
+  at the handler's own composition: the query service wired exactly
+  as `main.rs` builds it (`CachedLlm` over a scripted provider),
+  driven through `query_opts`, asserting per-mode provider calls,
+  per-mode answers in both orders, and scope notes surviving cache
+  serves (the fallback disclosure for soft serves, the brief-vault
+  note for hard serves); the cross-serve test fails if the addendum
+  is removed.
 - **Second Gemini failure page recognised and purged (29 Oct 2026,
   Piece 15, defect 1).** The bridge has more than one failure page:
   "I seem to be encountering an error. Can I try something else for

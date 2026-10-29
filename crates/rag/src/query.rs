@@ -265,6 +265,26 @@ pub fn brief_vault_note_empty(label: &str) -> String {
     )
 }
 
+/// System-prompt addendum stamped on brief-vault generations
+/// (Piece 15). The mode must be IN the prompt, not only in the scope
+/// note and the answer-cache key: the completion cache below the
+/// answer cache (`CachedLlm`) keys on (system, prompt) alone, so a
+/// hard ask and a soft ask that retrieve the same in-brief context
+/// otherwise produce byte-identical prompts and silently share
+/// whichever completion was generated first — the mode-partitioned
+/// answer cache never gets a say (pinned live on :3001: a soft ask
+/// was served the hard ask's cached completion in 0s). The addendum
+/// is also a real instruction: it tells the model the vault excerpts
+/// are the brief's complete universe for this question.
+pub fn brief_vault_system_addendum(label: &str) -> String {
+    format!(
+        "Brief-vault scope: the vault excerpts below are the complete contents of the brief \
+         \"{label}\" — no other vault document was searched for this question. Ground the \
+         answer only in the sources provided; do not rely on, or imply the existence of, \
+         any other vault document."
+    )
+}
+
 /// The single pooled retrieval query built from refinement terms
 /// (Piece 13). Terms are keywords/phrases (statutes, sections, legal
 /// terms, synonyms), so a comma-joined string embeds as one topical
@@ -1882,6 +1902,15 @@ impl QueryService {
             system_hint = res.system_hint;
         }
         let mut system = self.answer_system();
+        // Brief-vault mode rides in the system prompt (Piece 15): see
+        // `brief_vault_system_addendum` — without it, hard and soft
+        // asks over the same brief share one completion-cache entry.
+        if let Some(label) = &opts.brief_vault {
+            if scope.is_some() {
+                system.push_str("\n\n");
+                system.push_str(&brief_vault_system_addendum(label));
+            }
+        }
         if let Some(hint) = &system_hint {
             system.push_str("\n\n");
             system.push_str(hint);
@@ -3927,6 +3956,259 @@ mod tests {
             !off_after.citations.is_empty(),
             "a brief-vault refusal must not poison the soft mode"
         );
+    }
+
+    /// An answer LLM that plays a fixed script of ANSWER responses —
+    /// one per generation call — and counts them; every non-answer
+    /// call gets "[]", which the expansion/extraction callers degrade
+    /// on. The count is the point: a cache serve never increments it.
+    struct ScriptedAnswerLlm {
+        script: std::sync::Mutex<std::collections::VecDeque<String>>,
+        answer_calls: std::sync::atomic::AtomicUsize,
+    }
+
+    impl ScriptedAnswerLlm {
+        fn new(script: Vec<&str>) -> Self {
+            Self {
+                script: std::sync::Mutex::new(
+                    script.into_iter().map(str::to_string).collect(),
+                ),
+                answer_calls: std::sync::atomic::AtomicUsize::new(0),
+            }
+        }
+        fn answer_calls(&self) -> usize {
+            self.answer_calls.load(std::sync::atomic::Ordering::Relaxed)
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl LlmClient for ScriptedAnswerLlm {
+        async fn complete(&self, system: &str, _user: &str) -> Result<String> {
+            if system.contains("using ONLY the provided source excerpts") {
+                self.answer_calls
+                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                return Ok(self
+                    .script
+                    .lock()
+                    .unwrap()
+                    .pop_front()
+                    .expect("scripted answer llm ran out of responses"));
+            }
+            Ok("[]".to_string())
+        }
+    }
+
+    /// Piece 15 fixture: `seeded_two_briefs` wired the way the
+    /// service behind the HTTP handler is actually built in
+    /// production (crates/server/src/main.rs): the generation LLM is
+    /// wrapped in `CachedLlm` over a shared completion cache, and
+    /// `query_opts` — the exact call the handler makes — drives it.
+    /// Piece 12's cache test used a BARE mock LLM, so the completion
+    /// cache below the answer cache was invisible to it; that is the
+    /// layer the live cross-serve travelled through.
+    async fn seeded_two_briefs_handler_path(
+        script: Vec<&str>,
+    ) -> (QueryService, String, String, Arc<ScriptedAnswerLlm>) {
+        let rag = Arc::new(RagAnything::new(
+            RagAnythingConfig::default(),
+            Arc::new(MockEmbeddings::new(16)),
+            Arc::new(InMemoryVectorStore::new()),
+            Arc::new(InMemoryGraphStore::new()),
+            Arc::new(MockLlm::new(r#"["Acme"]"#)),
+            500,
+            50,
+        ));
+        rag.process_document_complete(
+            "nda.txt",
+            b"Acme Corp agrees to confidentiality. Acme shall not disclose trade secrets.",
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+        rag.process_document_complete(
+            "rent.txt",
+            b"Beta Properties served a notice to quit on the tenant for arrears of rent. The tenant must vacate the premises.",
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+        let docs = rag.list_documents();
+        let id_of = |name: &str| {
+            docs.iter()
+                .find(|d| rag.doc_title(&d.id).as_deref() == Some(name))
+                .unwrap_or_else(|| panic!("doc titled {name} seeded"))
+                .id
+                .clone()
+        };
+        let (a_id, b_id) = (id_of("nda.txt"), id_of("rent.txt"));
+        let scripted = Arc::new(ScriptedAnswerLlm::new(script));
+        let llm: Arc<dyn LlmClient> = Arc::new(crate::cache::CachedLlm::new(
+            scripted.clone(),
+            Arc::new(crate::cache::SemanticCache::new(1024)),
+        ));
+        let rag2 = rag.clone();
+        let svc = QueryService::new(
+            rag2.backends().0,
+            rag2.backends().1,
+            rag2.backends().2,
+            llm,
+            Arc::new(move |id: &str| rag2.doc_title(id)),
+            Arc::new(crate::web::NoopWebSearch),
+            None,
+        );
+        (svc, a_id, b_id, scripted)
+    }
+
+    #[tokio::test]
+    async fn handler_path_brief_vault_modes_never_share_a_completion() {
+        // Piece 15 regression for the live :3001 cross-serve. Hard
+        // and soft asks over the same brief retrieve the same
+        // context; before the fix their generation prompts were
+        // byte-identical, so through the production CachedLlm wiring
+        // the second mode was served the FIRST mode's completion in
+        // 0s — underneath the answer cache whose key Piece 12 had
+        // partitioned (its test used a bare mock and could not see
+        // this layer). Both orders are pinned: whichever mode asks
+        // second must reach the provider and generate its OWN answer.
+        let q = "What did Acme agree to?";
+
+        // Hard first, then soft.
+        let (svc, a_id, _b_id, llm) = seeded_two_briefs_handler_path(vec![
+            "Hard mode answer [doc:0].",
+            "Soft mode answer [doc:0].",
+        ])
+        .await;
+        let hard = svc
+            .query_opts(q, QueryMode::Mix, 3, Some(vec![a_id.clone()]), true, &brief_vault_opts(), CitatorContext::default())
+            .await
+            .unwrap();
+        assert!(hard.answer.contains("Hard mode answer"), "{}", hard.answer);
+        assert_eq!(
+            hard.scope_note.as_deref(),
+            Some(brief_vault_note_hit("Brief A").as_str())
+        );
+        assert_eq!(llm.answer_calls(), 1);
+        let soft = svc
+            .query_opts(q, QueryMode::Mix, 3, Some(vec![a_id.clone()]), false, &AskOptions::default(), CitatorContext::default())
+            .await
+            .unwrap();
+        assert!(
+            soft.answer.contains("Soft mode answer"),
+            "soft ask must generate its own answer, not replay the hard completion: {}",
+            soft.answer
+        );
+        assert_eq!(soft.scope_note, None, "soft in-brief answer carries no mode note");
+        assert_eq!(llm.answer_calls(), 2, "soft ask reached the provider — no cross-serve");
+        // Each mode's repeat serves its OWN cached answer, with its
+        // own note, and no new provider call.
+        let soft2 = svc
+            .query_opts(q, QueryMode::Mix, 3, Some(vec![a_id.clone()]), false, &AskOptions::default(), CitatorContext::default())
+            .await
+            .unwrap();
+        assert!(soft2.answer.contains("Soft mode answer"), "{}", soft2.answer);
+        let hard2 = svc
+            .query_opts(q, QueryMode::Mix, 3, Some(vec![a_id.clone()]), true, &brief_vault_opts(), CitatorContext::default())
+            .await
+            .unwrap();
+        assert!(hard2.answer.contains("Hard mode answer"), "{}", hard2.answer);
+        assert_eq!(
+            hard2.scope_note.as_deref(),
+            Some(brief_vault_note_hit("Brief A").as_str()),
+            "cached hard serve keeps the brief-vault note"
+        );
+        assert_eq!(llm.answer_calls(), 2, "repeats serve from cache, per mode");
+
+        // Soft first, then hard — fresh service, opposite order.
+        let (svc2, a2, _b2, llm2) = seeded_two_briefs_handler_path(vec![
+            "Soft mode answer [doc:0].",
+            "Hard mode answer [doc:0].",
+        ])
+        .await;
+        let soft = svc2
+            .query_opts(q, QueryMode::Mix, 3, Some(vec![a2.clone()]), false, &AskOptions::default(), CitatorContext::default())
+            .await
+            .unwrap();
+        assert!(soft.answer.contains("Soft mode answer"), "{}", soft.answer);
+        assert_eq!(llm2.answer_calls(), 1);
+        let hard = svc2
+            .query_opts(q, QueryMode::Mix, 3, Some(vec![a2]), true, &brief_vault_opts(), CitatorContext::default())
+            .await
+            .unwrap();
+        assert!(
+            hard.answer.contains("Hard mode answer"),
+            "hard ask must generate its own answer, not replay the soft completion: {}",
+            hard.answer
+        );
+        assert_eq!(llm2.answer_calls(), 2, "hard ask reached the provider — no cross-serve");
+    }
+
+    #[tokio::test]
+    async fn handler_path_cache_serves_carry_their_scope_notes() {
+        // Piece 15: scope disclosure must survive cache serves in
+        // both modes. A soft answer that widened to the full vault
+        // keeps its fallback note when the answer cache serves it
+        // again; a brief-vault answer keeps the mode's note (also
+        // pinned on the generated path in the cross-serve test).
+        let (svc, a_id, _b_id, llm) = seeded_two_briefs_handler_path(vec![
+            "Fallback answer [doc:0].",
+            "Hard mode answer [doc:0].",
+        ])
+        .await;
+        // Soft ask over an EMPTY brief scope widens (today's behavior).
+        let q_rent = "What notice did Beta Properties serve for rent arrears?";
+        let off = svc
+            .query_opts(q_rent, QueryMode::Mix, 3, Some(Vec::new()), false, &AskOptions::default(), CitatorContext::default())
+            .await
+            .unwrap();
+        assert!(off.answer.contains("Fallback answer"), "{}", off.answer);
+        assert!(
+            off.scope_note
+                .as_deref()
+                .is_some_and(|n| n.contains("answered from the full vault")),
+            "fallback discloses itself: {:?}",
+            off.scope_note
+        );
+        assert_eq!(llm.answer_calls(), 1);
+        // The cached repeat carries the same disclosure verbatim.
+        let off2 = svc
+            .query_opts(q_rent, QueryMode::Mix, 3, Some(Vec::new()), false, &AskOptions::default(), CitatorContext::default())
+            .await
+            .unwrap();
+        assert!(off2.answer.contains("Fallback answer"), "{}", off2.answer);
+        assert!(
+            off2.scope_note
+                .as_deref()
+                .is_some_and(|n| n.contains("answered from the full vault")),
+            "cached serve keeps the fallback note: {:?}",
+            off2.scope_note
+        );
+        assert_eq!(llm.answer_calls(), 1, "repeat served from the answer cache");
+        // Hard ask in-brief: the mode note is stamped at generation
+        // and survives the cached repeat.
+        let q_acme = "What did Acme agree to?";
+        let on = svc
+            .query_opts(q_acme, QueryMode::Mix, 3, Some(vec![a_id.clone()]), true, &brief_vault_opts(), CitatorContext::default())
+            .await
+            .unwrap();
+        assert!(on.answer.contains("Hard mode answer"), "{}", on.answer);
+        assert_eq!(
+            on.scope_note.as_deref(),
+            Some(brief_vault_note_hit("Brief A").as_str())
+        );
+        assert_eq!(llm.answer_calls(), 2);
+        let on2 = svc
+            .query_opts(q_acme, QueryMode::Mix, 3, Some(vec![a_id]), true, &brief_vault_opts(), CitatorContext::default())
+            .await
+            .unwrap();
+        assert!(on2.answer.contains("Hard mode answer"), "{}", on2.answer);
+        assert_eq!(
+            on2.scope_note.as_deref(),
+            Some(brief_vault_note_hit("Brief A").as_str()),
+            "cached serve keeps the brief-vault note"
+        );
+        assert_eq!(llm.answer_calls(), 2);
     }
 
     #[tokio::test]
