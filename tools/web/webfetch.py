@@ -208,13 +208,46 @@ def fetch_livelaw(url: str) -> dict | None:
     return got
 
 
+def is_kanoon(url: str) -> bool:
+    host = urllib.parse.urlparse(url).netloc.lower().removeprefix("www.")
+    return host == "indiankanoon.org" or host.endswith(".indiankanoon.org")
+
+
+def fetch_kanoon(url: str) -> dict | None:
+    """Indian Kanoon blocks this sandbox's egress directly — plain
+    HTTP is connection-reset and the stealth Firefox stops at
+    Cloudflare's "Just a moment…" (both verified 2026-10-29). The
+    reader proxy fetches Kanoon fine, so it leads here; the direct
+    paths remain as fallbacks for when the blocks lift."""
+    got = fetch_jina(url)
+    print(f"webfetch: kanoon path=jina {'ok' if got else 'fail'}",
+          file=sys.stderr)
+    if got:
+        return got
+    got = fetch_http(url) or fetch_firefox(url)
+    print(f"webfetch: kanoon path=direct {'ok' if got else 'fail'}",
+          file=sys.stderr)
+    return got
+
+
 def main() -> None:
     url = sys.argv[1] if len(sys.argv) > 1 else ""
     if not url.startswith("http"):
         print("webfetch: need an http(s) url", file=sys.stderr)
         sys.exit(2)
-    got = fetch_livelaw(url) if is_livelaw(url) else \
-        fetch_http(url) or fetch_firefox(url)
+    if is_livelaw(url):
+        got = fetch_livelaw(url)
+    elif is_kanoon(url):
+        got = fetch_kanoon(url)
+    else:
+        # Order matters: plain HTTP first (fast when it works), then
+        # the reader proxy (fast, and reads from its own infrastructure
+        # so per-site egress blocks don't apply — e.g.
+        # incometaxindia.gov.in 403s HTTP and stalls the browser for
+        # 60s+ before the proxy answers in ~4s), and the stealth
+        # Firefox only as the last resort for JS-heavy pages the proxy
+        # cannot render either.
+        got = fetch_http(url) or fetch_jina(url) or fetch_firefox(url)
     if not got:
         print("webfetch: no readable text found", file=sys.stderr)
         sys.exit(1)
