@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, FileText, Paperclip, X } from 'lucide-react'
 import { mattersApi, vaultApi } from '../api/client'
@@ -8,6 +8,7 @@ import { StatusPill } from './MattersPage'
 import AssistantPage from './AssistantPage'
 import InteractPage from './InteractPage'
 import DraftPage from './DraftPage'
+import { UploadProgressList, type ProgressItemView } from './UploadProgress'
 
 const TABS = ['Overview', 'Documents', 'Ask', 'Interact', 'Draft', 'History', 'Notes'] as const
 type Tab = (typeof TABS)[number]
@@ -196,16 +197,69 @@ function Documents({ matterId }: { matterId: string }) {
     qc.invalidateQueries({ queryKey: ['matters'] })
     qc.invalidateQueries({ queryKey: ['docs'] })
   }
-  const uploadFile = useMutation({
-    mutationFn: (f: File) => vaultApi.uploadFile(pasteTitle || f.name.replace(/\.[^.]+$/, ''), f, matterId),
-    onSuccess: (r) => { invalidate(); toast('success', `Filed — ${r.chunks} chunks indexed`) },
-    onError: (e) => toast('error', (e as Error).message),
-  })
-  const uploadText = useMutation({
-    mutationFn: () => vaultApi.uploadText(pasteTitle || 'Pasted document', 'pasted.txt', paste, matterId),
-    onSuccess: (r) => { invalidate(); setPaste(''); toast('success', `Filed — ${r.chunks} chunks indexed`) },
-    onError: (e) => toast('error', (e as Error).message),
-  })
+  // ---- Add-documents progress (Piece 17): the same staged
+  // Uploading → Indexing → Ready/Failed feedback Interact has,
+  // rendered by the shared UploadProgressList — this panel used to
+  // show a bare "Indexing…" button label for the whole ingest.
+  // Items process sequentially (ingest is LLM-backed); Ready means
+  // the server's ingest response landed, and a failure stays inline
+  // with the server's error plus Retry/Dismiss.
+  type AddPayload =
+    | { kind: 'file'; file: File; title: string }
+    | { kind: 'text'; title: string; text: string }
+  interface AddItem extends ProgressItemView { payload: AddPayload }
+  const [addItems, setAddItemsState] = useState<AddItem[]>([])
+  const addItemsRef = useRef<AddItem[]>([])
+  const addKeyRef = useRef(0)
+  const addProcessingRef = useRef(false)
+  const matterRef = useRef(matterId)
+  matterRef.current = matterId
+  const setAddItems = (next: AddItem[]) => {
+    addItemsRef.current = next
+    setAddItemsState(next)
+  }
+  const patchAddItem = (key: number, patch: Partial<AddItem>) =>
+    setAddItems(addItemsRef.current.map((i) => (i.key === key ? { ...i, ...patch } : i)))
+  const processAddQueue = async () => {
+    if (addProcessingRef.current) return
+    addProcessingRef.current = true
+    try {
+      for (;;) {
+        const item = addItemsRef.current.find((i) => i.status === 'queued')
+        if (!item) break
+        const isFile = item.payload.kind === 'file'
+        patchAddItem(item.key, {
+          status: isFile ? 'uploading' : 'indexing',
+          progress: isFile ? 0 : null,
+          startedAt: Date.now(),
+        })
+        try {
+          const p = item.payload
+          const r = p.kind === 'file'
+            ? await vaultApi.uploadFile(p.title, p.file, matterRef.current, (fraction) => {
+                if (fraction !== null && fraction >= 1) {
+                  patchAddItem(item.key, { status: 'indexing', progress: 1 })
+                } else {
+                  patchAddItem(item.key, { status: 'uploading', progress: fraction })
+                }
+              })
+            : await vaultApi.uploadText(p.title, 'pasted.txt', p.text, matterRef.current)
+          patchAddItem(item.key, { status: 'ready', progress: 1, note: `${r.chunks} chunks indexed` })
+          invalidate()
+          toast('success', `Filed — ${r.chunks} chunks indexed`)
+        } catch (e) {
+          patchAddItem(item.key, { status: 'failed', error: (e as Error).message })
+        }
+      }
+    } finally {
+      addProcessingRef.current = false
+    }
+  }
+  const enqueueAdd = (payload: AddPayload, name: string) => {
+    const item: AddItem = { key: ++addKeyRef.current, name, status: 'queued', payload }
+    setAddItems([...addItemsRef.current, item])
+    void processAddQueue()
+  }
   const attach = useMutation({
     mutationFn: () => mattersApi.attach(matterId, attachId),
     onSuccess: () => { invalidate(); setAttachId(''); toast('success', 'Document filed in this brief') },
@@ -255,10 +309,14 @@ function Documents({ matterId }: { matterId: string }) {
         <p className="text-[11px] uppercase tracking-wider text-stone-400 font-medium">Add documents</p>
         <div className="mt-3 flex flex-wrap items-center gap-3">
           <label className="rounded-lex bg-ink text-ivory px-3.5 py-2 text-[13px] font-medium cursor-pointer hover:bg-ink-900 transition-colors">
-            {uploadFile.isPending ? 'Indexing…' : 'Upload a file'}
+            Upload a file
             <input
               type="file" className="hidden"
-              onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadFile.mutate(f); e.target.value = '' }}
+              onChange={(e) => {
+                const f = e.target.files?.[0]
+                if (f) enqueueAdd({ kind: 'file', file: f, title: pasteTitle || f.name.replace(/\.[^.]+$/, '') }, f.name)
+                e.target.value = ''
+              }}
             />
           </label>
           {unfiled.length > 0 && (
@@ -292,12 +350,26 @@ function Documents({ matterId }: { matterId: string }) {
           className="mt-2 w-full rounded-lex border border-stone-200 px-3 py-2 text-[13px] outline-none focus:border-stone-400"
         />
         <button
-          disabled={!paste.trim() || uploadText.isPending}
-          onClick={() => uploadText.mutate()}
+          disabled={!paste.trim()}
+          onClick={() => {
+            enqueueAdd(
+              { kind: 'text', title: pasteTitle || 'Pasted document', text: paste },
+              pasteTitle || 'Pasted document',
+            )
+            setPaste('')
+          }}
           className="mt-2 rounded-lex border border-stone-200 px-3.5 py-2 text-[13px] font-medium disabled:opacity-40 hover:border-stone-300"
         >
-          {uploadText.isPending ? 'Indexing…' : 'File pasted text'}
+          File pasted text
         </button>
+        <UploadProgressList
+          items={addItems}
+          onRetry={(key) => {
+            patchAddItem(key, { status: 'queued', error: undefined, progress: null })
+            void processAddQueue()
+          }}
+          onDismiss={(key) => setAddItems(addItemsRef.current.filter((i) => i.key !== key))}
+        />
       </div>
     </div>
   )

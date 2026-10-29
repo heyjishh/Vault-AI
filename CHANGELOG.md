@@ -15,6 +15,33 @@ live**, what is **built but unverified**, and what is **roadmap**.
 ## [Unreleased]
 
 ### Added
+- **Staged upload/indexing progress on every ingest surface
+  (29 Oct 2026)**: the Brief page's Add-documents panel no longer
+  sits on a bare "Indexing…" button label for the whole ingest
+  (user report, 29 Oct). Piece 10's staged progress — Uploading
+  with byte progress → Indexing → Ready/Failed, per-item bars — now
+  lives in one shared component (`UploadProgressList`, extracted
+  from Interact, which renders through it too) and drives: the
+  Brief page's file-upload and pasted-text flows (queued items,
+  an elapsed timer while pending, Ready only on the server's
+  ingest confirmation, failures inline with the server's error
+  plus Retry/Dismiss), the Vault page's pasted-text flow (same
+  staged row), the Vault dropzone (already staged; gained the
+  elapsed readout and a persistent inline failure row with
+  Retry/Dismiss), the Vault S3/R2 ingest button (elapsed readout;
+  a bulk server-side pull has no client stages to show), and the
+  Confidential Vault's Seal flow (staged row, Ready = sealed and
+  confirmed). Frontend-only over the existing ingest endpoints —
+  no backend change. The frontend dist is shared between prod and
+  test, so prod shows the new panel immediately; it needs no
+  backend deploy. Verified: workspace tests 238 passed / 0 failed,
+  frontend build clean, the built bundle carries the shared
+  progress UI, and a live ingest into a test brief on the test
+  instance returned the confirmed report the UI keys "Ready" on
+  (a headless visual check was not feasible in the sandbox — the
+  only Chrome present is the harness-managed browser, which
+  refuses direct launches — so the Brief panel relies on parity
+  with the same shared component Interact already uses live).
 - **Interact: Ask-style UI + Vault / Private / Both source selector
   (29 Oct 2026)**: Interact's chat surface adopts the Ask experience —
   a message thread (question headings, live status line with elapsed

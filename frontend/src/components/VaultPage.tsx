@@ -7,6 +7,7 @@ import type { DocumentInfo, IngestReport } from '../api/types'
 import { useSession } from '../stores/session'
 import { useMatter } from '../stores/matter'
 import { EmptyState, Pager, Spinner, usePagination } from './ui'
+import { UploadProgressList, formatElapsed, isPendingStatus, useNow, type ProgressItemView } from './UploadProgress'
 
 export default function VaultPage() {
   const qc = useQueryClient()
@@ -59,29 +60,69 @@ export default function VaultPage() {
   const [uploadStage, setUploadStage] = useState<
     { stage: 'uploading' | 'indexing'; fraction: number | null } | null
   >(null)
+  // Piece 17: a failed dropzone upload also leaves a persistent
+  // inline row (server error + Retry/Dismiss) under the dropzone —
+  // previously the failure existed only as a transient toast.
+  const uploadStartRef = useRef(0)
+  const [fileError, setFileError] = useState<{ file: File; title: string; error: string } | null>(null)
   const uploadFile = useMutation({
-    mutationFn: (f: File) =>
-      vaultApi.uploadFile(title || f.name.replace(/\.[^.]+$/, ''), f, matterId, (fraction) =>
+    mutationFn: (v: { file: File; title: string }) => {
+      uploadStartRef.current = Date.now()
+      setFileError(null)
+      return vaultApi.uploadFile(v.title, v.file, matterId, (fraction) =>
         setUploadStage(
           fraction !== null && fraction >= 1
             ? { stage: 'indexing', fraction: 1 }
             : { stage: 'uploading', fraction },
         ),
-      ),
+      )
+    },
     onSuccess: (r) => { afterChange(r, r.documents > 0 ? 'Document' : 'File'); setTitle('') },
-    onError: (e) => toast('error', (e as Error).message),
+    onError: (e, v) => {
+      toast('error', (e as Error).message)
+      setFileError({ file: v.file, title: v.title, error: (e as Error).message })
+    },
     onSettled: () => setUploadStage(null),
   })
-  const uploadText = useMutation({
-    mutationFn: () => vaultApi.uploadText(title || 'Pasted document', 'pasted.txt', paste, matterId),
-    onSuccess: (r) => { afterChange(r, 'Pasted text'); setPaste(''); setTitle('') },
-    onError: (e) => toast('error', (e as Error).message),
-  })
+  const uploadNow = useNow(uploadFile.isPending)
+  // Piece 17: pasted text gets the same staged progress as every
+  // other ingest surface (shared UploadProgressList) instead of a
+  // bare "Indexing…" button label. A text post has no measurable
+  // byte progress, so the wait is the Indexing stage; Ready is set
+  // only when the server's ingest response lands.
+  const [pasteItem, setPasteItem] = useState<(ProgressItemView & { title: string; text: string }) | null>(null)
+  const pasteKeyRef = useRef(0)
+  const pasteBusy = pasteItem != null && isPendingStatus(pasteItem.status)
+  const runPaste = async (itemTitle: string, text: string) => {
+    const key = ++pasteKeyRef.current
+    setPasteItem({
+      key, name: itemTitle, status: 'indexing', progress: null,
+      startedAt: Date.now(), title: itemTitle, text,
+    })
+    try {
+      const r = await vaultApi.uploadText(itemTitle, 'pasted.txt', text, matterId)
+      setPasteItem((cur) => (cur && cur.key === key
+        ? { ...cur, status: 'ready', progress: 1, note: `${r.chunks} chunks indexed` }
+        : cur))
+      afterChange(r, 'Pasted text')
+      setPaste('')
+      setTitle('')
+    } catch (e) {
+      setPasteItem((cur) => (cur && cur.key === key
+        ? { ...cur, status: 'failed', error: (e as Error).message }
+        : cur))
+    }
+  }
+  const ingestStartRef = useRef(0)
   const ingest = useMutation({
-    mutationFn: () => vaultApi.ingestS3(prefix || undefined),
+    mutationFn: () => {
+      ingestStartRef.current = Date.now()
+      return vaultApi.ingestS3(prefix || undefined)
+    },
     onSuccess: (r) => afterChange(r, 'Bucket ingest'),
     onError: (e) => toast('error', (e as Error).message),
   })
+  const ingestNow = useNow(ingest.isPending)
   const [metaDoc, setMetaDoc] = useState<DocumentInfo | null>(null)
   const [indexDocId, setIndexDocId] = useState<string | null>(null)
   const { data: indexChunks, isLoading: indexLoading } = useQuery({
@@ -113,10 +154,10 @@ export default function VaultPage() {
     e.preventDefault()
     setDragging(false)
     const f = e.dataTransfer.files?.[0]
-    if (f) uploadFile.mutate(f)
+    if (f) uploadFile.mutate({ file: f, title: title || f.name.replace(/\.[^.]+$/, '') })
   }
 
-  const busy = uploadFile.isPending || uploadText.isPending || ingest.isPending
+  const busy = uploadFile.isPending || pasteBusy || ingest.isPending
 
   return (
     <div className="max-w-4xl mx-auto px-6 py-10">
@@ -147,9 +188,10 @@ export default function VaultPage() {
         )}
         <p className="font-medium text-[15px] mt-3">
           {uploadFile.isPending
-            ? uploadStage?.stage === 'indexing'
-              ? 'Indexing your document…'
-              : `Uploading…${uploadStage?.fraction != null ? ` ${Math.round(uploadStage.fraction * 100)}%` : ''}`
+            ? (uploadStage?.stage === 'indexing'
+                ? 'Indexing your document…'
+                : `Uploading…${uploadStage?.fraction != null ? ` ${Math.round(uploadStage.fraction * 100)}%` : ''}`)
+              + ` · ${formatElapsed(uploadNow - uploadStartRef.current)}`
             : 'Drop a file here, or click to browse'}
         </p>
         {uploadFile.isPending && (
@@ -173,9 +215,22 @@ export default function VaultPage() {
         <input
           ref={fileRef} type="file" className="hidden"
           accept=".pdf,.txt,.md,.doc,.docx"
-          onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadFile.mutate(f); e.target.value = '' }}
+          onChange={(e) => {
+            const f = e.target.files?.[0]
+            if (f) uploadFile.mutate({ file: f, title: title || f.name.replace(/\.[^.]+$/, '') })
+            e.target.value = ''
+          }}
         />
       </motion.div>
+
+      {fileError && (
+        <UploadProgressList
+          className="mt-4"
+          items={[{ key: 1, name: fileError.file.name, status: 'failed', error: fileError.error }]}
+          onRetry={() => uploadFile.mutate({ file: fileError.file, title: fileError.title })}
+          onDismiss={() => setFileError(null)}
+        />
+      )}
 
       <div className="grid md:grid-cols-2 gap-4 mt-4">
         <div className="rounded-lex-lg border border-stone-200 bg-white shadow-lex p-5">
@@ -191,11 +246,18 @@ export default function VaultPage() {
             className="mt-2 w-full rounded-lex border border-stone-300 px-3 py-2 text-[13px] outline-none focus:border-ink placeholder:text-stone-400 resize-none"
           />
           <button
-            onClick={() => uploadText.mutate()} disabled={busy || !paste.trim()}
+            onClick={() => void runPaste(title || 'Pasted document', paste)} disabled={busy || !paste.trim()}
             className="mt-2 rounded-lex border border-stone-300 px-3.5 py-2 text-[13px] font-medium hover:bg-stone-100 disabled:opacity-50"
           >
-            {uploadText.isPending ? 'Indexing…' : 'Index pasted text'}
+            Index pasted text
           </button>
+          {pasteItem && (
+            <UploadProgressList
+              items={[pasteItem]}
+              onRetry={() => void runPaste(pasteItem.title, pasteItem.text)}
+              onDismiss={() => setPasteItem(null)}
+            />
+          )}
         </div>
         <div className="rounded-lex-lg border border-stone-200 bg-white shadow-lex p-5">
           <h3 className="font-medium text-[15px]">Ingest from S3 / R2</h3>
@@ -213,7 +275,7 @@ export default function VaultPage() {
             onClick={() => ingest.mutate()} disabled={busy}
             className="mt-3 rounded-lex bg-ink text-ivory px-3.5 py-2 text-[13px] font-medium hover:bg-ink-900 disabled:opacity-50"
           >
-            {ingest.isPending ? 'Ingesting…' : 'Start ingest'}
+            {ingest.isPending ? `Ingesting… ${formatElapsed(ingestNow - ingestStartRef.current)}` : 'Start ingest'}
           </button>
         </div>
       </div>

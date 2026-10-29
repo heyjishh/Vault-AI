@@ -10,6 +10,7 @@ import { RefineControls, useRefine } from './RefineControls'
 import AssistantAvatar from './AssistantAvatar'
 import { SourceModal, citeMarkdownComponents, linkifyCitations } from './SourceModal'
 import { EmptyState } from './ui'
+import { UploadProgressList } from './UploadProgress'
 
 /** Same accept set as the Vault page — Interact upload is the vault
  *  ingest pipeline, not a second path. */
@@ -27,6 +28,8 @@ export interface UploadItem {
   docId?: string
   /** e.g. "selected" / "already selected" / "selection full". */
   note?: string
+  /** When this item started processing (ms epoch) — elapsed readout. */
+  startedAt?: number
 }
 
 /** "Folder: Smith-case (12 files)" when the batch came from a folder
@@ -363,7 +366,7 @@ export default function InteractPage({ matterId, go }: { matterId?: string; go?:
       for (;;) {
         const item = uploadsRef.current.find((u) => u.status === 'queued')
         if (!item) break
-        patchUpload(item.key, { status: 'uploading', progress: 0 })
+        patchUpload(item.key, { status: 'uploading', progress: 0, startedAt: Date.now() })
         try {
           const title = item.file.name.replace(/\.[^.]+$/, '')
           // Uploading = bytes in flight (progress events). Once the
@@ -564,85 +567,24 @@ export default function InteractPage({ matterId, go }: { matterId?: string; go?:
           />
         </div>
         {uploads.length > 0 && (
-          <div className="mt-3 rounded-lex border border-stone-200 px-3 py-2.5">
-            <div className="flex items-baseline justify-between gap-3">
-              <p className="text-[13px] font-medium">{batchLabel}</p>
-              <button
-                onClick={() => { setUploads([]); setBatchLabel(null) }}
-                className="text-[12px] text-stone-400 hover:text-stone-600"
-              >
-                Clear list
-              </button>
-            </div>
-            {(() => {
-              const finished = uploads.filter(
-                (u) => u.status === 'ready' || u.status === 'failed' || u.status === 'skipped',
-              ).length
-              const ready = uploads.filter((u) => u.status === 'ready').length
-              return (
-                <div className="mt-2">
-                  <div className="flex items-baseline justify-between gap-3">
-                    <span className="text-[12px] text-stone-500">
-                      {finished} of {uploads.length} files done · {ready} ready
-                    </span>
-                    <span className="text-[12px] text-stone-400">
-                      {Math.round((finished / uploads.length) * 100)}%
-                    </span>
-                  </div>
-                  <div className="h-1.5 mt-1 rounded-full bg-stone-200 overflow-hidden">
-                    <div
-                      className="h-full bg-stone-700 transition-all duration-300"
-                      style={{ width: `${(finished / uploads.length) * 100}%` }}
-                    />
-                  </div>
-                </div>
-              )
-            })()}
-            <ul className="mt-2 space-y-2">
-              {uploads.map((u) => (
-                <li key={u.key} className="text-[13px]">
-                  <div className="flex items-center gap-2">
-                    <span className="flex-1 truncate">{u.relPath || u.file.name}</span>
-                    {u.status === 'queued' && <span className="text-stone-400">Queued</span>}
-                    {u.status === 'uploading' && (
-                      <span className="text-stone-500">
-                        Uploading…{u.progress != null ? ` ${Math.round(u.progress * 100)}%` : ''}
-                      </span>
-                    )}
-                    {u.status === 'indexing' && <span className="text-stone-500">Indexing…</span>}
-                    {u.status === 'ready' && (
-                      <span className="text-emerald-700">Ready{u.note ? ` · ${u.note}` : ''}</span>
-                    )}
-                    {u.status === 'failed' && (
-                      <span className="text-[#a02c2c]">Failed: {u.error}</span>
-                    )}
-                    {u.status === 'skipped' && (
-                      <span className="text-amber-700">Skipped — {u.error}</span>
-                    )}
-                  </div>
-                  {(u.status === 'uploading' || u.status === 'indexing' || u.status === 'ready') && (
-                    <div className="h-1 mt-1 rounded-full bg-stone-200 overflow-hidden">
-                      <div
-                        className={`h-full transition-all duration-300 ${
-                          u.status === 'ready'
-                            ? 'bg-emerald-600'
-                            : u.status === 'indexing'
-                              ? 'bg-stone-400 animate-pulse'
-                              : 'bg-stone-500'
-                        } ${u.status === 'uploading' && u.progress == null ? 'animate-pulse' : ''}`}
-                        style={{
-                          width:
-                            u.status === 'uploading' && u.progress != null
-                              ? `${Math.round(u.progress * 100)}%`
-                              : '100%',
-                        }}
-                      />
-                    </div>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </div>
+          <UploadProgressList
+            headerLabel={batchLabel ?? undefined}
+            items={uploads.map((u) => ({
+              key: u.key,
+              name: u.relPath || u.file.name,
+              status: u.status,
+              progress: u.progress,
+              error: u.error,
+              note: u.note,
+              startedAt: u.startedAt,
+            }))}
+            onClear={() => { setUploads([]); setBatchLabel(null) }}
+            onRetry={(key) => {
+              patchUpload(key, { status: 'queued', error: undefined, progress: null })
+              void processQueue()
+            }}
+            onDismiss={(key) => setUploads(uploadsRef.current.filter((u) => u.key !== key))}
+          />
         )}
         <div className="mt-2.5 max-h-64 overflow-y-auto rounded-lex border border-stone-200 divide-y divide-stone-100">
           {(docs.data ?? []).map((d) => (

@@ -4,6 +4,7 @@ import { Fingerprint, KeyRound, Lock, LockOpen, ShieldCheck, Trash2 } from 'luci
 import { privateVaultApi, type PrivateDocMeta } from '../api/client'
 import { useSession } from '../stores/session'
 import { EmptyState, Spinner } from './ui'
+import { UploadProgressList, type ProgressItemView } from './UploadProgress'
 
 /**
  * The Confidential Vault: documents encrypted under the user's own vault
@@ -54,6 +55,12 @@ export default function PrivateVaultPage() {
     onSuccess: () => { setPassword(''); setNewPassword(''); setShowChange(false); toast('success', 'Vault password changed — everything re-encrypted') },
     onError: onErr,
   })
+  // Piece 17: sealing gets the shared staged progress row (elapsed
+  // + inline failure with Retry/Dismiss) instead of a bare
+  // "Sealing…" button label. The payload is already in memory, so
+  // the single POST is the Indexing stage — the server parsing,
+  // encrypting and embedding — and Ready means it confirmed.
+  const [sealItem, setSealItem] = useState<ProgressItemView | null>(null)
   const upload = useMutation({
     mutationFn: () =>
       privateVaultApi.upload({
@@ -62,13 +69,26 @@ export default function PrivateVaultPage() {
         text: fileB64 ? undefined : text,
         content_base64: fileB64 ?? undefined,
       }),
+    onMutate: () => {
+      setSealItem({
+        key: Date.now(),
+        name: title.trim() || fileName || 'Pasted document',
+        status: 'indexing',
+        progress: null,
+        startedAt: Date.now(),
+      })
+    },
     onSuccess: (m) => {
       setTitle(''); setText(''); setFileName(''); setFileB64(null)
       if (fileRef.current) fileRef.current.value = ''
+      setSealItem((cur) => (cur ? { ...cur, status: 'ready', progress: 1, note: `${m.chunks} chunks sealed` } : cur))
       refresh()
       toast('success', `Sealed into your vault — ${m.chunks} chunks, fingerprint ${m.sha256.slice(0, 12)}…`)
     },
-    onError: onErr,
+    onError: (e) => {
+      onErr(e)
+      setSealItem((cur) => (cur ? { ...cur, status: 'failed', error: (e as Error).message } : cur))
+    },
   })
   const remove = useMutation({
     mutationFn: (id: string) => privateVaultApi.remove(id),
@@ -237,9 +257,16 @@ export default function PrivateVaultPage() {
                 disabled={upload.isPending || (!text.trim() && !fileB64)}
                 className="px-4 py-2 rounded-full bg-ink text-ivory text-sm font-medium hover:bg-ink-900 disabled:opacity-40 transition-colors"
               >
-                {upload.isPending ? 'Sealing…' : 'Seal into vault'}
+                Seal into vault
               </button>
             </div>
+            {sealItem && (
+              <UploadProgressList
+                items={[sealItem]}
+                onRetry={() => upload.mutate()}
+                onDismiss={() => setSealItem(null)}
+              />
+            )}
           </section>
 
           {docs.isLoading ? (
