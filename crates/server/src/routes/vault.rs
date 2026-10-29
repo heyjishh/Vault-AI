@@ -268,6 +268,9 @@ pub async fn upload_document(
     if let Some(meta) = meta {
         state.rag.merge_document_meta(&report.doc_id, meta);
     }
+    // Attribute the document to its uploader (first uploader wins on
+    // deduped re-uploads) — the admin user-data purge keys off this.
+    state.rag.set_document_owner(&report.doc_id, &user.id);
     crate::routes::billing::settle_matter(
         &state,
         &user,
@@ -403,6 +406,9 @@ pub async fn ingest_s3(
             report.documents += 1;
             report.chunks += r.chunks;
             report.modal_processed += r.modal_processed;
+            if let Some(doc_id) = &r.doc_id {
+                state.rag.set_document_owner(doc_id, &user.id);
+            }
             // Batch-ingested documents are filed under the default matter.
             if let (Some(mid), Some(doc_id)) = (&report.matter_id, &r.doc_id) {
                 state.matters.add_document(mid, doc_id);
@@ -613,10 +619,9 @@ pub async fn delete_document(
     Path(id): Path<String>,
 ) -> Result<Json<HashMap<String, usize>>, ApiError> {
     let removed = state.rag.remove_document(&id).await?;
-    // Unfile it from whichever matter held it.
-    if let Some(mid) = state.matters.matter_of_document(&id) {
-        state.matters.remove_document(&mid, &id);
-    }
+    // Unfile it from every matter holding it (a document can be filed
+    // in several briefs; the old code unfiled only the first).
+    state.matters.unfile_document_everywhere(&id);
     Ok(Json(HashMap::from([("removed_chunks".to_string(), removed)])))
 }
 

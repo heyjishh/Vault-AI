@@ -200,6 +200,30 @@ impl MatterStore {
         Some(out)
     }
 
+    /// Remove a document's filing from EVERY brief holding it;
+    /// returns how many filings were removed. (The single-delete
+    /// route previously unfiled only from the first matching brief —
+    /// a document filed in two briefs kept a dangling filing in the
+    /// other.)
+    pub fn unfile_document_everywhere(&self, doc_id: &str) -> usize {
+        let mut removed = 0usize;
+        {
+            let mut matters = self.matters.write().unwrap();
+            for matter in matters.iter_mut() {
+                let before = matter.document_ids.len();
+                matter.document_ids.retain(|d| d != doc_id);
+                if matter.document_ids.len() != before {
+                    matter.updated_at = Utc::now();
+                    removed += 1;
+                }
+            }
+        }
+        if removed > 0 {
+            self.save();
+        }
+        removed
+    }
+
     /// Which matter (if any) a document belongs to.
     pub fn matter_of_document(&self, doc_id: &str) -> Option<String> {
         self.matters
@@ -334,6 +358,30 @@ mod tests {
             assert_eq!(from_disk.status, target);
             assert_eq!(from_disk.document_ids, vec!["doc-filed-1".to_string()]);
         }
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// A document filed in two briefs loses BOTH filings when it is
+    /// deleted (the admin user-data purge relies on this); the briefs
+    /// themselves survive as records.
+    #[test]
+    fn unfile_document_everywhere_clears_all_briefs() {
+        let (store, path) = temp_store();
+        let a = store.create("Brief A", "", "", "", "user-1", None);
+        let b = store.create("Brief B", "", "", "", "user-2", None);
+        store.add_document(&a.id, "doc-shared");
+        store.add_document(&b.id, "doc-shared");
+        store.add_document(&b.id, "doc-other");
+
+        assert_eq!(store.unfile_document_everywhere("doc-shared"), 2);
+        assert!(store.get(&a.id).unwrap().document_ids.is_empty());
+        assert_eq!(
+            store.get(&b.id).unwrap().document_ids,
+            vec!["doc-other".to_string()]
+        );
+        // Briefs survive; a second pass is a no-op.
+        assert_eq!(store.unfile_document_everywhere("doc-shared"), 0);
+        assert_eq!(store.list().len(), 2);
         let _ = std::fs::remove_file(&path);
     }
 }

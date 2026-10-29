@@ -159,4 +159,92 @@ impl ActivityStore {
     pub fn by_id(&self, id: &str) -> Option<ActivityEvent> {
         self.events.read().unwrap().iter().find(|e| e.id == id).cloned()
     }
+
+    /// Kind of the system record written when an admin purges a
+    /// user's data. Such records are SYSTEM data: the purge never
+    /// removes them (the audit trail of the purge itself must stay),
+    /// whoever authored them.
+    pub const PURGE_KIND: &str = "admin_purge";
+
+    /// How many of a user's entries a purge would remove (their
+    /// history, excluding system purge records).
+    pub fn count_for_user(&self, user_id: &str) -> usize {
+        self.events
+            .read()
+            .unwrap()
+            .iter()
+            .filter(|e| e.user_id == user_id && e.kind != Self::PURGE_KIND)
+            .count()
+    }
+
+    /// Remove a user's history (admin user-data purge). Returns how
+    /// many entries were removed. System purge records and every
+    /// other user's entries are preserved. Idempotent: a second call
+    /// removes nothing.
+    pub fn remove_for_user(&self, user_id: &str) -> usize {
+        let removed = {
+            let mut events = self.events.write().unwrap();
+            let before = events.len();
+            events.retain(|e| e.user_id != user_id || e.kind == Self::PURGE_KIND);
+            before - events.len()
+        };
+        if removed > 0 {
+            self.save();
+        }
+        removed
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn temp_store() -> (ActivityStore, PathBuf) {
+        let path = std::env::temp_dir().join(format!(
+            "activity-test-{}.json",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&path);
+        (ActivityStore::load(path.clone()), path)
+    }
+
+    fn ev(user: &str, kind: &str) -> ActivityEvent {
+        ActivityEvent::new(user, "u@example.test", kind, "t", "", "r", 0, 0)
+    }
+
+    /// The purge contract: a user's own history goes; system purge
+    /// records and other users' entries stay; the operation is
+    /// idempotent and the count preview matches the removal.
+    #[test]
+    fn remove_for_user_keeps_system_records_and_other_users() {
+        let (store, path) = temp_store();
+        store.record(ev("user-b", "query"));
+        store.record(ev("user-b", "upload"));
+        store.record(ev("user-b", ActivityStore::PURGE_KIND));
+        store.record(ev("admin-1", "query"));
+        store.record(ev("admin-1", ActivityStore::PURGE_KIND));
+
+        assert_eq!(store.count_for_user("user-b"), 2);
+        assert_eq!(store.remove_for_user("user-b"), 2);
+
+        let remaining = store.all();
+        // user-b's purge record (system data) + both admin entries.
+        assert_eq!(remaining.len(), 3);
+        assert!(remaining
+            .iter()
+            .all(|e| e.user_id != "user-b" || e.kind == ActivityStore::PURGE_KIND));
+        assert_eq!(
+            remaining
+                .iter()
+                .filter(|e| e.user_id == "admin-1")
+                .count(),
+            2
+        );
+
+        // Idempotent, and persisted to disk.
+        assert_eq!(store.remove_for_user("user-b"), 0);
+        let reloaded = ActivityStore::load(path.clone());
+        assert_eq!(reloaded.all().len(), 3);
+        let _ = std::fs::remove_file(&path);
+    }
 }

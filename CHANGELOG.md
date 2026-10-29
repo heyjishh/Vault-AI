@@ -15,6 +15,29 @@ live**, what is **built but unverified**, and what is **roadmap**.
 ## [Unreleased]
 
 ### Added
+- **Admin: permanent delete of a user's uploaded documents + history
+  (29 Oct 2026)** — Command Center → Users → "Delete data": shows the
+  pre-delete counts, requires typing the user's email to confirm,
+  and returns a deletion receipt. Scope is deliberately narrow and
+  is the feature's contract. DELETED: (1) documents the user
+  uploaded — uploads now stamp `uploaded_by` (first uploader wins on
+  content-deduped re-uploads; legacy unowned documents are never
+  attributed) — removed through the whole retrieval stack (record,
+  chunks, vectors in SereneDB + in-memory, graph nodes/edges,
+  citator treatments) and unfiled from every Brief holding them
+  (this also fixed the single-document delete route, which unfiled
+  only the first brief); (2) the user's history (activity entries).
+  PRESERVED, always: the account (login keeps working), feedback,
+  Private Vault (byte-identical), payment + usage/metering records,
+  system data — including the `admin_purge` activity record the
+  purge itself writes — briefs as records, and all other users'
+  data. Idempotent (second run removes nothing). Live-verified on
+  :3001 with a second user (2 docs, one filed in their brief, an
+  Ask, a feedback vote, a Private Vault doc): receipt 2 documents /
+  10 chunks / 2 filings / 4 history entries; post-purge the docs are
+  unretrievable and uncitable, history is empty, login works, and
+  feedback / private_vault / users files are byte-identical.
+  Workspace tests 198 → 201.
 - **Interact: multi-document selection + brief scoping (29 Oct 2026)**:
   the Interact picker is now a multi-select (checkboxes, selected
   count shown, cap of 5 stated in the UI and enforced by the API —

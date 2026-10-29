@@ -143,6 +143,19 @@ Cross-cutting behaviour in the server:
 - **Metering** — `usage.rs` records real provider token usage per call across
   query/stream/research/workflows/uploads; cache hits bill 0. Quota exhaustion
   returns HTTP 402.
+- **User-data purge (admin only)** — `DELETE /admin/users/{id}/data`
+  permanently deletes exactly two classes: (1) documents the user
+  uploaded (ownership is stamped on `DocumentInfo.uploaded_by` at
+  upload, first uploader wins on content-deduped re-uploads; removal
+  runs the full stack — record, chunks, vectors, graph, treatments —
+  and unfiles the document from every brief holding it), and
+  (2) the user's activity/history entries. The purge's scope is a
+  contract: the account, feedback, Private Vault, payment/usage
+  records, system data (including the `admin_purge` activity record
+  the purge itself writes) and all other users' data are never
+  touched. `GET /admin/users/{id}/data` returns the pre-delete
+  counts; the DELETE returns the removal receipt; both are
+  admin-gated, and the operation is idempotent.
 
 ## 5. Retrieval & generation pipeline
 

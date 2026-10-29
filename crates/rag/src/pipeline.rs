@@ -147,6 +147,12 @@ pub struct DocumentInfo {
     /// Jurisdiction / in-force metadata (empty for legacy documents).
     #[serde(default)]
     pub meta: DocMeta,
+    /// The user who uploaded this document, stamped by the upload
+    /// route after ingest (the pipeline itself is user-agnostic).
+    /// `None` for legacy/system documents — the admin user-data purge
+    /// (Piece 6) only ever removes documents with a recorded owner.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub uploaded_by: Option<String>,
 }
 
 /// Prepare PDF bytes for the pipeline: a password-protected PDF is
@@ -479,6 +485,30 @@ impl RagAnything {
             self.documents.read().expect("lock poisoned").values().cloned().collect();
         docs.sort_by(|a, b| b.ingested_at.cmp(&a.ingested_at));
         docs
+    }
+
+    /// Stamp the uploading user onto a document. First uploader wins:
+    /// document ids are content-derived and ingest dedupes identical
+    /// content, so a later identical upload by someone else must not
+    /// steal the attribution (the admin purge relies on it).
+    pub fn set_document_owner(&self, doc_id: &str, user_id: &str) -> bool {
+        let mut docs = self.documents.write().expect("lock poisoned");
+        match docs.get_mut(doc_id) {
+            Some(doc) if doc.uploaded_by.is_none() => {
+                doc.uploaded_by = Some(user_id.to_string());
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// Every document recorded as uploaded by this user (the admin
+    /// user-data purge's deletion set).
+    pub fn documents_of_user(&self, user_id: &str) -> Vec<DocumentInfo> {
+        self.list_documents()
+            .into_iter()
+            .filter(|d| d.uploaded_by.as_deref() == Some(user_id))
+            .collect()
     }
 
     fn set_status(
@@ -1051,6 +1081,7 @@ impl RagAnything {
                 chunk_ids: chunk_ids.clone(),
                 ingested_at: Utc::now(),
                 meta: doc_meta,
+                uploaded_by: None,
             },
         );
 
@@ -1815,6 +1846,51 @@ mod tests {
         assert!(rag.is_document_fully_processed(&report.doc_id));
         let status = rag.get_document_processing_status(&report.doc_id).unwrap();
         assert_eq!(status.status, DocStatus::Ready);
+    }
+
+    /// Admin user-data purge foundation: ownership attribution
+    /// (first uploader wins), per-user listing, and removal that
+    /// takes the document out of every retrieval layer.
+    #[tokio::test]
+    async fn document_ownership_and_purge_removal() {
+        let rag = rag();
+        let mine = rag
+            .process_document_complete(
+                "mine.txt",
+                b"Zqxwkj unique holding about river water sharing between riparian states.",
+                None,
+                None,
+            )
+            .await
+            .unwrap();
+        let other = rag
+            .process_document_complete(
+                "other.txt",
+                b"Another document about municipal taxation and octroi duties.",
+                None,
+                None,
+            )
+            .await
+            .unwrap();
+        // Fresh documents are unowned until the upload route stamps.
+        assert!(rag.documents_of_user("user-b").is_empty());
+        assert!(rag.set_document_owner(&mine.doc_id, "user-b"));
+        assert!(rag.set_document_owner(&other.doc_id, "user-a"));
+        // First uploader wins: a re-stamp by someone else is refused.
+        assert!(!rag.set_document_owner(&mine.doc_id, "user-a"));
+        assert_eq!(rag.documents_of_user("user-b").len(), 1);
+        assert_eq!(rag.documents_of_user("user-b")[0].id, mine.doc_id);
+
+        // Removal: record, chunks and text all gone; the other
+        // user's document is untouched.
+        let removed = rag.remove_document(&mine.doc_id).await.unwrap();
+        assert!(removed > 0);
+        assert!(rag.documents_of_user("user-b").is_empty());
+        assert!(rag.doc_title(&mine.doc_id).is_none());
+        let (_e, store, _g, _l) = rag.backends();
+        assert!(store.chunks_of_doc(&mine.doc_id).await.unwrap().is_empty());
+        assert!(!store.chunks_of_doc(&other.doc_id).await.unwrap().is_empty());
+        assert_eq!(rag.list_documents().len(), 1);
     }
 
     #[tokio::test]

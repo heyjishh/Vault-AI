@@ -19,6 +19,11 @@ export const tokens = {
 
 export interface Me { id: string; email: string; role: string }
 export interface AdminUser { id: string; email: string; role: string; created_at: string }
+export interface UserDataSummary { user_id: string; email: string; documents: number; history_entries: number }
+export interface UserDataReceipt {
+  user_id: string; email: string; documents_removed: number; chunks_removed: number
+  brief_filings_removed: number; history_entries_removed: number
+}
 export interface CorpusStats { documents: number; chunks: number; entities: number; relations: number }
 export interface DocInfo {
   id: string; title: string; source_uri: string; chars: number; chunks: number; ingested_at: string
@@ -166,6 +171,16 @@ export const adminApi = {
   },
   async deleteUser(id: string): Promise<void> {
     await api.delete(`/admin/users/${id}`)
+  },
+  /** Counts of what a user-data purge would remove (pre-confirm). */
+  async userDataSummary(id: string): Promise<UserDataSummary> {
+    const r = await api.get<UserDataSummary>(`/admin/users/${id}/data`)
+    return r.data
+  },
+  /** Permanently delete a user's uploaded documents + history. */
+  async deleteUserData(id: string): Promise<UserDataReceipt> {
+    const r = await api.delete<UserDataReceipt>(`/admin/users/${id}/data`)
+    return r.data
   },
   async stats(): Promise<CorpusStats> {
     const r = await api.get<CorpusStats>('/knowledge/stats')

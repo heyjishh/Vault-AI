@@ -135,6 +135,10 @@ pub fn router(state: AppState) -> Router {
         .route("/api/v1/admin/users", get(admin::list_users))
         .route("/api/v1/admin/users/{id}/role", post(admin::set_role))
         .route("/api/v1/admin/users/{id}", delete(admin::delete_user))
+        .route(
+            "/api/v1/admin/users/{id}/data",
+            get(admin::user_data_summary).delete(admin::delete_user_data),
+        )
         .route("/api/v1/admin/billing/overview", get(billing::admin_overview))
         .route("/api/v1/admin/billing/settings", get(billing::admin_get_settings).put(billing::admin_update_settings))
         .route("/api/v1/admin/insights", get(insights::admin_insights))
