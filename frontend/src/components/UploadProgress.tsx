@@ -14,9 +14,13 @@ import { RotateCcw, X } from 'lucide-react'
  * landed — never when the send merely finished. A failure carries
  * the server's actual error message and offers Retry / Dismiss
  * instead of an endless "Indexing…" label.
+ *
+ * The Confidential Vault's per-document seal POST is its own
+ * 'sealing' stage (Piece 19) — the server parsing, encrypting and
+ * embedding — same shape as 'indexing', with its honest label.
  */
 export type ProgressStatus =
-  | 'queued' | 'uploading' | 'indexing' | 'ready' | 'failed' | 'skipped'
+  | 'queued' | 'uploading' | 'indexing' | 'sealing' | 'ready' | 'failed' | 'skipped'
 
 export interface ProgressItemView {
   key: number
@@ -36,7 +40,7 @@ export interface ProgressItemView {
 }
 
 export function isPendingStatus(s: ProgressStatus): boolean {
-  return s === 'queued' || s === 'uploading' || s === 'indexing'
+  return s === 'queued' || s === 'uploading' || s === 'indexing' || s === 'sealing'
 }
 
 export function formatElapsed(ms: number): string {
@@ -208,6 +212,7 @@ export function UploadProgressList({
                   </span>
                 )}
                 {u.status === 'indexing' && <span className="text-stone-500">Indexing…{elapsed}</span>}
+                {u.status === 'sealing' && <span className="text-stone-500">Sealing…{elapsed}</span>}
                 {u.status === 'ready' && (
                   <span className="text-emerald-700">Ready{u.note ? ` · ${u.note}` : ''}</span>
                 )}
@@ -236,13 +241,13 @@ export function UploadProgressList({
                   </button>
                 )}
               </div>
-              {(u.status === 'uploading' || u.status === 'indexing' || u.status === 'ready') && (
+              {(u.status === 'uploading' || u.status === 'indexing' || u.status === 'sealing' || u.status === 'ready') && (
                 <div className="h-1 mt-1 rounded-full bg-stone-200 overflow-hidden">
                   <div
                     className={`h-full transition-all duration-300 ${
                       u.status === 'ready'
                         ? 'bg-emerald-600'
-                        : u.status === 'indexing'
+                        : u.status === 'indexing' || u.status === 'sealing'
                           ? 'bg-stone-400 animate-pulse'
                           : 'bg-stone-500'
                     } ${u.status === 'uploading' && u.progress == null ? 'animate-pulse' : ''}`}

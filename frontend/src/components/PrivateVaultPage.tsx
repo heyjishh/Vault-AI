@@ -1,10 +1,15 @@
 import { useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Fingerprint, KeyRound, Lock, LockOpen, ShieldCheck, Trash2 } from 'lucide-react'
+import { Fingerprint, FolderUp, KeyRound, Lock, LockOpen, ShieldCheck, Trash2 } from 'lucide-react'
 import { privateVaultApi, type PrivateDocMeta } from '../api/client'
 import { useSession } from '../stores/session'
 import { EmptyState, Spinner } from './ui'
-import { UploadProgressList, type ProgressItemView } from './UploadProgress'
+import {
+  UploadProgressList,
+  applyBatchCaps, batchLabelFor,
+  MAX_BATCH_FILES, MAX_BATCH_FOLDERS,
+  type ProgressItemView,
+} from './UploadProgress'
 
 /**
  * The Confidential Vault: documents encrypted under the user's own vault
@@ -25,9 +30,8 @@ export default function PrivateVaultPage() {
   const [showChange, setShowChange] = useState(false)
   const [title, setTitle] = useState('')
   const [text, setText] = useState('')
-  const [fileName, setFileName] = useState('')
-  const [fileB64, setFileB64] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
+  const folderRef = useRef<HTMLInputElement>(null)
 
   const refresh = () => {
     void queryClient.invalidateQueries({ queryKey: ['private-vault-status'] })
@@ -55,58 +59,136 @@ export default function PrivateVaultPage() {
     onSuccess: () => { setPassword(''); setNewPassword(''); setShowChange(false); toast('success', 'Vault password changed — everything re-encrypted') },
     onError: onErr,
   })
-  // Piece 17: sealing gets the shared staged progress row (elapsed
-  // + inline failure with Retry/Dismiss) instead of a bare
-  // "Sealing…" button label. The payload is already in memory, so
-  // the single POST is the Indexing stage — the server parsing,
-  // encrypting and embedding — and Ready means it confirmed.
-  const [sealItem, setSealItem] = useState<ProgressItemView | null>(null)
-  const upload = useMutation({
-    mutationFn: () =>
-      privateVaultApi.upload({
-        title: title.trim() || undefined,
-        file_name: fileName || 'note.txt',
-        text: fileB64 ? undefined : text,
-        content_base64: fileB64 ?? undefined,
-      }),
-    onMutate: () => {
-      setSealItem({
-        key: Date.now(),
-        name: title.trim() || fileName || 'Pasted document',
-        status: 'indexing',
-        progress: null,
-        startedAt: Date.now(),
-      })
-    },
-    onSuccess: (m) => {
-      setTitle(''); setText(''); setFileName(''); setFileB64(null)
-      if (fileRef.current) fileRef.current.value = ''
-      setSealItem((cur) => (cur ? { ...cur, status: 'ready', progress: 1, note: `${m.chunks} chunks sealed` } : cur))
-      refresh()
-      toast('success', `Sealed into your vault — ${m.chunks} chunks, fingerprint ${m.sha256.slice(0, 12)}…`)
-    },
-    onError: (e) => {
-      onErr(e)
-      setSealItem((cur) => (cur ? { ...cur, status: 'failed', error: (e as Error).message } : cur))
-    },
-  })
+  // ---- Universal intake (Piece 19): the seal pickers take many
+  // files at once (`multiple`) and whole folders
+  // (`webkitdirectory`), like every other upload surface — this
+  // page was the last single-pick holdout. Everything picked feeds
+  // ONE sequential seal queue rendered by the shared
+  // UploadProgressList: per item, Uploading (the file is read into
+  // memory) → Sealing (the per-document seal POST — the server
+  // parses, encrypts and embeds; Ready only when it confirms,
+  // noted "N chunks sealed") → Ready / Failed with the server's
+  // actual error plus Retry/Dismiss. Pasted text joins the same
+  // queue as a one-item job (its payload is already in memory, so
+  // it starts at Sealing — the Piece 17 shape). Batch caps are the
+  // shared 20 files / 10 folders; overflow stays in the list as
+  // skipped-with-reason rows, never silently dropped.
+  //
+  // Locked gating is unchanged and exact: this queue can only be
+  // started from the seal section, which renders only while the
+  // vault is unlocked. If the vault is locked MID-queue, the
+  // processor keeps going — each remaining item's POST fails with
+  // the server's locked error and lands as a Failed row; the queue
+  // never stops silently.
+  type SealPayload =
+    | { kind: 'file'; file: File; docTitle: string | undefined }
+    | { kind: 'text'; docTitle: string | undefined; text: string }
+  interface SealItem extends ProgressItemView { payload: SealPayload }
+  const [sealItems, setSealItemsState] = useState<SealItem[]>([])
+  const sealItemsRef = useRef<SealItem[]>([])
+  const sealKeyRef = useRef(0)
+  const sealProcessingRef = useRef(false)
+  const [sealBatchLabel, setSealBatchLabel] = useState<string | null>(null)
+  const setSealItems = (next: SealItem[]) => {
+    sealItemsRef.current = next
+    setSealItemsState(next)
+  }
+  const patchSealItem = (key: number, patch: Partial<SealItem>) =>
+    setSealItems(sealItemsRef.current.map((i) => (i.key === key ? { ...i, ...patch } : i)))
+  const readFileBase64 = (f: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => {
+        const s = String(reader.result)
+        resolve(s.slice(s.indexOf(',') + 1))
+      }
+      reader.onerror = () => reject(new Error(`could not read ${f.name}`))
+      reader.readAsDataURL(f)
+    })
+  const processSealQueue = async () => {
+    if (sealProcessingRef.current) return
+    sealProcessingRef.current = true
+    try {
+      for (;;) {
+        const item = sealItemsRef.current.find((i) => i.status === 'queued')
+        if (!item) break
+        const p = item.payload
+        try {
+          let meta: PrivateDocMeta
+          if (p.kind === 'file') {
+            patchSealItem(item.key, { status: 'uploading', progress: null, startedAt: Date.now() })
+            const content_base64 = await readFileBase64(p.file)
+            patchSealItem(item.key, { status: 'sealing', progress: null })
+            meta = await privateVaultApi.upload({
+              title: p.docTitle,
+              file_name: p.file.name,
+              content_base64,
+            })
+          } else {
+            patchSealItem(item.key, { status: 'sealing', progress: null, startedAt: Date.now() })
+            meta = await privateVaultApi.upload({
+              title: p.docTitle,
+              file_name: 'note.txt',
+              text: p.text,
+            })
+          }
+          patchSealItem(item.key, {
+            status: 'ready', progress: 1, note: `${meta.chunks} chunks sealed`,
+          })
+          refresh()
+          toast('success', `Sealed into your vault — ${meta.chunks} chunks, fingerprint ${meta.sha256.slice(0, 12)}…`)
+        } catch (e) {
+          patchSealItem(item.key, { status: 'failed', error: (e as Error).message })
+          toast('error', (e as Error).message)
+        }
+      }
+    } finally {
+      sealProcessingRef.current = false
+    }
+  }
+  // Title rule: a batch file's document title is its own name
+  // (minus extension) — one Title field cannot name many documents.
+  // A LONE file picked while the Title field is filled uses that
+  // title instead (the field's long-standing role from the
+  // single-pick flow), and the field is consumed. Pasted text uses
+  // the Title field, or stays untitled (named by file name).
+  const enqueueSealFiles = (files: { file: File; relPath: string }[]) => {
+    if (files.length === 0) return
+    const loneTitle = files.length === 1 && title.trim() ? title.trim() : undefined
+    if (loneTitle) setTitle('')
+    const items: SealItem[] = applyBatchCaps(files).map(({ file, relPath, skipReason }) => ({
+      key: ++sealKeyRef.current,
+      name: relPath || file.name,
+      status: skipReason ? ('skipped' as const) : ('queued' as const),
+      error: skipReason,
+      payload: {
+        kind: 'file' as const,
+        file,
+        docTitle: loneTitle ?? file.name.replace(/\.[^.]+$/, ''),
+      },
+    }))
+    setSealBatchLabel(batchLabelFor(files))
+    setSealItems([...sealItemsRef.current, ...items])
+    void processSealQueue()
+  }
+  const enqueueSealText = () => {
+    if (!text.trim()) return
+    const item: SealItem = {
+      key: ++sealKeyRef.current,
+      name: title.trim() || 'Pasted document',
+      status: 'queued',
+      payload: { kind: 'text', docTitle: title.trim() || undefined, text },
+    }
+    setTitle('')
+    setText('')
+    setSealItems([...sealItemsRef.current, item])
+    void processSealQueue()
+  }
   const remove = useMutation({
     mutationFn: (id: string) => privateVaultApi.remove(id),
     onSuccess: () => { refresh(); toast('success', 'Private document destroyed') },
     onError: onErr,
   })
-
-  function pickFile(f: File | undefined) {
-    if (!f) return
-    setFileName(f.name)
-    if (!title) setTitle(f.name.replace(/\.[^.]+$/, ''))
-    const reader = new FileReader()
-    reader.onload = () => {
-      const s = String(reader.result)
-      setFileB64(s.slice(s.indexOf(',') + 1))
-    }
-    reader.readAsDataURL(f)
-  }
 
   const st = status.data
 
@@ -237,34 +319,62 @@ export default function PrivateVaultPage() {
                 placeholder="Title (only you ever see this)"
                 className="flex-1 min-w-[220px] rounded-lex border border-stone-200 bg-ivory px-3 py-2 text-sm outline-none focus:border-stone-400"
               />
-              <input ref={fileRef} type="file" accept=".pdf,.txt,.md,.docx" onChange={(e) => pickFile(e.target.files?.[0])} className="hidden" />
-              <button onClick={() => fileRef.current?.click()} className="rounded-full border border-stone-200 px-3.5 py-1.5 text-[13px] text-stone-600 hover:text-ink hover:border-stone-300 transition-colors">
-                {fileName ? `File: ${fileName}` : 'Choose file…'}
-              </button>
+              <label className="rounded-full border border-stone-200 px-3.5 py-1.5 text-[13px] text-stone-600 hover:text-ink hover:border-stone-300 transition-colors cursor-pointer">
+                Choose files…
+                <input
+                  ref={fileRef} type="file" multiple accept=".pdf,.txt,.md,.docx" className="hidden"
+                  onChange={(e) => {
+                    const files = Array.from(e.target.files ?? []).map((file) => ({ file, relPath: '' }))
+                    e.target.value = ''
+                    enqueueSealFiles(files)
+                  }}
+                />
+              </label>
+              <label className="rounded-full border border-stone-200 px-3.5 py-1.5 text-[13px] text-stone-600 hover:text-ink hover:border-stone-300 transition-colors cursor-pointer inline-flex items-center gap-1.5">
+                <FolderUp size={13} /> Choose folder…
+                <input
+                  ref={folderRef} type="file" accept=".pdf,.txt,.md,.docx" className="hidden"
+                  {...({ webkitdirectory: '' } as Record<string, string>)}
+                  onChange={(e) => {
+                    const files = Array.from(e.target.files ?? []).map((file) => ({
+                      file,
+                      relPath: file.webkitRelativePath || '',
+                    }))
+                    e.target.value = ''
+                    enqueueSealFiles(files)
+                  }}
+                />
+              </label>
+              <span className="text-[12.5px] text-stone-400">
+                up to {MAX_BATCH_FILES} files and {MAX_BATCH_FOLDERS} folders per batch
+              </span>
             </div>
-            {!fileB64 && (
-              <textarea
-                value={text}
-                onChange={(e) => setText(e.target.value)}
-                placeholder="…or paste confidential text"
-                rows={5}
-                className="mt-3 w-full rounded-lex border border-stone-200 bg-ivory px-3 py-2 text-sm outline-none focus:border-stone-400 resize-y"
-              />
-            )}
+            <textarea
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              placeholder="…or paste confidential text"
+              rows={5}
+              className="mt-3 w-full rounded-lex border border-stone-200 bg-ivory px-3 py-2 text-sm outline-none focus:border-stone-400 resize-y"
+            />
             <div className="mt-3 flex justify-end">
               <button
-                onClick={() => upload.mutate()}
-                disabled={upload.isPending || (!text.trim() && !fileB64)}
+                onClick={enqueueSealText}
+                disabled={!text.trim()}
                 className="px-4 py-2 rounded-full bg-ink text-ivory text-sm font-medium hover:bg-ink-900 disabled:opacity-40 transition-colors"
               >
-                Seal into vault
+                Seal pasted text
               </button>
             </div>
-            {sealItem && (
+            {sealItems.length > 0 && (
               <UploadProgressList
-                items={[sealItem]}
-                onRetry={() => upload.mutate()}
-                onDismiss={() => setSealItem(null)}
+                items={sealItems}
+                headerLabel={sealBatchLabel ?? undefined}
+                onClear={() => { setSealItems([]); setSealBatchLabel(null) }}
+                onRetry={(key) => {
+                  patchSealItem(key, { status: 'queued', error: undefined, progress: null })
+                  void processSealQueue()
+                }}
+                onDismiss={(key) => setSealItems(sealItemsRef.current.filter((i) => i.key !== key))}
               />
             )}
           </section>
