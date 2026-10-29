@@ -5,6 +5,7 @@ import remarkGfm from 'remark-gfm'
 import { Bot, ChevronDown, Compass, Play } from 'lucide-react'
 import { mattersApi, ragApi } from '../api/client'
 import { useSession } from '../stores/session'
+import { RefineControls, useRefine } from './RefineControls'
 import type { AutonomousRun, Citation, WorkflowDef, WorkflowRun } from '../api/types'
 import { CitationCard, EmptyState, Spinner } from './ui'
 import { CitedText, SourceModal, citeMarkdownComponents, linkifyCitations } from './SourceModal'
@@ -44,8 +45,11 @@ export default function AgentsPage({ go }: { go?: (view: string) => void } = {})
     }
   }, [run, workflows, selected])
 
+  // Prompt refinement (Piece 13) for the workflow input.
+  const refineWf = useRefine({ value: input, setValue: setInput, surface: 'agents' })
+
   const start = useMutation({
-    mutationFn: () => ragApi.runWorkflow(selected!.id, input.trim()),
+    mutationFn: () => ragApi.runWorkflow(selected!.id, input.trim(), refineWf.consumeTerms()),
     onSuccess: (r) => { setRun(r); setError(null); setOpenStep(null) },
     onError: (e) => setError((e as Error).message),
   })
@@ -57,8 +61,10 @@ export default function AgentsPage({ go }: { go?: (view: string) => void } = {})
   const [autoRun, setAutoRun] = useState<AutonomousRun | null>(null)
   const [autoError, setAutoError] = useState<string | null>(null)
   const matters = useQuery({ queryKey: ['matters'], queryFn: mattersApi.list })
+  // Prompt refinement (Piece 13) for the autonomous goal.
+  const refineAuto = useRefine({ value: goal, setValue: setGoal, surface: 'agents' })
   const startAuto = useMutation({
-    mutationFn: () => ragApi.runAutonomous(goal.trim(), autoMatter || undefined, autoSteps),
+    mutationFn: () => ragApi.runAutonomous(goal.trim(), autoMatter || undefined, autoSteps, refineAuto.consumeTerms()),
     onSuccess: (r) => { setAutoRun(r); setAutoError(null) },
     onError: (e) => setAutoError((e as Error).message),
   })
@@ -103,7 +109,10 @@ export default function AgentsPage({ go }: { go?: (view: string) => void } = {})
             className="w-full rounded-lex border border-stone-300 px-3 py-2.5 text-[15px] outline-none focus:border-ink placeholder:text-stone-400 resize-y"
           />
           <div className="flex items-center justify-between mt-3">
-            <p className="text-meta text-stone-400">Steps: {selected.steps.map((s) => s.name).join(' → ')}</p>
+            <div className="flex items-center gap-3">
+              <p className="text-meta text-stone-400">Steps: {selected.steps.map((s) => s.name).join(' → ')}</p>
+              <RefineControls ctl={refineWf} disabled={!input.trim()} />
+            </div>
             <button
               onClick={() => input.trim() && start.mutate()} disabled={start.isPending || !input.trim()}
               className="flex items-center gap-2 rounded-lex bg-ink text-ivory px-4 py-2 text-meta2 font-medium hover:bg-ink-900 disabled:opacity-40"
@@ -138,6 +147,7 @@ export default function AgentsPage({ go }: { go?: (view: string) => void } = {})
               onChange={(e) => setAutoSteps(Math.min(10, Math.max(1, Number(e.target.value) || 6)))}
               className="w-16 rounded-lex border border-stone-300 px-2 py-1.5 outline-none focus:border-ink" />
           </label>
+          <RefineControls ctl={refineAuto} disabled={!goal.trim()} />
           <button
             onClick={() => goal.trim() && startAuto.mutate()} disabled={startAuto.isPending || !goal.trim()}
             className="ml-auto flex items-center gap-2 rounded-lex bg-ink text-ivory px-4 py-2 text-meta2 font-medium hover:bg-ink-900 disabled:opacity-40"

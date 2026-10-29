@@ -80,6 +80,11 @@ pub struct InteractRequest {
     pub document_ids: Option<Vec<String>>,
     pub action: String,
     pub question: Option<String>,
+    /// Refinement terms (Piece 13) for the chat question. Interact
+    /// has no retrieval leg — the selected documents are the
+    /// evidence — so the handler folds them into the instruction as
+    /// an explicit focus instead of an expansion query.
+    pub refine_terms: Option<Vec<String>>,
 }
 
 /// Resolve the effective selection: `document_ids` (deduped, order
@@ -255,7 +260,20 @@ pub async fn interact(
 ) -> Result<Json<InteractResponse>, ApiError> {
     crate::routes::billing::ensure_quota(&state, &user.id)?;
     let ids = resolve_selection(&body)?;
-    let instruction = interact_instruction(&body.action, body.question.as_deref())?;
+    let mut instruction = interact_instruction(&body.action, body.question.as_deref())?;
+    // Refinement terms fold (Piece 13): no retrieval leg exists here
+    // to expand, so for the chat action the terms become an explicit
+    // focus line in the instruction — the same steering intent,
+    // applied at the only seam Interact has.
+    if body.action == "chat" {
+        let terms = crate::routes::knowledge::body_terms(&body.refine_terms);
+        if !terms.is_empty() {
+            instruction = format!(
+                "{instruction}\n\nFocus your answer on these aspects of the question: {}.",
+                terms.join(", ")
+            );
+        }
+    }
     // Load every selected document with its share of the budget. Any
     // missing or text-less document fails the run with a clear error
     // (the single-document behaviour, applied per document) — a
@@ -387,6 +405,9 @@ pub struct DraftRequest {
     /// state (unknown codes behave as absent) and AAR/AAAR applicant.
     pub state: Option<String>,
     pub applicant: Option<String>,
+    /// Refinement terms (Piece 13), folded into the grounding
+    /// query's expansion pool.
+    pub refine_terms: Option<Vec<String>>,
 }
 
 #[derive(Serialize)]
@@ -419,15 +440,22 @@ pub async fn draft(
                 _ => None,
             };
             let ctx = crate::routes::citator_context(body.state.as_deref(), body.applicant.as_deref());
-            let answer = match &scoped {
-                Some(docs) => {
-                    state
-                        .query
-                        .query_scoped(&body.instructions, QueryMode::Mix, 5, docs.clone(), ctx)
-                        .await
-                }
-                None => state.query.query(&body.instructions, QueryMode::Mix, 5, ctx).await,
+            let ground_opts = legal_rag_rag::AskOptions {
+                brief_vault: None,
+                refine_terms: crate::routes::knowledge::body_terms(&body.refine_terms),
             };
+            let answer = state
+                .query
+                .query_opts(
+                    &body.instructions,
+                    QueryMode::Mix,
+                    5,
+                    scoped.clone(),
+                    false,
+                    &ground_opts,
+                    ctx,
+                )
+                .await;
             if let Ok(answer) = answer {
                 for (i, c) in answer.citations.iter().enumerate() {
                     grounding.push_str(&format!(
@@ -490,6 +518,7 @@ mod tests {
                 .map(|v| v.into_iter().map(str::to_string).collect()),
             action: "summary".to_string(),
             question: None,
+            refine_terms: None,
         }
     }
 

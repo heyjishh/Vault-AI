@@ -5,6 +5,7 @@ import remarkGfm from 'remark-gfm'
 import { CalendarClock, FileSearch, FolderUp, ListTree, ScanSearch, ShieldAlert, Upload } from 'lucide-react'
 import { createApi, vaultApi, type InteractResponse } from '../api/client'
 import { useSession } from '../stores/session'
+import { RefineControls, useRefine } from './RefineControls'
 import { EmptyState, Spinner } from './ui'
 
 /** Same accept set as the Vault page — Interact upload is the vault
@@ -188,9 +189,11 @@ export default function InteractPage({ matterId }: { matterId?: string } = {}) {
   }, [])
   const [question, setQuestion] = useState('')
   const [result, setResult] = useState<InteractResponse | null>(null)
+  // Prompt refinement (Piece 13) for the chat question.
+  const refineCtl = useRefine({ value: question, setValue: setQuestion, surface: 'interact' })
 
   const run = useMutation({
-    mutationFn: (action: string) => createApi.interact(selectedIds, action, action === 'chat' ? question : undefined),
+    mutationFn: (action: string) => createApi.interact(selectedIds, action, action === 'chat' ? question : undefined, action === 'chat' ? refineCtl.consumeTerms() : undefined),
     onSuccess: (r) => setResult(r),
     onError: (e) => toast('error', (e as Error).message),
   })
@@ -525,6 +528,9 @@ export default function InteractPage({ matterId }: { matterId?: string } = {}) {
               placeholder="For “Ask the documents”: e.g. What is the notice period, and who can terminate?"
               className="mt-3 w-full rounded-lex border border-stone-300 px-3 py-2.5 text-[14px]"
             />
+            <div className="mt-2">
+              <RefineControls ctl={refineCtl} disabled={!question.trim()} />
+            </div>
           </>
         )}
       </div>

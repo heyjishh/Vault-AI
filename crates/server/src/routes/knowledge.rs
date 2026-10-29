@@ -41,6 +41,20 @@ pub struct QueryRequest {
     /// Citator V2 context: the applicant name for the AAR/AAAR rule
     /// (an AAR/AAAR ruling governs only for its own applicant).
     pub applicant: Option<String>,
+    /// Refinement terms (Piece 13): retrieval terms the client's
+    /// Refine step produced for this prompt. Sanitized server-side
+    /// and folded into the retrieval expansion pool.
+    pub refine_terms: Option<Vec<String>>,
+}
+
+/// Sanitize client-supplied refinement terms the same way the rag
+/// layer sanitizes model-produced ones (trim, dedupe, caps) — client
+/// terms steer retrieval only and are never trusted raw.
+pub(crate) fn body_terms(terms: &Option<Vec<String>>) -> Vec<String> {
+    terms
+        .as_ref()
+        .map(|t| legal_rag_rag::clean_refine_terms(t))
+        .unwrap_or_default()
 }
 
 /// Build the per-request citator context: state normalized through
@@ -213,7 +227,7 @@ pub async fn query(
     let strict = strict || bv.label.is_some();
     let opts = legal_rag_rag::AskOptions {
         brief_vault: bv.label.clone(),
-        refine_terms: Vec::new(),
+        refine_terms: body_terms(&body.refine_terms),
     };
     let want_private = body.private.unwrap_or(false);
     let extra = private_sources(&state, &user.id, &body.query, want_private).await?;
@@ -385,7 +399,7 @@ pub async fn query_stream(
     let strict = strict || bv.label.is_some();
     let opts = legal_rag_rag::AskOptions {
         brief_vault: bv.label.clone(),
-        refine_terms: Vec::new(),
+        refine_terms: body_terms(&body.refine_terms),
     };
     let matter_id = bv.matter_id.clone();
     let want_private = body.private.unwrap_or(false);
@@ -507,6 +521,9 @@ pub struct ResearchRequest {
     /// behave as absent) and AAR/AAAR applicant.
     pub state: Option<String>,
     pub applicant: Option<String>,
+    /// Refinement terms (Piece 13), folded into every hypothesis's
+    /// retrieval.
+    pub refine_terms: Option<Vec<String>>,
 }
 
 /// Deep research: epistemic loop (frame → evidence → adjudicate → report).
@@ -522,7 +539,7 @@ pub async fn research(
     let scope = legal_rag_rag::usage::new_scope();
     let ctx = crate::routes::citator_context(body.state.as_deref(), body.applicant.as_deref());
     let report = legal_rag_rag::usage::scope_usage(scope.clone(), async {
-        state.query.research(&body.query, body.web.unwrap_or(false), ctx).await
+        state.query.research(&body.query, body.web.unwrap_or(false), &body_terms(&body.refine_terms), ctx).await
     })
     .await?;
     crate::routes::billing::settle_with_payload(
@@ -537,6 +554,83 @@ pub async fn research(
         Some(serde_json::json!({ "question": body.query, "report": report })),
     );
     Ok(Json(report))
+}
+
+/// Maximum prompt length the refine endpoint accepts, in characters.
+/// Prompts are chat inputs; anything longer is a document, not a
+/// prompt, and gets a clean refusal rather than a giant LLM call.
+pub const REFINE_MAX_CHARS: usize = 4000;
+
+#[derive(Deserialize)]
+pub struct RefineRequest {
+    pub text: String,
+    /// Which chat surface the prompt belongs to ("ask", "interact",
+    /// "research", "draft", "agents") — context for the refinement,
+    /// not a behavior switch.
+    pub surface: Option<String>,
+}
+
+#[derive(Serialize)]
+pub struct RefineResponse {
+    pub refined: String,
+    pub terms: Vec<String>,
+}
+
+/// Validate + normalize a refine request's text (pure; unit-tested).
+/// Empty and over-cap inputs are clean client errors — the client
+/// keeps the user's original text untouched in both cases.
+fn validate_refine_text(raw: &str) -> Result<String, ApiError> {
+    let text = raw.trim();
+    if text.is_empty() {
+        return Err(
+            legal_rag_common::Error::BadRequest("nothing to refine — the prompt is empty".into())
+                .into(),
+        );
+    }
+    if text.chars().count() > REFINE_MAX_CHARS {
+        return Err(legal_rag_common::Error::BadRequest(format!(
+            "prompt is too long to refine (max {REFINE_MAX_CHARS} characters)"
+        ))
+        .into());
+    }
+    Ok(text.to_string())
+}
+
+/// Refine a chat prompt (Piece 13): a user-clicked, visible rewrite
+/// plus retrieval terms. Never called implicitly — the rewrite is
+/// shown to the user, who edits or undoes it before sending.
+/// Identical inputs are served by the shared LLM response cache the
+/// QueryService's client is wrapped in (same system+prompt → cached
+/// completion), so repeat clicks on unchanged text cost no second
+/// provider call; no second cache is kept. Metered through the
+/// standard usage scope like every LLM-backed route. Deliberately
+/// NOT settled as an activity record: a refine click is editing
+/// assistance on text the user is still composing, not a work
+/// product — the send that follows is what lands in history.
+pub async fn refine(
+    State(state): State<AppState>,
+    AuthUser(user): AuthUser,
+    Json(body): Json<RefineRequest>,
+) -> Result<Json<RefineResponse>, ApiError> {
+    let text = validate_refine_text(&body.text)?;
+    crate::routes::billing::ensure_quota(&state, &user.id)?;
+    let surface = body
+        .surface
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .unwrap_or("ask");
+    let scope = legal_rag_rag::usage::new_scope();
+    let out = legal_rag_rag::usage::scope_usage(scope.clone(), async {
+        state.query.refine_prompt(&text, surface).await
+    })
+    .await?;
+    let totals = scope.lock().map(|t| *t).unwrap_or_default();
+    state.billing.add_usage(&user.id, &totals);
+    Ok(Json(RefineResponse {
+        refined: out.refined,
+        terms: out.terms,
+    }))
 }
 
 /// Semantic-cache (KV cache) hit/miss stats.
@@ -617,6 +711,8 @@ pub async fn workflow_list(
 pub struct WorkflowRunRequest {
     pub workflow_id: String,
     pub input: String,
+    /// Refinement terms (Piece 13), folded into every step's retrieval.
+    pub refine_terms: Option<Vec<String>>,
 }
 
 /// Run an agentic workflow end to end.
@@ -631,7 +727,7 @@ pub async fn workflow_run(
     crate::routes::billing::ensure_quota(&state, &user.id)?;
     let scope = legal_rag_rag::usage::new_scope();
     let run = legal_rag_rag::usage::scope_usage(scope.clone(), async {
-        state.workflows.run(&body.workflow_id, &body.input).await
+        state.workflows.run(&body.workflow_id, &body.input, &body_terms(&body.refine_terms)).await
     })
     .await?;
     crate::routes::billing::settle_with_payload(
@@ -669,6 +765,9 @@ pub struct AutonomousRunRequest {
     /// AAR/AAAR applicant.
     pub state: Option<String>,
     pub applicant: Option<String>,
+    /// Refinement terms (Piece 13), folded into the researcher legs'
+    /// retrieval (orchestrated) and the planner's steps (legacy).
+    pub refine_terms: Option<Vec<String>>,
 }
 
 /// Orchestrator config for this server: commissioned defaults, with
@@ -716,7 +815,7 @@ pub async fn autonomous_run(
         let run = legal_rag_rag::usage::scope_usage(scope.clone(), async {
             state
                 .orchestrator
-                .run(body.goal.trim(), docs, cfg, ctx, None)
+                .run(body.goal.trim(), docs, cfg, ctx, &body_terms(&body.refine_terms), None)
                 .await
         })
         .await?;
@@ -738,7 +837,7 @@ pub async fn autonomous_run(
     let run = legal_rag_rag::usage::scope_usage(scope.clone(), async {
         state
             .agent
-            .run(body.goal.trim(), docs, body.max_steps.unwrap_or(6))
+            .run(body.goal.trim(), docs, body.max_steps.unwrap_or(6), &body_terms(&body.refine_terms))
             .await
     })
     .await?;
@@ -774,6 +873,7 @@ async fn autonomous_stream(
 
     let cfg = orchestration_config(&state);
     let goal = body.goal.trim().to_string();
+    let terms = body_terms(&body.refine_terms);
     let matter_id = body.matter_id.clone();
     let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<QueryEvent>();
     let orchestrator = state.orchestrator.clone();
@@ -787,7 +887,7 @@ async fn autonomous_stream(
         let scope_in = scope.clone();
         let run = legal_rag_rag::usage::scope_usage(scope_in, async {
             orchestrator
-                .run(&goal, docs, cfg, ctx, Some(progress_tx))
+                .run(&goal, docs, cfg, ctx, &terms, Some(progress_tx))
                 .await
         })
         .await;
@@ -880,4 +980,37 @@ pub async fn graph_view(
         entities: state.graph.all_entities().await?,
         relations: state.graph.all_relations().await?,
     }))
+}
+
+#[cfg(test)]
+mod refine_validation_tests {
+    //! Piece 13: the refine endpoint's input contract — empty and
+    //! over-cap prompts are clean client errors (the client keeps
+    //! the original text); valid text passes trimmed.
+    use super::{validate_refine_text, REFINE_MAX_CHARS};
+
+    #[test]
+    fn empty_and_whitespace_prompts_are_rejected() {
+        assert!(validate_refine_text("").is_err());
+        assert!(validate_refine_text("   \n\t ").is_err());
+    }
+
+    #[test]
+    fn over_cap_prompts_are_rejected_at_the_boundary() {
+        let at_cap = "x".repeat(REFINE_MAX_CHARS);
+        assert!(validate_refine_text(&at_cap).is_ok());
+        let over = "x".repeat(REFINE_MAX_CHARS + 1);
+        let err = validate_refine_text(&over).unwrap_err();
+        assert!(err.0.to_string().contains("too long"), "clean cap error: {}", err.0);
+    }
+
+    #[test]
+    fn valid_prompts_pass_trimmed() {
+        assert_eq!(
+            validate_refine_text("  batao kiraya kitna hai  ")
+                .ok()
+                .as_deref(),
+            Some("batao kiraya kitna hai")
+        );
+    }
 }

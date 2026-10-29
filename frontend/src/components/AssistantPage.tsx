@@ -8,6 +8,7 @@ import {
 import { useQuery } from '@tanstack/react-query'
 import { mattersApi, privateVaultApi, publicSettingsApi, queryStream, ragApi } from '../api/client'
 import AssistantAvatar from './AssistantAvatar'
+import { RefineControls, useRefine, type RefineCtl } from './RefineControls'
 import { SourceModal, citeMarkdownComponents, linkifyCitations } from './SourceModal'
 import type { Citation, CitationAudit, QueryMode } from '../api/types'
 import { useSession } from '../stores/session'
@@ -28,6 +29,8 @@ interface Turn {
   verified: boolean
   audit: CitationAudit | null
   expansions: string[]
+  /** Piece 13: refinement terms this question was sent with. */
+  refineTerms?: string[]
   startedAt: number
   elapsedMs: number | null
 }
@@ -62,6 +65,8 @@ export default function AssistantPage({ matterId: fixedMatterId, go }: { matterI
   // Brief-vault mode (Piece 12): Ask answers ONLY from the active
   // brief's vault, with no full-vault fallback. Off = today's behavior.
   const [briefVault, setBriefVault] = useState(false)
+  // Prompt refinement (Piece 13): visible rewrite + retrieval terms.
+  const refineCtl = useRefine({ value: input, setValue: setInput, surface: 'ask' })
   const [asOf, setAsOf] = useState('')
   const [jurisdiction, setJurisdiction] = useState('')
   const { data: vaultStatus } = useQuery({ queryKey: ['private-vault-status'], queryFn: privateVaultApi.status })
@@ -85,10 +90,13 @@ export default function AssistantPage({ matterId: fixedMatterId, go }: { matterI
     const question = questionRaw.trim()
     if (!question || busy) return
     setFocusCite(null)
+    // Refinement terms attach only when the composer text itself is
+    // what is being sent (follow-ups / history questions carry none).
+    const sentTerms = question === input.trim() ? refineCtl.consumeTerms() : []
     const id = ++turnId
     const turn: Turn = {
       id, question, mode, status: 'Connecting…', citations: [], answer: '',
-      streaming: true, done: false, error: null, scopeNote: null, verified: false, audit: null, expansions: [], startedAt: Date.now(), elapsedMs: null,
+      streaming: true, done: false, error: null, scopeNote: null, verified: false, audit: null, expansions: [], refineTerms: sentTerms, startedAt: Date.now(), elapsedMs: null,
     }
     setTurns((t) => [...t, turn])
     addHistory(question)
@@ -111,7 +119,7 @@ export default function AssistantPage({ matterId: fixedMatterId, go }: { matterI
 
     try {
       await queryStream(
-        { query: question, mode, top_k: sources, web, web_results: 3, matter_id: scopeMatterId ?? undefined, private: priv && privAvailable ? true : undefined, brief_vault: briefVault && scopeMatterId ? true : undefined, as_of: asOf || undefined, jurisdiction: jurisdiction.trim() || undefined },
+        { query: question, mode, top_k: sources, web, web_results: 3, matter_id: scopeMatterId ?? undefined, private: priv && privAvailable ? true : undefined, brief_vault: briefVault && scopeMatterId ? true : undefined, as_of: asOf || undefined, jurisdiction: jurisdiction.trim() || undefined, refine_terms: sentTerms.length ? sentTerms : undefined },
         {
           onStatus: (message) =>
             setTurns((ts) =>
@@ -147,7 +155,7 @@ export default function AssistantPage({ matterId: fixedMatterId, go }: { matterI
       } else {
         // Stream transport failed — fall back to the blocking endpoint.
         try {
-          const data = await ragApi.query(question, mode, sources, web, 3, scopeMatterId ?? undefined, priv && privAvailable ? true : undefined, briefVault && scopeMatterId ? true : undefined)
+          const data = await ragApi.query(question, mode, sources, web, 3, scopeMatterId ?? undefined, priv && privAvailable ? true : undefined, briefVault && scopeMatterId ? true : undefined, sentTerms.length ? sentTerms : undefined)
           setTurns((ts) =>
             ts.map((t) =>
               t.id === id
@@ -259,7 +267,7 @@ export default function AssistantPage({ matterId: fixedMatterId, go }: { matterI
           </motion.div>
           <Composer
             input={input} setInput={setInput}             sources={sources} setSources={setSources} web={web} setWeb={setWeb} priv={priv} setPriv={setPriv} privAvailable={privAvailable}
-            briefVault={briefVault} setBriefVault={setBriefVault} briefAvailable={!!scopeMatterId} briefName={scopeMatter?.title}
+            briefVault={briefVault} setBriefVault={setBriefVault} briefAvailable={!!scopeMatterId} briefName={scopeMatter?.title} refineCtl={refineCtl}
             asOf={asOf} setAsOf={setAsOf} jurisdiction={jurisdiction} setJurisdiction={setJurisdiction}
             busy={busy} onSubmit={() => ask(input)} onStop={() => abortRef.current?.abort()}
           />
@@ -305,7 +313,7 @@ export default function AssistantPage({ matterId: fixedMatterId, go }: { matterI
           <div className="sticky bottom-4">
             <Composer
               input={input} setInput={setInput}               sources={sources} setSources={setSources} web={web} setWeb={setWeb} priv={priv} setPriv={setPriv} privAvailable={privAvailable}
-              briefVault={briefVault} setBriefVault={setBriefVault} briefAvailable={!!scopeMatterId} briefName={scopeMatter?.title}
+              briefVault={briefVault} setBriefVault={setBriefVault} briefAvailable={!!scopeMatterId} briefName={scopeMatter?.title} refineCtl={refineCtl}
               asOf={asOf} setAsOf={setAsOf} jurisdiction={jurisdiction} setJurisdiction={setJurisdiction}
               busy={busy} onSubmit={() => ask(input)} onStop={() => abortRef.current?.abort()}
             />
@@ -627,6 +635,12 @@ function TurnView({ turn, onCopy, onRegenerate, onFollowUp, onCite, onShowSource
             </div>
           )}
 
+          {turn.refineTerms && turn.refineTerms.length > 0 && (
+            <p className="mt-3 text-[12px] text-stone-400">
+              Searching also for: {turn.refineTerms.join(' · ')}
+            </p>
+          )}
+
           {turn.verified && (
             <div className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-[#e7f4e4] text-[#2f6b2f] px-3 py-1 text-[12.5px] font-medium">
               <BadgeCheck size={14} />
@@ -723,11 +737,12 @@ function Composer(props: {
   web: boolean; setWeb: (v: boolean) => void
   priv: boolean; setPriv: (v: boolean) => void; privAvailable: boolean
   briefVault: boolean; setBriefVault: (v: boolean) => void; briefAvailable: boolean; briefName?: string
+  refineCtl: RefineCtl
   asOf: string; setAsOf: (v: string) => void
   jurisdiction: string; setJurisdiction: (v: string) => void
   busy: boolean; onSubmit: () => void; onStop: () => void
 }) {
-  const { input, setInput, sources, setSources, web, setWeb, priv, setPriv, privAvailable, briefVault, setBriefVault, briefAvailable, briefName, asOf, setAsOf, jurisdiction, setJurisdiction, busy, onSubmit, onStop } = props
+  const { input, setInput, sources, setSources, web, setWeb, priv, setPriv, privAvailable, briefVault, setBriefVault, briefAvailable, briefName, refineCtl, asOf, setAsOf, jurisdiction, setJurisdiction, busy, onSubmit, onStop } = props
   const [srcOpen, setSrcOpen] = useState(false)
   const [lawOpen, setLawOpen] = useState(false)
   const lawActive = !!(asOf || jurisdiction.trim())
@@ -776,6 +791,7 @@ function Composer(props: {
           >
             <Briefcase size={13} /> Brief vault
           </button>
+          <RefineControls ctl={refineCtl} disabled={!input.trim()} />
           <div className="relative">
             <button
               onClick={() => setLawOpen((v) => !v)}

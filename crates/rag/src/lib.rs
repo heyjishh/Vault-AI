@@ -62,8 +62,9 @@ pub use pipeline::{
 };
 pub use processors::{ModalProcessor, ProcessedModal};
 pub use query::{
-    query_service_for, Annotation, AskOptions, Citation, CitatorContext, ExtraSource, HitStage,
-    HitTestReport, HitView, QueryAnswer, QueryEvent, QueryMode, QueryService,
+    clean_refine_terms, query_service_for, Annotation, AskOptions, Citation, CitatorContext,
+    ExtraSource, HitStage, HitTestReport, HitView, QueryAnswer, QueryEvent, QueryMode,
+    QueryService, RefinedPrompt,
 };
 pub use rerank::{HttpLateInteractor, HttpReranker, LateInteractor, LlmReranker, Reranker};
 pub use research::{Conflict, EvidenceNote, Hypothesis, ResearchReport};

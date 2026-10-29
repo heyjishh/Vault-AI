@@ -149,10 +149,13 @@ impl QueryService {
     /// Run the epistemic loop over a research question. `ctx` carries
     /// the request's state/applicant for V2 governing selection (the
     /// Ask route's normalization applies at the API boundary).
+    /// `refine_terms` (Piece 13) pools into every hypothesis's
+    /// retrieval as one extra query — the same fold the Ask path uses.
     pub async fn research(
         &self,
         question: &str,
         use_web: bool,
+        refine_terms: &[String],
         ctx: CitatorContext,
     ) -> Result<ResearchReport> {
         // Degradations are findings, not failures: every leg that could
@@ -200,6 +203,11 @@ impl QueryService {
                 prediction: String::new(),
             });
         }
+        let term_pool: Vec<String> = if refine_terms.is_empty() {
+            Vec::new()
+        } else {
+            vec![crate::query::refine_terms_query(refine_terms)]
+        };
 
         // 2. Evidence — each candidate through retrieval (+ web).
         let mut all_citations: Vec<Citation> = Vec::new();
@@ -222,7 +230,7 @@ impl QueryService {
 
         for (hi, h) in hyps.iter().enumerate() {
             let (hits, graph_ctx) = match self
-                .retrieve(&h.question, QueryMode::Mix, 5, None)
+                .retrieve_expanded(&h.question, QueryMode::Mix, 5, None, &term_pool)
                 .await
             {
                 Ok(v) => v,
@@ -682,7 +690,7 @@ mod tests {
         )
         .await;
         let report = svc
-            .research("Is agricultural income taxable?", false, CitatorContext::default())
+            .research("Is agricultural income taxable?", false, &[], CitatorContext::default())
             .await
             .expect("frame failure must degrade, not error");
         assert_eq!(report.hypotheses.len(), 1);
@@ -706,7 +714,7 @@ mod tests {
         )
         .await;
         let report = svc
-            .research("Does Acme Corp agree to confidentiality?", false, CitatorContext::default())
+            .research("Does Acme Corp agree to confidentiality?", false, &[], CitatorContext::default())
             .await
             .expect("adjudication failure must degrade, not error");
         assert!(
@@ -741,7 +749,7 @@ mod tests {
         )
         .await;
         let report = svc
-            .research("Does Acme Corp agree to confidentiality?", false, CitatorContext::default())
+            .research("Does Acme Corp agree to confidentiality?", false, &[], CitatorContext::default())
             .await
             .unwrap();
         assert_eq!(report.hypotheses[0].status, "inconclusive");
@@ -774,7 +782,7 @@ mod tests {
         )
         .await;
         let report = svc
-            .research("Does Acme Corp agree to confidentiality?", false, CitatorContext::default())
+            .research("Does Acme Corp agree to confidentiality?", false, &[], CitatorContext::default())
             .await
             .unwrap();
         assert_eq!(report.hypotheses.len(), 1);
@@ -808,7 +816,7 @@ mod tests {
         )
         .await;
         let report = svc
-            .research("Does Acme Corp agree to confidentiality?", true, CitatorContext::default())
+            .research("Does Acme Corp agree to confidentiality?", true, &[], CitatorContext::default())
             .await
             .expect("web failure must degrade, not error");
         let note = report.web_note.expect("web note on the report");
@@ -835,7 +843,7 @@ mod tests {
         )
         .await;
         let report = svc
-            .research("Is agricultural income taxable?", false, CitatorContext::default())
+            .research("Is agricultural income taxable?", false, &[], CitatorContext::default())
             .await
             .unwrap();
         assert!(

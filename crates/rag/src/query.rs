@@ -278,6 +278,58 @@ pub fn refine_terms_query(terms: &[String]) -> String {
         .join(", ")
 }
 
+/// One prompt refinement (Piece 13): the rewritten text the user
+/// reviews, plus the retrieval terms the send folds into retrieval.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RefinedPrompt {
+    pub refined: String,
+    pub terms: Vec<String>,
+}
+
+/// Sanitize model-produced retrieval terms: trimmed, non-empty,
+/// de-duplicated (case-insensitively), each capped at 80 chars, at
+/// most 10 terms. Terms steer retrieval only — a malformed term can
+/// waste a pooled query, never corrupt an answer.
+pub fn clean_refine_terms(terms: &[String]) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for t in terms {
+        let t: String = t.trim().chars().take(80).collect();
+        if t.is_empty() {
+            continue;
+        }
+        if out.iter().any(|x: &String| x.eq_ignore_ascii_case(&t)) {
+            continue;
+        }
+        out.push(t);
+        if out.len() >= 10 {
+            break;
+        }
+    }
+    out
+}
+
+/// The refinement contract (Piece 13). The rewrite must be a pure
+/// clarity pass: facts and intent survive verbatim, nothing is
+/// added, and the user's language is kept. The terms may name the
+/// authorities the text points to — they steer retrieval, where an
+/// implied statute helps and cannot distort the answer's grounding.
+pub const REFINE_SYSTEM: &str = "You refine a user's prompt before it is sent to a legal \
+research system. Rewrite the text so the system understands it better, and extract \
+retrieval terms.\n\nRULES — follow exactly:\n\
+1. Preserve the user's intent and every fact EXACTLY: names, parties, dates, amounts, \
+statute and section numbers, places, and quoted phrases survive verbatim. Never add \
+facts, never drop facts, never state or imply a legal conclusion the user did not \
+state, and never widen or narrow what is being asked.\n\
+2. Make the prompt self-contained using only what the text itself provides — resolve \
+pronouns and references from the text; invent no context.\n\
+3. Keep the user's language: English stays English; Hindi or Hinglish stays Hindi or \
+Hinglish, lightly cleaned (spelling, punctuation, spacing), never translated.\n\
+4. Be concise: remove filler and repetition; keep everything that carries meaning.\n\
+5. Reply with ONLY a JSON object: {\"refined\": \"<the rewritten prompt>\", \"terms\": \
+[\"<retrieval term>\", ...]}. Terms are for searching a legal corpus: the statutes, \
+Acts, sections, and legal concepts the text names or clearly points to, plus \
+synonyms, including Hindi equivalents where natural. At most 10 terms.";
+
 /// A human-verified answer (annotation): a curator corrected or authored
 /// the answer to a question, and semantically matching future questions
 /// are served it verbatim. Annotations bind to the corpus fingerprint
@@ -2256,6 +2308,55 @@ impl QueryService {
         out
     }
 
+    /// Refine a user prompt for the chat surfaces (Piece 13). The
+    /// hybrid mix in one call: a VISIBLE rewrite the user reviews and
+    /// edits before sending (never a silent rewrite — the client only
+    /// calls this on an explicit Refine click), plus retrieval terms
+    /// the send folds into the expansion pool. A provider failure
+    /// page, an unparseable response, or an empty rewrite is an
+    /// error, so the client can leave the original text untouched
+    /// and sendable — refinement must never become a failure mode
+    /// for asking.
+    pub async fn refine_prompt(&self, text: &str, surface: &str) -> Result<RefinedPrompt> {
+        #[derive(serde::Deserialize)]
+        struct RefineOut {
+            #[serde(default)]
+            refined: String,
+            #[serde(default)]
+            terms: Vec<String>,
+        }
+        let raw = self
+            .llm
+            .complete(
+                REFINE_SYSTEM,
+                &format!(
+                    "The user is writing in the {surface} surface of a legal research app.\n\n---\n{text}\n---"
+                ),
+            )
+            .await?;
+        if is_failure_output(&raw) {
+            return Err(legal_rag_common::Error::Upstream(
+                "llm provider returned a failure message instead of a refinement".into(),
+            ));
+        }
+        let parsed: Option<RefineOut> = crate::graph::parse_llm_json(&raw);
+        let Some(parsed) = parsed else {
+            return Err(legal_rag_common::Error::Upstream(
+                "refinement response could not be parsed".into(),
+            ));
+        };
+        let refined = parsed.refined.trim().to_string();
+        if refined.is_empty() {
+            return Err(legal_rag_common::Error::Upstream(
+                "refinement came back empty".into(),
+            ));
+        }
+        Ok(RefinedPrompt {
+            refined,
+            terms: clean_refine_terms(&parsed.terms),
+        })
+    }
+
     /// Retrieval with HyDE / multi-query expansion queries pooled into
     /// the vector leg. Bypasses the retrieval cache: expansions are
     /// generated per call, so the pooled result is not the canonical
@@ -3813,6 +3914,100 @@ mod tests {
             "note: {:?}",
             cross.scope_note
         );
+    }
+
+    // ---------- Piece 13: prompt refinement -------------------------
+
+    /// A QueryService whose LLM answers every call with `response`
+    /// (refinement needs no corpus).
+    fn refine_svc(response: &str) -> QueryService {
+        QueryService::new(
+            Arc::new(crate::embeddings::MockEmbeddings::new(16)),
+            Arc::new(crate::vector_store::InMemoryVectorStore::new()),
+            Arc::new(crate::graph::InMemoryGraphStore::new()),
+            Arc::new(MockLlm::new(response)),
+            Arc::new(|_id: &str| -> Option<String> { None }),
+            Arc::new(crate::web::NoopWebSearch),
+            None,
+        )
+    }
+
+    #[tokio::test]
+    async fn refine_prompt_preserves_facts_and_returns_terms() {
+        // The fixture LLM plays the refiner: the rewrite keeps every
+        // fact of a deliberately messy, fact-dense prompt (parties,
+        // amount, section, date) verbatim, and the terms come back
+        // sanitized (trimmed, deduped case-insensitively).
+        let svc = refine_svc(
+            r#"{"refined": "Under the agreement dated 3 March 2021, did Acme Corp agree to pay Beta Traders Rs 4,50,000 for the defective consignment, and does Section 73 of the Indian Contract Act 1872 allow compensation for the loss?", "terms": ["Indian Contract Act 1872", "Section 73", "compensation for breach", " indian contract act 1872 ", "damages"]}"#,
+        );
+        let messy = "so basically ye batao ki acme corp ne 3 march 2021 wale agreement me beta traders ko rs 4,50,000 dene ki baat defective consignment ke liye mani thi kya aur section 73 contract act se loss ka compensation mil sakta hai??";
+        let out = svc.refine_prompt(messy, "ask").await.unwrap();
+        for fact in ["Acme Corp", "Beta Traders", "Rs 4,50,000", "3 March 2021", "Section 73", "defective consignment"] {
+            assert!(out.refined.contains(fact), "refined must keep {fact}: {}", out.refined);
+        }
+        assert_eq!(
+            out.terms,
+            vec!["Indian Contract Act 1872", "Section 73", "compensation for breach", "damages"],
+            "terms trimmed + deduped case-insensitively"
+        );
+    }
+
+    #[tokio::test]
+    async fn refine_prompt_failures_are_errors_not_answers() {
+        // A provider failure page (Piece 14's contract) must surface
+        // as an error so the client keeps the original text.
+        let svc = refine_svc("Sorry, something went wrong. Please try again later.");
+        assert!(svc.refine_prompt("koi sawal", "ask").await.is_err());
+
+        // An unparseable response is an error too — never a rewrite.
+        let svc = refine_svc("I cannot help with that.");
+        assert!(svc.refine_prompt("koi sawal", "ask").await.is_err());
+    }
+
+    #[test]
+    fn clean_refine_terms_caps_and_dedupes() {
+        let raw: Vec<String> = (0..15).map(|i| format!(" term {i} ")).collect();
+        let out = clean_refine_terms(&raw);
+        assert_eq!(out.len(), 10, "at most 10 terms");
+        assert_eq!(out[0], "term 0", "trimmed");
+        let dup = clean_refine_terms(&["Section 73".into(), "section 73".into(), "".into(), "  ".into()]);
+        assert_eq!(dup, vec!["Section 73"]);
+    }
+
+    #[tokio::test]
+    async fn refine_terms_pool_into_retrieval_expansions() {
+        // A send carrying refine_terms must fold them into the SAME
+        // expansion pool as HyDE/multi-query (visible on the answer),
+        // and the answer stays grounded in the corpus.
+        let (svc, _a, _b) = seeded_two_briefs().await;
+        let terms = vec![
+            "Acme Corp".to_string(),
+            "confidentiality".to_string(),
+            "गोपनीयता".to_string(),
+        ];
+        let opts = AskOptions {
+            brief_vault: None,
+            refine_terms: terms.clone(),
+        };
+        let ans = svc
+            .query_opts(
+                "What did Acme Corp agree to?",
+                QueryMode::Mix,
+                5,
+                None,
+                false,
+                &opts,
+                CitatorContext::default(),
+            )
+            .await
+            .unwrap();
+        assert!(
+            ans.expansions.contains(&refine_terms_query(&terms)),
+            "pooled refine-terms query must appear in expansions: {:?}",
+            ans.expansions
+        );
+        assert!(!ans.citations.is_empty());
     }
 
     #[tokio::test]

@@ -3,6 +3,7 @@ import { useMutation } from '@tanstack/react-query'
 import { FlaskConical, Globe, Lightbulb, AlertTriangle } from 'lucide-react'
 import { ragApi } from '../api/client'
 import { useSession } from '../stores/session'
+import { RefineControls, useRefine } from './RefineControls'
 import type { ResearchReport } from '../api/types'
 import { CitationCard, Spinner, StatusBadge } from './ui'
 import { CitedText, SourceModal } from './SourceModal'
@@ -28,8 +29,11 @@ export default function ResearchPage({ go }: { go?: (view: string) => void } = {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [restore])
 
+  // Prompt refinement (Piece 13) for the research question.
+  const refineCtl = useRefine({ value: q, setValue: setQ, surface: 'research' })
+
   const run = useMutation({
-    mutationFn: () => ragApi.research(q.trim(), web),
+    mutationFn: () => ragApi.research(q.trim(), web, refineCtl.consumeTerms()),
     onSuccess: (r) => { setReport(r); setError(null) },
     onError: (e) => setError((e as Error).message),
   })
@@ -51,14 +55,17 @@ export default function ResearchPage({ go }: { go?: (view: string) => void } = {
           onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); if (q.trim()) run.mutate() } }}
         />
         <div className="flex items-center justify-between mt-2">
-          <button
-            onClick={() => setWeb(!web)}
-            className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-meta transition-colors ${
-              web ? 'bg-ink text-ivory border-ink' : 'border-stone-200 text-stone-500 hover:text-ink'
-            }`}
-          >
-            <Globe size={13} /> Include web evidence
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setWeb(!web)}
+              className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-meta transition-colors ${
+                web ? 'bg-ink text-ivory border-ink' : 'border-stone-200 text-stone-500 hover:text-ink'
+              }`}
+            >
+              <Globe size={13} /> Include web evidence
+            </button>
+            <RefineControls ctl={refineCtl} disabled={!q.trim()} />
+          </div>
           <button
             onClick={() => q.trim() && run.mutate()} disabled={run.isPending || !q.trim()}
             className="rounded-lex bg-ink text-ivory px-4 py-2 text-meta2 font-medium hover:bg-ink-900 disabled:opacity-40"

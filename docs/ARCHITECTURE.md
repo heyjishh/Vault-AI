@@ -284,6 +284,24 @@ Web and Private are independent legs and compose with any corpus
 mode (web citations are not vault documents; private sources remain
 the owner's alone).
 
+**Prompt refinement** (Piece 13): every chat surface (Ask, Interact
+chat, Research, Draft, Agents) offers the same user-clicked Refine.
+`POST /knowledge/refine` makes one LLM call under a preservation
+contract (facts and intent verbatim, no added conclusions, the
+user's language kept) and returns `{refined, terms[]}`. The client
+shows the rewrite in place with a byte-identical Undo; on send it
+passes the terms back as `refine_terms`, and each surface folds
+them into its existing retrieval: Ask/Research/Draft/agents pool
+them as one extra query in the HyDE/multi-query expansion list (the
+pool is visible on the answer's `expansions`); Interact, which stuffs
+its documents rather than retrieving, folds them into the chat
+instruction as an explicit focus. Terms are sanitized identically
+whether model- or client-produced (trim, dedupe, ≤10 × 80 chars).
+Refinement is metered but not activity-logged, is served by the
+shared LLM response cache on identical inputs, and fails honestly
+(provider errors and Piece-14 failure pages are endpoint errors) —
+the original text is always sendable as-is.
+
 Citation pinpoints (23 Oct 2026): each citation also carries the exact
 sentence in the passage that supports the claim — selected by distinct
 query-term coverage over flowing (de-wrapped) sentence segmentation

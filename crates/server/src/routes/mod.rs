@@ -72,6 +72,7 @@ pub fn router(state: AppState) -> Router {
         .route("/api/v1/knowledge/source-document", post(knowledge::source_document))
         .route("/api/v1/knowledge/query/stream", post(knowledge::query_stream))
         .route("/api/v1/knowledge/research", post(knowledge::research))
+        .route("/api/v1/knowledge/refine", post(knowledge::refine))
         .route("/api/v1/knowledge/cache-stats", get(knowledge::cache_stats))
         .route("/api/v1/admin/hit-test", post(knowledge::hit_test))
         .route("/api/v1/admin/retrieval-status", get(knowledge::retrieval_status))

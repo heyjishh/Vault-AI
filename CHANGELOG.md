@@ -15,6 +15,43 @@ live**, what is **built but unverified**, and what is **roadmap**.
 ## [Unreleased]
 
 ### Added
+- **Refine prompt in every chat surface (29 Oct 2026)**: Ask,
+  Interact's document chat, Research, Draft, and the Agents inputs
+  (workflow + autonomous) gain one shared **Refine** control — the
+  hybrid the user asked for ("refine them what our system understand
+  better, or make it vectorize, or hybrid mix"). One click on
+  `POST /api/v1/knowledge/refine` returns a **visible rewrite** plus
+  **retrieval terms**: the rewrite replaces the input text in place
+  (still editable, never auto-sent) with **"Refined — Undo"**
+  restoring the byte-identical original, and a subtle "Searching
+  also for: …" line shows the terms the send will carry. The
+  refinement contract is enforced in the prompt: intent and every
+  fact preserved exactly (names, dates, amounts, sections verbatim),
+  no new facts or legal conclusions, the user's language kept
+  (Hindi/Hinglish stays, lightly cleaned). On send, the terms ride
+  as `refine_terms` and fold into the **existing** HyDE/multi-query
+  expansion pool as one pooled query — Ask (blocking + streaming),
+  Research (every hypothesis's retrieval), Draft's grounding query,
+  and the agent engines' steps/researcher legs. Interact has no
+  retrieval leg (the selected documents are the evidence), so there
+  the terms fold in server-side as an explicit focus line in the
+  chat instruction. Refine failure (provider down, failure page,
+  unparseable reply) is an honest error and leaves the original
+  untouched and sendable — the endpoint keys off Piece 14's
+  failure-page contract. Empty prompts and prompts over 4,000
+  characters are clean 400s. Identical inputs are served by the
+  shared LLM response cache (no second cache); the call is metered
+  through the standard usage scope and deliberately not written to
+  activity history (the send that follows is). **Verified live on
+  :3001**: a messy Hinglish royalty question refined faithfully
+  (language and intent kept; terms incl. a Hindi equivalent), the
+  send answered from the document (Rs 310/tonne) with the pooled
+  terms query visible in the answer's expansions — confirmed on
+  fresh scoped and unscoped asks (a send whose question matches an
+  already-cached answer is served that answer, as with every
+  expansion); Interact refine + send verified the same way; bridge
+  stopped → refine returns an honest 502 with no fabricated rewrite.
+  Workspace tests 219 → 226 for this piece.
 - **Ask: "Brief vault" mode (29 Oct 2026)**: Ask gains a toggle beside
   Web / Private. Off (default) is exactly today's behavior — Ask draws
   on the whole corpus, preferring the active brief and widening to the

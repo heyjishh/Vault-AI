@@ -435,16 +435,21 @@ impl SubAgentOrchestrator {
         branch: &str,
         scope_docs: &Option<Vec<String>>,
         ctx: crate::query::CitatorContext,
+        terms: &[String],
     ) -> Result<crate::query::QueryAnswer> {
+        let opts = crate::query::AskOptions {
+            brief_vault: None,
+            refine_terms: terms.to_vec(),
+        };
         match scope_docs {
             Some(docs) => {
                 self.query
-                    .query_with_web(branch, QueryMode::Mix, 4, 2, Some(docs.clone()), true, ctx, &crate::query::AskOptions::default())
+                    .query_with_web(branch, QueryMode::Mix, 4, 2, Some(docs.clone()), true, ctx, &opts)
                     .await
             }
             None => {
                 self.query
-                    .query_with_web(branch, QueryMode::Mix, 4, 2, None, false, ctx, &crate::query::AskOptions::default())
+                    .query_with_web(branch, QueryMode::Mix, 4, 2, None, false, ctx, &opts)
                     .await
             }
         }
@@ -461,6 +466,7 @@ impl SubAgentOrchestrator {
         scope_docs: Option<Vec<String>>,
         config: OrchestratorConfig,
         ctx: crate::query::CitatorContext,
+        terms: &[String],
         progress: Option<UnboundedSender<QueryEvent>>,
     ) -> Result<OrchestratedRun> {
         let started = Instant::now();
@@ -555,8 +561,13 @@ impl SubAgentOrchestrator {
                 let scope = scope_docs.clone();
                 let branch_owned = branch.clone();
                 let ctx_child = ctx.clone();
+                let terms_child = terms.to_vec();
                 let handle = tokio::spawn(async move {
                     usage::scope_usage(child2, async move {
+                        let opts = crate::query::AskOptions {
+                            brief_vault: None,
+                            refine_terms: terms_child,
+                        };
                         match &scope {
                             Some(docs) => {
                                 svc.query_with_web(
@@ -567,7 +578,7 @@ impl SubAgentOrchestrator {
                                     Some(docs.clone()),
                                     true,
                                     ctx_child,
-                                    &crate::query::AskOptions::default(),
+                                    &opts,
                                 )
                                 .await
                             }
@@ -580,7 +591,7 @@ impl SubAgentOrchestrator {
                                     None,
                                     false,
                                     ctx_child,
-                                    &crate::query::AskOptions::default(),
+                                    &opts,
                                 )
                                 .await
                             }
@@ -709,7 +720,7 @@ impl SubAgentOrchestrator {
                     let child2 = child.clone();
                     let branch_owned = branch.clone();
                     let fut = usage::scope_usage(child2, async {
-                        self.researcher_query(&branch_owned, &scope_docs, ctx.clone()).await
+                        self.researcher_query(&branch_owned, &scope_docs, ctx.clone(), terms).await
                     });
                     let retry = tokio::time::timeout(timeout, fut).await;
                     let totals = child.lock().map(|t| *t).unwrap_or_default();
@@ -1027,7 +1038,7 @@ impl SubAgentOrchestrator {
                 "Verify this disputed claim against the brief documents, citing sources: {disputed}"
             );
             let fut = usage::scope_usage(child2, async {
-                self.researcher_query(&requery, &scope_docs, ctx.clone()).await
+                self.researcher_query(&requery, &scope_docs, ctx.clone(), terms).await
             });
             let mut receipt =
                 SubAgentReceipt::new("reconciler", "reconciler", &requery);
@@ -1371,7 +1382,7 @@ mod tests {
             r#"{"branches": [{"query": "q1", "why": "only"}], "verdict_supported": true, "issues": []}"#,
         );
         let run = o
-            .run("a goal", None, OrchestratorConfig::default(), crate::query::CitatorContext::default(), None)
+            .run("a goal", None, OrchestratorConfig::default(), crate::query::CitatorContext::default(), &[], None)
             .await
             .unwrap();
         let roles: Vec<&str> = run.sub_agents.iter().map(|r| r.role.as_str()).collect();
@@ -1390,7 +1401,7 @@ mod tests {
         let o = orchestrator_with(r#"{"branches": [{"query": "q1", "why": "only"}]}"#);
         let mut cfg = OrchestratorConfig::default();
         cfg.per_run_token_cap = 0;
-        let run = o.run("a goal", None, cfg, crate::query::CitatorContext::default(), None).await.unwrap();
+        let run = o.run("a goal", None, cfg, crate::query::CitatorContext::default(), &[], None).await.unwrap();
         // Lead runs first and bills its mock tokens, so the cap trips
         // immediately after it; no researcher receipt exists.
         assert_eq!(run.stopped, "budget");

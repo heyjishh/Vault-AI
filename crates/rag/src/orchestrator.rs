@@ -108,12 +108,14 @@ impl AutonomousAgent {
 
     /// Run the planner loop for one goal. `scope_docs` confines vault
     /// searches to a brief (the caller enforces space membership);
-    /// `max_steps` is clamped to 1..=10.
+    /// `max_steps` is clamped to 1..=10. `terms` (Piece 13) pool into
+    /// every step's retrieval expansions.
     pub async fn run(
         &self,
         goal: &str,
         scope_docs: Option<Vec<String>>,
         max_steps: usize,
+        terms: &[String],
     ) -> Result<AutonomousRun> {
         let max_steps = max_steps.clamp(1, 10);
         let mut steps: Vec<AgentStepTrace> = Vec::new();
@@ -138,16 +140,20 @@ impl AutonomousAgent {
                     } else {
                         plan.query.trim().to_string()
                     };
+                    let step_opts = crate::query::AskOptions {
+                        brief_vault: None,
+                        refine_terms: terms.to_vec(),
+                    };
                     let answer = if plan.action == "search_web" {
                         self.query
-                            .query_with_web(&q, QueryMode::Mix, 4, 3, scope_docs.clone(), false, crate::query::CitatorContext::default(), &crate::query::AskOptions::default())
+                            .query_with_web(&q, QueryMode::Mix, 4, 3, scope_docs.clone(), false, crate::query::CitatorContext::default(), &step_opts)
                             .await?
                     } else if let Some(docs) = &scope_docs {
                         self.query
-                            .query_scoped(&q, QueryMode::Mix, 4, docs.clone(), crate::query::CitatorContext::default())
+                            .query_opts(&q, QueryMode::Mix, 4, Some(docs.clone()), false, &step_opts, crate::query::CitatorContext::default())
                             .await?
                     } else {
-                        self.query.query(&q, QueryMode::Mix, 4, crate::query::CitatorContext::default()).await?
+                        self.query.query_opts(&q, QueryMode::Mix, 4, None, false, &step_opts, crate::query::CitatorContext::default()).await?
                     };
                     steps.push(AgentStepTrace {
                         n,
@@ -275,7 +281,7 @@ mod tests {
     #[tokio::test]
     async fn planner_that_finishes_immediately_synthesizes_with_no_steps() {
         let agent = agent_with(r#"{"action":"finish","reason":"nothing to gather"}"#);
-        let run = agent.run("a goal", None, 5).await.unwrap();
+        let run = agent.run("a goal", None, 5, &[]).await.unwrap();
         assert_eq!(run.stopped, "finished");
         assert!(run.steps.is_empty());
         assert!(!run.final_report.is_empty());
@@ -285,7 +291,7 @@ mod tests {
     async fn step_budget_bounds_the_loop() {
         // The mock always asks for another vault search; the budget must stop it.
         let agent = agent_with(r#"{"action":"search_vault","query":"q","reason":"digging"}"#);
-        let run = agent.run("a goal", None, 3).await.unwrap();
+        let run = agent.run("a goal", None, 3, &[]).await.unwrap();
         assert_eq!(run.stopped, "budget");
         assert_eq!(run.steps.len(), 3);
         assert!(run.steps.iter().all(|s| s.action == "search_vault"));

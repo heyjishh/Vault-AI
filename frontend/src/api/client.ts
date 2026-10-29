@@ -80,9 +80,17 @@ export const authApi = {
 }
 
 export const ragApi = {
-  async query(q: string, mode: QueryMode, top_k: number, web: boolean, web_results = 3, matter_id?: string, priv?: boolean, brief_vault?: boolean): Promise<QueryAnswer> {
+  async query(q: string, mode: QueryMode, top_k: number, web: boolean, web_results = 3, matter_id?: string, priv?: boolean, brief_vault?: boolean, refine_terms?: string[]): Promise<QueryAnswer> {
     try {
-      const r = await api.post<QueryAnswer>('/knowledge/query', { query: q, mode, top_k, web, web_results, matter_id, private: priv || undefined, brief_vault: brief_vault || undefined })
+      const r = await api.post<QueryAnswer>('/knowledge/query', { query: q, mode, top_k, web, web_results, matter_id, private: priv || undefined, brief_vault: brief_vault || undefined, refine_terms: refine_terms?.length ? refine_terms : undefined })
+      return r.data
+    } catch (e) { throw new Error(err(e)) }
+  },
+  /** Piece 13: refine a prompt the user wrote — a visible rewrite
+   * plus retrieval terms. Only ever called on the user's click. */
+  async refine(text: string, surface: string): Promise<{ refined: string; terms: string[] }> {
+    try {
+      const r = await api.post<{ refined: string; terms: string[] }>('/knowledge/refine', { text, surface })
       return r.data
     } catch (e) { throw new Error(err(e)) }
   },
@@ -97,8 +105,8 @@ export const ragApi = {
       return r.data
     } catch (e) { throw new Error(err(e)) }
   },
-  async research(query: string, web: boolean): Promise<ResearchReport> {
-    try { const r = await api.post<ResearchReport>('/knowledge/research', { query, web }); return r.data }
+  async research(query: string, web: boolean, refine_terms?: string[]): Promise<ResearchReport> {
+    try { const r = await api.post<ResearchReport>('/knowledge/research', { query, web, refine_terms: refine_terms?.length ? refine_terms : undefined }); return r.data }
     catch (e) { throw new Error(err(e)) }
   },
   async stats(): Promise<CorpusStats> {
@@ -110,18 +118,18 @@ export const ragApi = {
   async cacheStats(): Promise<CacheStats> {
     const r = await api.get<CacheStats>('/knowledge/cache-stats'); return r.data
   },
-  async runAutonomous(goal: string, matter_id?: string, max_steps?: number): Promise<AutonomousRun> {
+  async runAutonomous(goal: string, matter_id?: string, max_steps?: number, refine_terms?: string[]): Promise<AutonomousRun> {
     try {
-      const r = await api.post<AutonomousRun>('/knowledge/agents/autonomous', { goal, matter_id: matter_id ?? null, max_steps: max_steps ?? null })
+      const r = await api.post<AutonomousRun>('/knowledge/agents/autonomous', { goal, matter_id: matter_id ?? null, max_steps: max_steps ?? null, refine_terms: refine_terms?.length ? refine_terms : undefined })
       return r.data
     } catch (e) { throw new Error(err(e)) }
   },
   async workflows(): Promise<WorkflowDef[]> {
     const r = await api.get<WorkflowDef[]>('/knowledge/workflows'); return r.data
   },
-  async runWorkflow(workflow_id: string, input: string): Promise<WorkflowRun> {
+  async runWorkflow(workflow_id: string, input: string, refine_terms?: string[]): Promise<WorkflowRun> {
     try {
-      const r = await api.post<WorkflowRun>('/knowledge/workflows/run', { workflow_id, input })
+      const r = await api.post<WorkflowRun>('/knowledge/workflows/run', { workflow_id, input, refine_terms: refine_terms?.length ? refine_terms : undefined })
       return r.data
     } catch (e) { throw new Error(err(e)) }
   },
@@ -308,20 +316,21 @@ export interface DraftResponse {
 }
 
 export const createApi = {
-  async interact(document_ids: string[], action: string, question?: string): Promise<InteractResponse> {
+  async interact(document_ids: string[], action: string, question?: string, refine_terms?: string[]): Promise<InteractResponse> {
     try {
       const r = await api.post<InteractResponse>('/knowledge/interact', {
         document_id: document_ids[0],
         document_ids,
         action,
         question,
+        refine_terms: refine_terms?.length ? refine_terms : undefined,
       })
       return r.data
     } catch (e) { throw new Error(err(e)) }
   },
-  async draft(kind: string, instructions: string, use_corpus: boolean, matter_id?: string): Promise<DraftResponse> {
+  async draft(kind: string, instructions: string, use_corpus: boolean, matter_id?: string, refine_terms?: string[]): Promise<DraftResponse> {
     try {
-      const r = await api.post<DraftResponse>('/knowledge/draft', { kind, instructions, use_corpus, matter_id })
+      const r = await api.post<DraftResponse>('/knowledge/draft', { kind, instructions, use_corpus, matter_id, refine_terms: refine_terms?.length ? refine_terms : undefined })
       return r.data
     } catch (e) { throw new Error(err(e)) }
   },
@@ -452,7 +461,7 @@ export interface StreamHandlers {
  * Uses fetch + ReadableStream (axios can't stream in the browser).
  */
 export async function queryStream(
-  payload: { query: string; mode: QueryMode; top_k: number; web: boolean; web_results?: number; matter_id?: string; private?: boolean; brief_vault?: boolean; as_of?: string; jurisdiction?: string },
+  payload: { query: string; mode: QueryMode; top_k: number; web: boolean; web_results?: number; matter_id?: string; private?: boolean; brief_vault?: boolean; as_of?: string; jurisdiction?: string; refine_terms?: string[] },
   handlers: StreamHandlers,
   signal?: AbortSignal,
 ): Promise<void> {

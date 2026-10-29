@@ -249,7 +249,14 @@ impl WorkflowEngine {
     }
 
     /// Run a workflow end to end.
-    pub async fn run(&self, workflow_id: &str, input: &str) -> Result<WorkflowRun> {
+    /// `terms` (Piece 13 refinement terms) pool into every step's
+    /// retrieval expansions, like the Ask path.
+    pub async fn run(
+        &self,
+        workflow_id: &str,
+        input: &str,
+        terms: &[String],
+    ) -> Result<WorkflowRun> {
         let def = Self::find(workflow_id)
             .ok_or_else(|| Error::BadRequest(format!("unknown workflow: {workflow_id}")))?;
         if def.steps.is_empty() {
@@ -269,10 +276,14 @@ impl WorkflowEngine {
             } else {
                 format!("{question}\n\nFocus: {}", step.focus)
             };
+            let step_opts = crate::query::AskOptions {
+                brief_vault: None,
+                refine_terms: terms.to_vec(),
+            };
             let answer = if step.use_web {
-                self.query.query_with_web(&focused, step.mode, step.top_k, 2, None, false, crate::query::CitatorContext::default(), &crate::query::AskOptions::default()).await?
+                self.query.query_with_web(&focused, step.mode, step.top_k, 2, None, false, crate::query::CitatorContext::default(), &step_opts).await?
             } else {
-                self.query.query(&focused, step.mode, step.top_k, crate::query::CitatorContext::default()).await?
+                self.query.query_opts(&focused, step.mode, step.top_k, None, false, &step_opts, crate::query::CitatorContext::default()).await?
             };
             // Feed a compact summary forward so later steps build on earlier ones.
             let summary: String = answer.answer.chars().take(800).collect();
@@ -367,7 +378,7 @@ mod tests {
     #[tokio::test]
     async fn memo_workflow_runs_end_to_end() {
         let e = engine();
-        let run = e.run("memo_draft", "test question").await.unwrap();
+        let run = e.run("memo_draft", "test question", &[]).await.unwrap();
         assert_eq!(run.workflow_id, "memo_draft");
         assert_eq!(run.steps.len(), 4);
         assert!(!run.final_report.is_empty());
@@ -376,6 +387,6 @@ mod tests {
     #[tokio::test]
     async fn unknown_workflow_errors() {
         let e = engine();
-        assert!(e.run("nope", "x").await.is_err());
+        assert!(e.run("nope", "x", &[]).await.is_err());
     }
 }

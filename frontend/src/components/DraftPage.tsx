@@ -5,6 +5,7 @@ import remarkGfm from 'remark-gfm'
 import { Copy, Download, PenLine } from 'lucide-react'
 import { createApi, type DraftResponse } from '../api/client'
 import type { Citation } from '../api/types'
+import { RefineControls, useRefine } from './RefineControls'
 import { CitationCard, EmptyState, Spinner } from './ui'
 import { SourceModal, citeMarkdownComponents, linkifyCitations } from './SourceModal'
 import { useSession } from '../stores/session'
@@ -44,8 +45,11 @@ export default function DraftPage({ matterId: fixedMatterId, go }: { matterId?: 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [restore])
 
+  // Prompt refinement (Piece 13) for the draft instructions.
+  const refineCtl = useRefine({ value: instructions, setValue: setInstructions, surface: 'draft' })
+
   const run = useMutation({
-    mutationFn: () => createApi.draft(kind, instructions.trim(), useCorpus, matterId),
+    mutationFn: () => createApi.draft(kind, instructions.trim(), useCorpus, matterId, refineCtl.consumeTerms()),
     onSuccess: (r) => { setResult(r); toast('success', 'Draft ready — review before use.') },
     onError: (e) => toast('error', (e as Error).message),
   })
@@ -89,10 +93,13 @@ export default function DraftPage({ matterId: fixedMatterId, go }: { matterId?: 
           className="mt-4 w-full rounded-lex border border-stone-300 px-3.5 py-3 text-[14.5px] leading-relaxed"
         />
         <div className="flex items-center justify-between mt-3 flex-wrap gap-3">
-          <label className="flex items-center gap-2 text-[13.5px] text-stone-600">
-            <input type="checkbox" checked={useCorpus} onChange={(e) => setUseCorpus(e.target.checked)} className="accent-[#0f0e0d]" />
-            Ground in the vault (search sources first, cite them in the draft)
-          </label>
+          <div className="flex items-center gap-3 flex-wrap">
+            <label className="flex items-center gap-2 text-[13.5px] text-stone-600">
+              <input type="checkbox" checked={useCorpus} onChange={(e) => setUseCorpus(e.target.checked)} className="accent-[#0f0e0d]" />
+              Ground in the vault (search sources first, cite them in the draft)
+            </label>
+            <RefineControls ctl={refineCtl} disabled={!instructions.trim()} />
+          </div>
           <button
             disabled={!instructions.trim() || run.isPending}
             onClick={() => run.mutate()}
