@@ -28,6 +28,43 @@ pub trait LlmClient: Send + Sync {
     }
 }
 
+/// Whole-output provider failure pages, lowercased. Web-backed model
+/// bridges return their failure page as an ordinary HTTP 200 completion
+/// (the Gemini web bridge behind the test instance is the observed
+/// case: a transient Gemini failure arrives as the assistant text
+/// "Sorry, something went wrong. Please try your request again.").
+/// Nothing in that text marks it as an error — it must be recognised
+/// here, at the provider boundary, or it is indistinguishable from a
+/// real answer and every downstream cache will store and re-serve it
+/// as one (Piece 14, pinned live 2026-10-29: an Interact chat's
+/// one-off bridge failure was cached and replayed in 0s forever).
+const FAILURE_OUTPUT_PREFIXES: &[&str] = &["sorry, something went wrong"];
+
+/// True when a completion is a provider failure page rather than a
+/// generated answer. Deliberately conservative: the ENTIRE trimmed
+/// output must be short (≤ 200 chars) and begin with a known failure
+/// prefix — a genuine answer that merely discusses a failure, or
+/// quotes one inside a longer analysis, never matches.
+pub fn is_failure_output(text: &str) -> bool {
+    let t = text.trim();
+    if t.is_empty() || t.chars().count() > 200 {
+        return false;
+    }
+    let lower = t.to_lowercase();
+    FAILURE_OUTPUT_PREFIXES.iter().any(|p| lower.starts_with(p))
+}
+
+/// The error a failure page becomes: an upstream failure, so callers
+/// surface an honest error status and a retry reaches the provider.
+/// (The wording deliberately contains no HTTP status code —
+/// `retry_upstream` pattern-matches codes in error text, and a
+/// failure page is not a retryable HTTP transient at this layer.)
+pub(crate) fn failure_output_error() -> Error {
+    Error::Upstream(
+        "llm provider returned a failure message instead of a completion".into(),
+    )
+}
+
 /// Retry an upstream call on 429 / transient 5xx with exponential backoff.
 /// Mistral's test/free tiers rate-limit aggressively, so this is essential.
 pub(crate) async fn retry_upstream<T, F, Fut>(op: F) -> Result<T>
@@ -159,6 +196,12 @@ impl LlmClient for OpenAiLlm {
                 .next()
                 .and_then(|c| c.message.content)
                 .ok_or_else(|| Error::Upstream("llm returned no content".into()))?;
+            // A provider failure page delivered as HTTP 200 content
+            // is a failure, not a completion (see is_failure_output):
+            // never meter it, cache it, or serve it as an answer.
+            if is_failure_output(&content) {
+                return Err(failure_output_error());
+            }
             // Metering: provider-reported usage wins; estimate otherwise.
             match usage {
                 Some(u) => crate::usage::record_llm(u.prompt_tokens, u.completion_tokens),
@@ -241,6 +284,10 @@ impl LlmClient for OpenAiLlm {
 fn finish_stream(full: String) -> Result<String> {
     if full.is_empty() {
         Err(Error::Upstream("llm stream returned no content".into()))
+    } else if is_failure_output(&full) {
+        // A streamed provider failure page is a failure, not an
+        // answer (see is_failure_output).
+        Err(failure_output_error())
     } else {
         Ok(full)
     }
@@ -341,5 +388,40 @@ impl LlmClient for MockLlm {
             crate::usage::estimate_tokens(&self.response),
         );
         Ok(self.response.clone())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn failure_output_detects_the_bridge_failure_page() {
+        // The exact text the Gemini web bridge delivered as a 200
+        // completion on :3001 (2026-10-29), plus trivial variants.
+        assert!(is_failure_output(
+            "Sorry, something went wrong. Please try your request again."
+        ));
+        assert!(is_failure_output("  sorry, something went wrong\n"));
+        assert!(is_failure_output("Sorry, something went wrong."));
+    }
+
+    #[test]
+    fn failure_output_ignores_genuine_answers() {
+        assert!(!is_failure_output(""));
+        assert!(!is_failure_output("   "));
+        assert!(!is_failure_output("The notice period is 30 days [doc:0]."));
+        // A longer answer that merely opens by discussing a failure
+        // is an answer, not a failure page: the whole-output length
+        // cap keeps it out.
+        let long = format!(
+            "Sorry, something went wrong in the transaction. {}",
+            "The agreement provides a cure period and a termination right \
+             for the non-defaulting party, exercisable on fifteen days' \
+             written notice to the defaulting party's registered address. "
+                .repeat(3)
+        );
+        assert!(long.chars().count() > 200);
+        assert!(!is_failure_output(&long));
     }
 }

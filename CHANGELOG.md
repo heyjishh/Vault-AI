@@ -460,6 +460,30 @@ live**, what is **built but unverified**, and what is **roadmap**.
   surfaced as a flaky failure in the Piece 4 regression test.
 
 ### Fixed
+- **Provider failure pages are never cached as answers (29 Oct 2026,
+  Piece 14).** A web-backed LLM bridge returns its failure page as an
+  ordinary HTTP 200 completion ("Sorry, something went wrong. Please
+  try your request again."), so one transient bridge failure during
+  an Interact chat was written into the shared LLM cache and then
+  re-served in 0s forever for that exact (documents, action,
+  question) input — a 200 carrying error text, indistinguishable from
+  an answer. Fixed at three layers. (1) Provider boundary:
+  `is_failure_output` (whole-output, short, known-prefix match) makes
+  `OpenAiLlm` — blocking and streaming — return an upstream error for
+  a failure page instead of a completion, so Interact / Draft /
+  Research / Agents surface an honest error status and a retry
+  reaches the provider. (2) `CachedLlm` never writes a failure page
+  and purges one on read (entries stored by older builds self-heal);
+  the semantic answer cache refuses failure answers at `store` and
+  purges them at `lookup`. (3) Ask guards both generation exits
+  (blocking + streaming) before the citation audit and the answer
+  cache, so a failure can never be polished into — or stored as — a
+  grounded-looking response on any client configuration. Successful
+  answers still cache exactly as before. Regression tests: scripted
+  fail-then-recover LLM at the cache layer (no write, purge-on-read,
+  retry reaches the provider, success still cached, blocking +
+  streaming), answer-cache refusal/purge, and query-level
+  fail-then-succeed on both the blocking and streaming Ask paths.
 - **Citator misattribution — a named reversal no longer lands on an
   unmatched sole candidate (27 Oct 2026, engine fix + tests).** A live
   orchestrated run showed "Section 86 IT Act" as **reversed** with Mehta

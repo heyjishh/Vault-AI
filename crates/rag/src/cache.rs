@@ -91,6 +91,13 @@ impl SemanticCache {
         inner.map.insert(key, value);
     }
 
+    pub fn remove(&self, key: &str) {
+        if let Ok(mut inner) = self.inner.lock() {
+            inner.map.remove(key);
+            inner.order.retain(|k| k != key);
+        }
+    }
+
     pub fn stats(&self) -> CacheStats {
         CacheStats {
             hits: self.hits.load(Ordering::Relaxed),
@@ -123,15 +130,42 @@ impl CachedLlm {
     }
 }
 
+impl CachedLlm {
+    /// Decode a cached completion. A stored provider failure page
+    /// (see `crate::llm::is_failure_output`) is PURGED and reported
+    /// as a miss: poison written before the guard existed — or by an
+    /// unguarded inner client — must never be served a second time.
+    fn cached_completion(&self, key: &str) -> Option<Result<String>> {
+        let hit = self.cache.get(key)?;
+        match String::from_utf8(hit) {
+            Ok(text) if crate::llm::is_failure_output(&text) => {
+                self.cache.remove(key);
+                None
+            }
+            Ok(text) => Some(Ok(text)),
+            Err(e) => Some(Err(Error::Storage(e.to_string()))),
+        }
+    }
+
+    /// Store a completion — unless it is a failure page. A transient
+    /// provider failure must never become a permanent fake answer:
+    /// the next identical request has to reach the provider again.
+    fn store_completion(&self, key: &str, out: &str) {
+        if !crate::llm::is_failure_output(out) {
+            self.cache.put(key.to_string(), out.as_bytes().to_vec());
+        }
+    }
+}
+
 #[async_trait]
 impl LlmClient for CachedLlm {
     async fn complete(&self, system: &str, user: &str) -> Result<String> {
         let key = format!("llm:{}", hash_key(&[system, user]));
-        if let Some(hit) = self.cache.get(&key) {
-            return String::from_utf8(hit).map_err(|e| Error::Storage(e.to_string()));
+        if let Some(hit) = self.cached_completion(&key) {
+            return hit;
         }
         let out = self.inner.complete(system, user).await?;
-        self.cache.put(key, out.as_bytes().to_vec());
+        self.store_completion(&key, &out);
         Ok(out)
     }
 
@@ -145,8 +179,8 @@ impl LlmClient for CachedLlm {
         sink: &mut crate::llm::ChunkSink<'_>,
     ) -> Result<String> {
         let key = format!("llm:{}", hash_key(&[system, user]));
-        if let Some(hit) = self.cache.get(&key) {
-            let text = String::from_utf8(hit).map_err(|e| Error::Storage(e.to_string()))?;
+        if let Some(hit) = self.cached_completion(&key) {
+            let text = hit?;
             for chunk in text.split_inclusive(' ') {
                 if !chunk.is_empty() {
                     sink(chunk);
@@ -155,7 +189,7 @@ impl LlmClient for CachedLlm {
             return Ok(text);
         }
         let out = self.inner.complete_stream(system, user, sink).await?;
-        self.cache.put(key, out.as_bytes().to_vec());
+        self.store_completion(&key, &out);
         Ok(out)
     }
 }
@@ -229,6 +263,9 @@ impl Embeddings for CachedEmbeddings {
 /// - Callers never store or look up answers for web-augmented or private
 ///   (confidential-vault) queries; only answers with ≥1 citation are
 ///   stored, so refusals and ungrounded text never enter the cache.
+/// - Provider failure pages are refused at `store` and purged at
+///   `lookup` (Piece 14): a transient generation failure can never
+///   enter, or be served from, this cache as though it were an answer.
 /// - The threshold is deliberately high (default 0.97): this trades hit
 ///   rate for near-zero false-serve risk on fact-sensitive questions.
 pub struct SemanticAnswerCache {
@@ -263,7 +300,12 @@ impl SemanticAnswerCache {
     /// Best-matching stored answer for this question vector under this
     /// scope key, if its cosine clears the threshold.
     pub fn lookup(&self, qvec: &[f32], scope_key: &str) -> Option<crate::query::QueryAnswer> {
-        let entries = self.entries.lock().ok()?;
+        let mut entries = self.entries.lock().ok()?;
+        // Purge-on-read: a stored provider failure page (Piece 14) is
+        // not an answer — drop any such entry before matching, so it
+        // can never be served, even if it was written by a code path
+        // that predates the store-side refusal below.
+        entries.retain(|e| !crate::llm::is_failure_output(&e.answer.answer));
         let mut best: Option<(f32, &SemanticAnswerEntry)> = None;
         for e in entries.iter() {
             if e.scope_key != scope_key || e.qvec.len() != qvec.len() {
@@ -287,6 +329,11 @@ impl SemanticAnswerCache {
     }
 
     pub fn store(&self, qvec: Vec<f32>, scope_key: String, answer: crate::query::QueryAnswer) {
+        // A provider failure page is never an answer (Piece 14):
+        // refuse the write, whatever the caller believed it generated.
+        if crate::llm::is_failure_output(&answer.answer) {
+            return;
+        }
         let Ok(mut entries) = self.entries.lock() else { return };
         // Same question under the same scope: replace, don't duplicate.
         entries.retain(|e| !(e.scope_key == scope_key && crate::vector_store::cosine(&e.qvec, &qvec) >= 0.999));
@@ -343,5 +390,157 @@ mod tests {
         assert!(c.get("k0").is_none());
         assert!(c.get("k16").is_some());
         assert_eq!(c.stats().entries, 16);
+    }
+
+    /// The failure page the Gemini web bridge returns as an HTTP 200
+    /// completion (the :3001 poison, 2026-10-29).
+    const FAILURE_PAGE: &str = "Sorry, something went wrong. Please try your request again.";
+
+    /// LLM that plays a fixed script of `Ok` responses and counts how
+    /// often it was actually called — a cache serve never increments.
+    struct ScriptedLlm {
+        script: std::sync::Mutex<VecDeque<String>>,
+        calls: std::sync::atomic::AtomicUsize,
+    }
+
+    impl ScriptedLlm {
+        fn new(script: Vec<&str>) -> Self {
+            Self {
+                script: std::sync::Mutex::new(
+                    script.into_iter().map(str::to_string).collect(),
+                ),
+                calls: std::sync::atomic::AtomicUsize::new(0),
+            }
+        }
+        fn calls(&self) -> usize {
+            self.calls.load(Ordering::Relaxed)
+        }
+    }
+
+    #[async_trait]
+    impl LlmClient for ScriptedLlm {
+        async fn complete(&self, _system: &str, _user: &str) -> Result<String> {
+            self.calls.fetch_add(1, Ordering::Relaxed);
+            Ok(self
+                .script
+                .lock()
+                .unwrap()
+                .pop_front()
+                .expect("scripted llm ran out of responses"))
+        }
+    }
+
+    #[tokio::test]
+    async fn llm_failure_output_is_never_cached_and_retry_reaches_provider() {
+        // An unguarded provider delivers the failure page as Ok(..)
+        // once, then recovers. The failure must not be written to the
+        // cache: the identical retry goes back to the provider.
+        let inner = Arc::new(ScriptedLlm::new(vec![FAILURE_PAGE, "real answer"]));
+        let cached = CachedLlm::new(inner.clone(), Arc::new(SemanticCache::new(16)));
+        let first = cached.complete("sys", "user").await.unwrap();
+        assert_eq!(first, FAILURE_PAGE, "unguarded text passes through once");
+        let second = cached.complete("sys", "user").await.unwrap();
+        assert_eq!(second, "real answer");
+        assert_eq!(inner.calls(), 2, "retry reached the provider, not the cache");
+        // A successful answer still caches normally.
+        let third = cached.complete("sys", "user").await.unwrap();
+        assert_eq!(third, "real answer");
+        assert_eq!(inner.calls(), 2, "success serves from cache");
+    }
+
+    #[tokio::test]
+    async fn llm_error_is_never_cached_and_retry_reaches_provider() {
+        struct FlakyLlm {
+            calls: std::sync::atomic::AtomicUsize,
+        }
+        #[async_trait]
+        impl LlmClient for FlakyLlm {
+            async fn complete(&self, _system: &str, _user: &str) -> Result<String> {
+                let n = self.calls.fetch_add(1, Ordering::Relaxed);
+                if n == 0 {
+                    Err(Error::Upstream("transient boom".into()))
+                } else {
+                    Ok("recovered".to_string())
+                }
+            }
+        }
+        let inner = Arc::new(FlakyLlm { calls: std::sync::atomic::AtomicUsize::new(0) });
+        let cached = CachedLlm::new(inner.clone(), Arc::new(SemanticCache::new(16)));
+        assert!(cached.complete("sys", "user").await.is_err());
+        assert_eq!(cached.complete("sys", "user").await.unwrap(), "recovered");
+        assert_eq!(inner.calls.load(Ordering::Relaxed), 2);
+    }
+
+    #[tokio::test]
+    async fn llm_cache_purges_a_stored_failure_on_read() {
+        // Poison written before the guard existed: it sits in the
+        // cache under the request's key. The next identical request
+        // must purge it and reach the provider instead of serving it.
+        let cache = Arc::new(SemanticCache::new(16));
+        let key = format!("llm:{}", hash_key(&["sys", "user"]));
+        cache.put(key.clone(), FAILURE_PAGE.as_bytes().to_vec());
+        let inner = Arc::new(ScriptedLlm::new(vec!["real answer"]));
+        let cached = CachedLlm::new(inner.clone(), cache.clone());
+        let out = cached.complete("sys", "user").await.unwrap();
+        assert_eq!(out, "real answer");
+        assert_eq!(inner.calls(), 1, "provider was consulted, poison not served");
+        let stored = String::from_utf8(cache.get(&key).expect("entry present")).unwrap();
+        assert_eq!(stored, "real answer", "poison replaced by the real completion");
+    }
+
+    #[tokio::test]
+    async fn llm_stream_failure_output_is_never_cached() {
+        let inner = Arc::new(ScriptedLlm::new(vec![FAILURE_PAGE, "streamed answer"]));
+        let cached = CachedLlm::new(inner.clone(), Arc::new(SemanticCache::new(16)));
+        let mut sink = |_chunk: &str| {};
+        let first = cached.complete_stream("sys", "user", &mut sink).await.unwrap();
+        assert_eq!(first, FAILURE_PAGE);
+        let second = cached.complete_stream("sys", "user", &mut sink).await.unwrap();
+        assert_eq!(second, "streamed answer");
+        assert_eq!(inner.calls(), 2, "streamed retry reached the provider");
+        let third = cached.complete_stream("sys", "user", &mut sink).await.unwrap();
+        assert_eq!(third, "streamed answer");
+        assert_eq!(inner.calls(), 2, "streamed success serves from cache");
+    }
+
+    fn qa(answer: &str) -> crate::query::QueryAnswer {
+        crate::query::QueryAnswer {
+            answer: answer.to_string(),
+            citations: Vec::new(),
+            mode: crate::query::QueryMode::Mix,
+            scope_note: None,
+            verified: false,
+            citation_audit: None,
+            expansions: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn answer_cache_refuses_failure_answers_but_keeps_real_ones() {
+        let cache = SemanticAnswerCache::new(16, 0.97);
+        let qvec = vec![1.0, 0.0];
+        cache.store(qvec.clone(), "scope".to_string(), qa(FAILURE_PAGE));
+        assert!(
+            cache.lookup(&qvec, "scope").is_none(),
+            "a failure page must never enter the answer cache"
+        );
+        assert_eq!(cache.stats().entries, 0);
+        cache.store(qvec.clone(), "scope".to_string(), qa("grounded answer"));
+        let hit = cache.lookup(&qvec, "scope").expect("real answer serves");
+        assert_eq!(hit.answer, "grounded answer");
+    }
+
+    #[test]
+    fn answer_cache_purges_poisoned_entries_on_lookup() {
+        // Poison inserted directly (as a pre-guard build would have
+        // stored it): lookup must not serve it, and must evict it.
+        let cache = SemanticAnswerCache::new(16, 0.97);
+        cache.entries.lock().unwrap().push_back(SemanticAnswerEntry {
+            qvec: vec![1.0, 0.0],
+            scope_key: "scope".to_string(),
+            answer: qa(FAILURE_PAGE),
+        });
+        assert!(cache.lookup(&[1.0, 0.0], "scope").is_none());
+        assert_eq!(cache.stats().entries, 0, "poisoned entry evicted on read");
     }
 }

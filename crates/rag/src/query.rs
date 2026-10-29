@@ -20,7 +20,7 @@ use crate::bm25::Bm25Index;
 use crate::cache::{hash_key, SemanticAnswerCache};
 use crate::embeddings::Embeddings;
 use crate::graph::{Entity, GraphStore, Relation};
-use crate::llm::LlmClient;
+use crate::llm::{is_failure_output, LlmClient};
 use crate::rerank::Reranker;
 use crate::vector_store::{is_searchable, parent_id, ChunkRecord, ScoredChunk, VectorStore};
 use crate::web::{FetchedPage, WebSearch};
@@ -1788,6 +1788,15 @@ impl QueryService {
         // text, so only it honors the private-LLM override.
         let gen_llm = llm_override.as_ref().unwrap_or(&self.llm);
         let answer = gen_llm.complete(&system, &user_prompt).await?;
+        // A provider failure page is not an answer (Piece 14): error
+        // out BEFORE the audit, the treatment note, and the answer
+        // cache, so a transient generation failure is never polished
+        // into — or stored as — a grounded-looking response.
+        if is_failure_output(&answer) {
+            return Err(legal_rag_common::Error::Upstream(
+                "llm provider returned a failure message instead of an answer".into(),
+            ));
+        }
         // Citation-integrity audit: strip markers the cited source does
         // not support, before the answer (or its cached copy) ships.
         let audit_sources: Vec<(String, String)> = citations
@@ -1981,6 +1990,14 @@ impl QueryService {
         // text, so only it honors the private-LLM override.
         let gen_llm = llm_override.as_ref().unwrap_or(&self.llm);
         let answer = gen_llm.complete_stream(&system, &user_prompt, &mut sink).await?;
+        // Same failure-page guard as the blocking path (Piece 14):
+        // no Done, no answer-cache store — the stream reports an
+        // error and a retry regenerates.
+        if is_failure_output(&answer) {
+            return Err(legal_rag_common::Error::Upstream(
+                "llm provider returned a failure message instead of an answer".into(),
+            ));
+        }
         // Same integrity audit as the blocking path. Deltas already
         // streamed raw; the Done event carries the audited answer,
         // which is what the client persists and re-renders.
@@ -3283,6 +3300,128 @@ mod tests {
             None,
         );
         (svc, rag)
+    }
+
+    /// An LLM whose ANSWER call first returns a provider failure page
+    /// — as an `Ok` completion, exactly how a web-backed bridge
+    /// delivers it — and then recovers. Every non-answer call gets
+    /// "[]", which the expansion/extraction callers degrade on.
+    struct FlakyAnswerLlm {
+        answer_calls: std::sync::atomic::AtomicUsize,
+    }
+
+    #[async_trait::async_trait]
+    impl LlmClient for FlakyAnswerLlm {
+        async fn complete(&self, system: &str, _user: &str) -> Result<String> {
+            if system.contains("using ONLY the provided source excerpts") {
+                let n = self
+                    .answer_calls
+                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                if n == 0 {
+                    return Ok(
+                        "Sorry, something went wrong. Please try your request again."
+                            .to_string(),
+                    );
+                }
+                return Ok("Recovered grounded answer [doc:0].".to_string());
+            }
+            Ok("[]".to_string())
+        }
+    }
+
+    /// `seeded()` with the flaky answer LLM wired into the service.
+    async fn flaky_seeded() -> QueryService {
+        let rag = Arc::new(RagAnything::new(
+            RagAnythingConfig::default(),
+            Arc::new(MockEmbeddings::new(16)),
+            Arc::new(InMemoryVectorStore::new()),
+            Arc::new(InMemoryGraphStore::new()),
+            Arc::new(MockLlm::new(r#"["Acme"]"#)),
+            500,
+            50,
+        ));
+        rag.process_document_complete(
+            "nda.txt",
+            b"Acme Corp agrees to confidentiality. Acme shall not disclose.",
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+        let rag2 = rag.clone();
+        QueryService::new(
+            rag2.backends().0,
+            rag2.backends().1,
+            rag2.backends().2,
+            Arc::new(FlakyAnswerLlm {
+                answer_calls: std::sync::atomic::AtomicUsize::new(0),
+            }),
+            Arc::new(move |id: &str| rag2.doc_title(id)),
+            Arc::new(crate::web::NoopWebSearch),
+            None,
+        )
+    }
+
+    #[tokio::test]
+    async fn failure_output_is_an_error_and_never_cached() {
+        // Piece 14 regression: a provider failure page must surface
+        // as an error — never as an answer, and never into the
+        // semantic answer cache, where it would be re-served forever.
+        let svc = flaky_seeded().await;
+        let first = svc
+            .query("What did Acme agree to?", QueryMode::Mix, 3, CitatorContext::default())
+            .await;
+        assert!(
+            first.is_err(),
+            "failure page must not be served as an answer: {:?}",
+            first.map(|a| a.answer)
+        );
+        // The identical retry regenerates (nothing was cached) and
+        // succeeds now that the provider has recovered.
+        let second = svc
+            .query("What did Acme agree to?", QueryMode::Mix, 3, CitatorContext::default())
+            .await
+            .unwrap();
+        assert!(
+            second.answer.contains("Recovered grounded answer"),
+            "{}",
+            second.answer
+        );
+        // And a successful answer still serves normally afterwards.
+        let third = svc
+            .query("What did Acme agree to?", QueryMode::Mix, 3, CitatorContext::default())
+            .await
+            .unwrap();
+        assert!(
+            third.answer.contains("Recovered grounded answer"),
+            "{}",
+            third.answer
+        );
+    }
+
+    #[tokio::test]
+    async fn failure_output_stream_is_an_error_and_never_cached() {
+        // Piece 14, streaming path: the failed stream errors (no
+        // Done, no cache store); the identical retry streams to Done.
+        let svc = flaky_seeded().await;
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<QueryEvent>();
+        let first = svc
+            .query_stream("What did Acme agree to?", QueryMode::Mix, 3, false, 3, tx)
+            .await;
+        assert!(first.is_err(), "streamed failure page must error, not Done");
+        while rx.try_recv().is_ok() {}
+        let (tx2, mut rx2) = tokio::sync::mpsc::unbounded_channel::<QueryEvent>();
+        svc.query_stream("What did Acme agree to?", QueryMode::Mix, 3, false, 3, tx2)
+            .await
+            .unwrap();
+        let mut done_answer = None;
+        while let Ok(ev) = rx2.try_recv() {
+            if let QueryEvent::Done { answer, .. } = ev {
+                done_answer = Some(answer);
+            }
+        }
+        let done = done_answer.expect("second stream completes with Done");
+        assert!(done.contains("Recovered grounded answer"), "{done}");
     }
 
     #[tokio::test]
