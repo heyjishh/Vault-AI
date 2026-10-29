@@ -268,6 +268,22 @@ Question
      or unknown source → marker stripped; receipt returned to the client
  11. Metering + activity capture (+ answer-cache store when ≥1 citation)
 
+**Ask source modes** (the corpus leg's scope is a per-request choice):
+the default is the whole corpus, preferring the active brief — when a
+brief is active and retrieval inside it comes back empty, the query
+widens to the full vault and the answer's `scope_note` says so. The
+legal-validity filters (`as_of` / `jurisdiction`) and **Brief-vault
+mode** (`brief_vault=true`, Piece 12) make the scope a hard boundary
+instead: no widening, ever — zero in-scope evidence yields a grounded
+refusal whose scope note names the restriction (and, in brief-vault
+mode, the brief: every answer in the mode carries the note). The mode
+is folded into the semantic cache's scope key, so hard- and
+soft-scoped answers never cross-serve; the verified-annotation tier
+matches scope exactly, so it cannot leak across the boundary either.
+Web and Private are independent legs and compose with any corpus
+mode (web citations are not vault documents; private sources remain
+the owner's alone).
+
 Citation pinpoints (23 Oct 2026): each citation also carries the exact
 sentence in the passage that supports the claim — selected by distinct
 query-term coverage over flowing (de-wrapped) sentence segmentation

@@ -3,7 +3,7 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { motion } from 'framer-motion'
 import {
-  ArrowUp, BadgeCheck, Check, ChevronDown, Copy, ExternalLink, Globe, Lock, PanelRight, RotateCcw, ShieldCheck, Square, ThumbsDown, ThumbsUp, X,
+  ArrowUp, BadgeCheck, Briefcase, Check, ChevronDown, Copy, ExternalLink, Globe, Lock, PanelRight, RotateCcw, ShieldCheck, Square, ThumbsDown, ThumbsUp, X,
 } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { mattersApi, privateVaultApi, publicSettingsApi, queryStream, ragApi } from '../api/client'
@@ -59,6 +59,9 @@ export default function AssistantPage({ matterId: fixedMatterId, go }: { matterI
   const [sources, setSources] = useState(5)
   const [web, setWeb] = useState(false)
   const [priv, setPriv] = useState(false)
+  // Brief-vault mode (Piece 12): Ask answers ONLY from the active
+  // brief's vault, with no full-vault fallback. Off = today's behavior.
+  const [briefVault, setBriefVault] = useState(false)
   const [asOf, setAsOf] = useState('')
   const [jurisdiction, setJurisdiction] = useState('')
   const { data: vaultStatus } = useQuery({ queryKey: ['private-vault-status'], queryFn: privateVaultApi.status })
@@ -108,13 +111,13 @@ export default function AssistantPage({ matterId: fixedMatterId, go }: { matterI
 
     try {
       await queryStream(
-        { query: question, mode, top_k: sources, web, web_results: 3, matter_id: scopeMatterId ?? undefined, private: priv && privAvailable ? true : undefined, as_of: asOf || undefined, jurisdiction: jurisdiction.trim() || undefined },
+        { query: question, mode, top_k: sources, web, web_results: 3, matter_id: scopeMatterId ?? undefined, private: priv && privAvailable ? true : undefined, brief_vault: briefVault && scopeMatterId ? true : undefined, as_of: asOf || undefined, jurisdiction: jurisdiction.trim() || undefined },
         {
           onStatus: (message) =>
             setTurns((ts) =>
               ts.map((t) =>
                 t.id === id
-                  ? { ...t, status: message, scopeNote: message.includes('full vault') ? message : t.scopeNote }
+                  ? { ...t, status: message, scopeNote: message.includes('full vault') || message.includes('Brief vault') ? message : t.scopeNote }
                   : t,
               ),
             ),
@@ -144,7 +147,7 @@ export default function AssistantPage({ matterId: fixedMatterId, go }: { matterI
       } else {
         // Stream transport failed — fall back to the blocking endpoint.
         try {
-          const data = await ragApi.query(question, mode, sources, web, 3, scopeMatterId ?? undefined, priv && privAvailable ? true : undefined)
+          const data = await ragApi.query(question, mode, sources, web, 3, scopeMatterId ?? undefined, priv && privAvailable ? true : undefined, briefVault && scopeMatterId ? true : undefined)
           setTurns((ts) =>
             ts.map((t) =>
               t.id === id
@@ -215,15 +218,29 @@ export default function AssistantPage({ matterId: fixedMatterId, go }: { matterI
       {scopeMatterId && (
         <div className="mt-6 flex items-center gap-2 rounded-lex border border-stone-200 bg-white px-3.5 py-2.5 text-[13px] shadow-lex">
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 flex-shrink-0" />
-          <span className="text-stone-600">
-            Asking within <span className="font-medium text-ink">{scopeMatter?.title ?? 'this brief'}</span>
-            {' '}— answers draw only on this brief's documents.
-          </span>
-          {!fixedMatterId && (
+          {briefVault ? (
+            <span className="text-stone-600">
+              <span className="font-medium text-ink">Brief vault is on</span>
+              {' '}— answers come only from <span className="font-medium text-ink">{scopeMatter?.title ?? 'this brief'}</span>'s documents, with no full-vault fallback.
+            </span>
+          ) : (
+            <span className="text-stone-600">
+              Asking within <span className="font-medium text-ink">{scopeMatter?.title ?? 'this brief'}</span>
+              {' '}— answers draw only on this brief's documents.
+            </span>
+          )}
+          {!fixedMatterId && (briefVault ? (
+            <button
+              onClick={() => { setBriefVault(false); setStoreMatter(null); toast('success', 'Brief vault off — Ask now searches the full vault') }}
+              className="ml-auto text-stone-500 hover:text-ink font-medium whitespace-nowrap"
+            >
+              Turn off Brief vault &amp; search full vault
+            </button>
+          ) : (
             <button onClick={() => setStoreMatter(null)} className="ml-auto text-stone-500 hover:text-ink font-medium whitespace-nowrap">
               Search full vault instead
             </button>
-          )}
+          ))}
         </div>
       )}
       {empty ? (
@@ -242,6 +259,7 @@ export default function AssistantPage({ matterId: fixedMatterId, go }: { matterI
           </motion.div>
           <Composer
             input={input} setInput={setInput}             sources={sources} setSources={setSources} web={web} setWeb={setWeb} priv={priv} setPriv={setPriv} privAvailable={privAvailable}
+            briefVault={briefVault} setBriefVault={setBriefVault} briefAvailable={!!scopeMatterId} briefName={scopeMatter?.title}
             asOf={asOf} setAsOf={setAsOf} jurisdiction={jurisdiction} setJurisdiction={setJurisdiction}
             busy={busy} onSubmit={() => ask(input)} onStop={() => abortRef.current?.abort()}
           />
@@ -287,6 +305,7 @@ export default function AssistantPage({ matterId: fixedMatterId, go }: { matterI
           <div className="sticky bottom-4">
             <Composer
               input={input} setInput={setInput}               sources={sources} setSources={setSources} web={web} setWeb={setWeb} priv={priv} setPriv={setPriv} privAvailable={privAvailable}
+              briefVault={briefVault} setBriefVault={setBriefVault} briefAvailable={!!scopeMatterId} briefName={scopeMatter?.title}
               asOf={asOf} setAsOf={setAsOf} jurisdiction={jurisdiction} setJurisdiction={setJurisdiction}
               busy={busy} onSubmit={() => ask(input)} onStop={() => abortRef.current?.abort()}
             />
@@ -703,11 +722,12 @@ function Composer(props: {
   sources: number; setSources: (n: number) => void
   web: boolean; setWeb: (v: boolean) => void
   priv: boolean; setPriv: (v: boolean) => void; privAvailable: boolean
+  briefVault: boolean; setBriefVault: (v: boolean) => void; briefAvailable: boolean; briefName?: string
   asOf: string; setAsOf: (v: string) => void
   jurisdiction: string; setJurisdiction: (v: string) => void
   busy: boolean; onSubmit: () => void; onStop: () => void
 }) {
-  const { input, setInput, sources, setSources, web, setWeb, priv, setPriv, privAvailable, asOf, setAsOf, jurisdiction, setJurisdiction, busy, onSubmit, onStop } = props
+  const { input, setInput, sources, setSources, web, setWeb, priv, setPriv, privAvailable, briefVault, setBriefVault, briefAvailable, briefName, asOf, setAsOf, jurisdiction, setJurisdiction, busy, onSubmit, onStop } = props
   const [srcOpen, setSrcOpen] = useState(false)
   const [lawOpen, setLawOpen] = useState(false)
   const lawActive = !!(asOf || jurisdiction.trim())
@@ -744,6 +764,18 @@ function Composer(props: {
               <Lock size={13} /> Private
             </button>
           )}
+          <button
+            onClick={() => setBriefVault(!briefVault)}
+            disabled={!briefAvailable}
+            title={briefAvailable
+              ? `Answer only from ${briefName ?? 'this brief'}'s vault — if the brief has no answer, Ask says so instead of searching the full vault`
+              : 'Open a brief to answer from its vault only'}
+            className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[12px] transition-colors disabled:opacity-40 ${
+              briefVault ? 'bg-ink text-ivory border-ink' : 'border-stone-200 text-stone-500 hover:text-ink hover:border-stone-300'
+            }`}
+          >
+            <Briefcase size={13} /> Brief vault
+          </button>
           <div className="relative">
             <button
               onClick={() => setLawOpen((v) => !v)}

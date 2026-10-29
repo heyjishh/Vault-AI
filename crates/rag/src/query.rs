@@ -228,6 +228,56 @@ pub struct QueryAnswer {
     pub expansions: Vec<String>,
 }
 
+/// Per-request Ask options (Pieces 12–13), threaded through the query
+/// entry points. `Default` reproduces today's behavior exactly.
+#[derive(Debug, Clone, Default)]
+pub struct AskOptions {
+    /// Brief-vault mode (Piece 12): the active brief's display label.
+    /// When set (together with a document scope), the corpus leg is a
+    /// HARD boundary — retrieval never falls back to the full vault —
+    /// and every answer's scope note names the brief, so the user can
+    /// always tell the answer came from that brief alone. `None` =
+    /// today's behavior (soft brief scoping with a disclosed fallback).
+    pub brief_vault: Option<String>,
+    /// Retrieval terms produced by prompt refinement (Piece 13): one
+    /// pooled query built from these terms joins the same expansion
+    /// pool HyDE / multi-query uses — there is no second path.
+    pub refine_terms: Vec<String>,
+}
+
+impl AskOptions {
+    /// True when brief-vault hard scoping is active.
+    pub fn brief_vault_on(&self) -> bool {
+        self.brief_vault.is_some()
+    }
+}
+
+/// Scope note for a brief-vault answer that found in-brief evidence.
+pub fn brief_vault_note_hit(label: &str) -> String {
+    format!("Brief vault: answered only from {label}'s documents — the full vault was not searched.")
+}
+
+/// Scope note for a brief-vault answer with no in-brief evidence: the
+/// grounded refusal declares the restriction instead of widening.
+pub fn brief_vault_note_empty(label: &str) -> String {
+    format!(
+        "Brief vault: no documents in {label} matched — nothing outside this brief was searched."
+    )
+}
+
+/// The single pooled retrieval query built from refinement terms
+/// (Piece 13). Terms are keywords/phrases (statutes, sections, legal
+/// terms, synonyms), so a comma-joined string embeds as one topical
+/// query alongside the HyDE variants.
+pub fn refine_terms_query(terms: &[String]) -> String {
+    terms
+        .iter()
+        .map(|t| t.trim())
+        .filter(|t| !t.is_empty())
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
 /// A human-verified answer (annotation): a curator corrected or authored
 /// the answer to a question, and semantically matching future questions
 /// are served it verbatim. Annotations bind to the corpus fingerprint
@@ -705,7 +755,11 @@ impl QueryService {
 
     /// Scope key for the semantic answer cache: two questions may only
     /// share an answer under identical mode, pool size, brief scope, and
-    /// corpus state.
+    /// corpus state. Brief-vault mode (Piece 12) is part of the key: a
+    /// hard-scoped answer (refusal, or brief-only citations) must never
+    /// be served to a soft-scoped ask over the same document set, nor
+    /// the reverse — the two modes can produce opposite answers to the
+    /// same question over the same brief.
     fn answer_scope_key(
         &self,
         mode: QueryMode,
@@ -713,6 +767,7 @@ impl QueryService {
         scope: Option<&DocScope>,
         corpus_fp: &str,
         ctx: &CitatorContext,
+        hard_scope: bool,
     ) -> String {
         let scope_part = match scope {
             Some(docs) => {
@@ -732,6 +787,7 @@ impl QueryService {
             corpus_fp,
             ctx.state.as_deref().unwrap_or(""),
             ctx.applicant.as_deref().unwrap_or(""),
+            if hard_scope { "brief-vault" } else { "soft" },
         ])
     }
 
@@ -1085,7 +1141,25 @@ impl QueryService {
 
     /// Run one query end to end — like `aquery`.
     pub async fn query(&self, question: &str, mode: QueryMode, top_k: usize, ctx: CitatorContext) -> Result<QueryAnswer> {
-        self.query_inner(question, mode, top_k, &[], None, &[], false, None, &ctx).await
+        self.query_inner(question, mode, top_k, &[], None, &[], false, None, &ctx, &AskOptions::default()).await
+    }
+
+    /// Query with per-request Ask options (Pieces 12–13): optional
+    /// document scope, hard-boundary flag, brief-vault mode and
+    /// refinement terms. This is the Ask route's plain (non-web,
+    /// non-private) entry; the older scoped wrappers delegate here.
+    pub async fn query_opts(
+        &self,
+        question: &str,
+        mode: QueryMode,
+        top_k: usize,
+        scope_docs: Option<Vec<String>>,
+        strict: bool,
+        opts: &AskOptions,
+        ctx: CitatorContext,
+    ) -> Result<QueryAnswer> {
+        let scope: Option<DocScope> = scope_docs.map(|docs| docs.into_iter().collect());
+        self.query_inner(question, mode, top_k, &[], scope, &[], strict, None, &ctx, opts).await
     }
 
     /// Full query: optional brief scope plus the owner's confidential
@@ -1101,9 +1175,10 @@ impl QueryService {
         strict: bool,
         llm_override: Option<Arc<dyn LlmClient>>,
         ctx: CitatorContext,
+        opts: &AskOptions,
     ) -> Result<QueryAnswer> {
         let scope: Option<DocScope> = scope_docs.map(|docs| docs.into_iter().collect());
-        self.query_inner(question, mode, top_k, &[], scope, &extra, strict, llm_override, &ctx).await
+        self.query_inner(question, mode, top_k, &[], scope, &extra, strict, llm_override, &ctx, opts).await
     }
 
     /// Query scoped to a set of documents (a matter). Retrieval and graph
@@ -1118,7 +1193,7 @@ impl QueryService {
         ctx: CitatorContext,
     ) -> Result<QueryAnswer> {
         let scope: DocScope = scope_docs.into_iter().collect();
-        self.query_inner(question, mode, top_k, &[], Some(scope), &[], false, None, &ctx).await
+        self.query_inner(question, mode, top_k, &[], Some(scope), &[], false, None, &ctx, &AskOptions::default()).await
     }
 
     /// Strictly scoped query for legal-validity filters (as-of date /
@@ -1134,7 +1209,7 @@ impl QueryService {
         ctx: CitatorContext,
     ) -> Result<QueryAnswer> {
         let scope: DocScope = scope_docs.into_iter().collect();
-        self.query_inner(question, mode, top_k, &[], Some(scope), &[], true, None, &ctx).await
+        self.query_inner(question, mode, top_k, &[], Some(scope), &[], true, None, &ctx, &AskOptions::default()).await
     }
 
     /// Query with live web augmentation: local retrieval plus stealth-fetched
@@ -1151,11 +1226,12 @@ impl QueryService {
         scope_docs: Option<Vec<String>>,
         strict: bool,
         ctx: CitatorContext,
+        opts: &AskOptions,
     ) -> Result<QueryAnswer> {
         let gather = self.gather_web(question, web_results).await;
         let scope: Option<DocScope> = scope_docs.map(|docs| docs.into_iter().collect());
         let mut ans = self
-            .query_inner(question, mode, top_k, &gather.pages, scope, &[], strict, None, &ctx)
+            .query_inner(question, mode, top_k, &gather.pages, scope, &[], strict, None, &ctx, opts)
             .await?;
         if let Some(note) = gather.outcome.note() {
             ans.scope_note = Some(match ans.scope_note.take() {
@@ -1446,6 +1522,7 @@ impl QueryService {
         extra: &[ExtraSource],
         strict: bool,
         ctx: &CitatorContext,
+        opts: &AskOptions,
     ) -> Result<(String, String, Vec<Citation>, Option<String>, Vec<String>, Option<String>)> {
         let top_k = top_k.clamp(1, 50);
 
@@ -1465,11 +1542,20 @@ impl QueryService {
         // passage + paraphrase variants and pool their searches.
         // Env gate LEGAL_RAG_HYDE=0 disables; failures degrade to the
         // bare question.
-        let expansions: Vec<String> = if hyde_trigger(question) {
+        let mut expansions: Vec<String> = if hyde_trigger(question) {
             self.expand_query(question).await
         } else {
             Vec::new()
         };
+        // Refinement terms (Piece 13) join the SAME pool as one extra
+        // query — the hybrid mix: the user sees the refined wording,
+        // retrieval additionally searches for the terms it names.
+        if !opts.refine_terms.is_empty() {
+            let pooled = refine_terms_query(&opts.refine_terms);
+            if !pooled.is_empty() && !expansions.contains(&pooled) {
+                expansions.push(pooled);
+            }
+        }
 
         // With a reranker, retrieve a wide candidate set and let the
         // precision pass select the best top_k. When scoped to a matter,
@@ -1491,7 +1577,15 @@ impl QueryService {
         // judgments count — never another brief's.
         let mut fell_back = false;
         if scope.is_some() && hits.is_empty() && graph_context.is_empty() {
-            if strict {
+            if let Some(label) = &opts.brief_vault {
+                // Brief-vault mode (Piece 12): the brief is a hard
+                // boundary BY THE USER'S EXPLICIT CHOICE — there is no
+                // fallback to widen into. The answer proceeds with no
+                // corpus sources and refuses, grounded, and the note
+                // states the restriction. (Web pages, when the web leg
+                // is on, are unaffected: they are not vault documents.)
+                scope_note = Some(brief_vault_note_empty(label));
+            } else if strict {
                 // A legal-validity scope (as-of date / jurisdiction) is a
                 // hard boundary: serving out-of-scope law silently would
                 // be a correctness defect, so there is no fallback — the
@@ -1509,6 +1603,16 @@ impl QueryService {
                 fell_back = true;
                 scope_note =
                     Some("No documents in this brief matched — answered from the full vault.".to_string());
+            }
+        }
+        // Brief-vault mode declares itself on EVERY answer, not just
+        // refusals: the user must always be able to tell the answer
+        // came from the brief alone.
+        if scope_note.is_none() {
+            if let Some(label) = &opts.brief_vault {
+                if scope.is_some() {
+                    scope_note = Some(brief_vault_note_hit(label));
+                }
             }
         }
         let hits = self.apply_metadata_boost(question, hits);
@@ -1749,6 +1853,7 @@ impl QueryService {
         strict: bool,
         llm_override: Option<Arc<dyn LlmClient>>,
         ctx: &CitatorContext,
+        opts: &AskOptions,
     ) -> Result<QueryAnswer> {
         // Verified annotations + semantic answer cache — corpus-only,
         // grounded work only. Web answers go stale and private answers
@@ -1765,12 +1870,22 @@ impl QueryService {
                 .map(|mut v| v.remove(0))
             {
                 let fp = self.corpus_fingerprint().await;
-                if let Some(hit) = self.annotation_lookup(&qvec, mode, scope.as_ref(), &fp) {
+                if let Some(mut hit) = self.annotation_lookup(&qvec, mode, scope.as_ref(), &fp) {
                     info!("verified annotation served (zero LLM cost)");
+                    // Brief-vault mode declares its scope on every
+                    // answer — a verified annotation carries no note of
+                    // its own, so stamp the mode's note on the way out.
+                    // (Annotation scope matching is exact, so a served
+                    // annotation is always within the brief's doc set.)
+                    if let Some(label) = &opts.brief_vault {
+                        if hit.scope_note.is_none() && scope.is_some() {
+                            hit.scope_note = Some(brief_vault_note_hit(label));
+                        }
+                    }
                     return Ok(hit);
                 }
                 if self.answer_cache_enabled {
-                    let key = self.answer_scope_key(mode, top_k, scope.as_ref(), &fp, ctx);
+                    let key = self.answer_scope_key(mode, top_k, scope.as_ref(), &fp, ctx, opts.brief_vault_on());
                     if let Some(mut hit) = self.answer_cache.lookup(&qvec, &key) {
                         info!("semantic answer cache hit (zero LLM cost)");
                         // Edges may have landed since this answer was
@@ -1783,7 +1898,7 @@ impl QueryService {
             }
         }
         let (system, user_prompt, citations, scope_note, expansions, governing_line) =
-            self.prepare_context(question, mode, top_k, web_pages, scope, extra, strict, ctx).await?;
+            self.prepare_context(question, mode, top_k, web_pages, scope, extra, strict, ctx, opts).await?;
         // Only this final call ever sees confidential (extra) source
         // text, so only it honors the private-LLM override.
         let gen_llm = llm_override.as_ref().unwrap_or(&self.llm);
@@ -1845,7 +1960,7 @@ impl QueryService {
         web_results: usize,
         tx: tokio::sync::mpsc::UnboundedSender<QueryEvent>,
     ) -> Result<()> {
-        self.query_stream_scoped(question, mode, top_k, web, web_results, None, &[], false, None, CitatorContext::default(), tx)
+        self.query_stream_scoped(question, mode, top_k, web, web_results, None, &[], false, None, CitatorContext::default(), &AskOptions::default(), tx)
             .await
     }
 
@@ -1864,6 +1979,7 @@ impl QueryService {
         strict: bool,
         llm_override: Option<Arc<dyn LlmClient>>,
         ctx: CitatorContext,
+        opts: &AskOptions,
         tx: tokio::sync::mpsc::UnboundedSender<QueryEvent>,
     ) -> Result<()> {
         let _ = tx.send(QueryEvent::Status {
@@ -1900,6 +2016,16 @@ impl QueryService {
                     let _ = tx.send(QueryEvent::Status {
                         message: "Serving a human-verified answer for this question.".to_string(),
                     });
+                    // Brief-vault parity: the scope note rides a Status
+                    // event (the stream's scope mechanism), as on the
+                    // freshly-generated path below.
+                    if let Some(label) = &opts.brief_vault {
+                        if scope.is_some() {
+                            let _ = tx.send(QueryEvent::Status {
+                                message: brief_vault_note_hit(label),
+                            });
+                        }
+                    }
                     let _ = tx.send(QueryEvent::Sources {
                         citations: hit.citations.clone(),
                         mode,
@@ -1914,11 +2040,19 @@ impl QueryService {
                     return Ok(());
                 }
                 if self.answer_cache_enabled {
-                    let key = self.answer_scope_key(mode, top_k, scope.as_ref(), &fp, &ctx);
+                    let key = self.answer_scope_key(mode, top_k, scope.as_ref(), &fp, &ctx, opts.brief_vault_on());
                     if let Some(mut hit) = self.answer_cache.lookup(&qvec, &key) {
                         let _ = tx.send(QueryEvent::Status {
                             message: "Matched an earlier answer — serving it instantly.".to_string(),
                         });
+                        // Brief-vault parity: replay the stored scope
+                        // note as a Status so the turn declares its
+                        // scope exactly like a fresh answer does.
+                        if opts.brief_vault_on() {
+                            if let Some(note) = &hit.scope_note {
+                                let _ = tx.send(QueryEvent::Status { message: note.clone() });
+                            }
+                        }
                         // Same refresh as the blocking path: statuses
                         // track the current edge set, not cache time.
                         self.refresh_treatments(&mut hit, scope.as_ref(), &ctx);
@@ -1947,7 +2081,7 @@ impl QueryService {
         // Retrieval + rerank can take seconds on a loaded box; keep the
         // status line moving while it runs so the wait never reads as a
         // frozen "connecting" — the user sees work happening throughout.
-        let prep = self.prepare_context(question, mode, top_k, &pages, scope, extra, strict, &ctx);
+        let prep = self.prepare_context(question, mode, top_k, &pages, scope, extra, strict, &ctx, opts);
         tokio::pin!(prep);
         let mut beat = tokio::time::interval(std::time::Duration::from_millis(1600));
         beat.tick().await; // consume the immediate first tick
@@ -3424,14 +3558,310 @@ mod tests {
         assert!(done.contains("Recovered grounded answer"), "{done}");
     }
 
+    /// Piece 12 fixture: two documents that read as two briefs —
+    /// "nda.txt" in brief A, "rent.txt" outside it. Questions are
+    /// worded so each retrieves only its own document under the
+    /// mock embedder.
+    async fn seeded_two_briefs() -> (QueryService, String, String) {
+        let rag = Arc::new(RagAnything::new(
+            RagAnythingConfig::default(),
+            Arc::new(MockEmbeddings::new(16)),
+            Arc::new(InMemoryVectorStore::new()),
+            Arc::new(InMemoryGraphStore::new()),
+            Arc::new(MockLlm::new(r#"["Acme"]"#)),
+            500,
+            50,
+        ));
+        rag.process_document_complete(
+            "nda.txt",
+            b"Acme Corp agrees to confidentiality. Acme shall not disclose trade secrets.",
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+        rag.process_document_complete(
+            "rent.txt",
+            b"Beta Properties served a notice to quit on the tenant for arrears of rent. The tenant must vacate the premises.",
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+        let docs = rag.list_documents();
+        let id_of = |name: &str| {
+            docs.iter()
+                .find(|d| rag.doc_title(&d.id).as_deref() == Some(name))
+                .unwrap_or_else(|| panic!("doc titled {name} seeded"))
+                .id
+                .clone()
+        };
+        let (a_id, b_id) = (id_of("nda.txt"), id_of("rent.txt"));
+        let rag2 = rag.clone();
+        let svc = QueryService::new(
+            rag2.backends().0,
+            rag2.backends().1,
+            rag2.backends().2,
+            Arc::new(MockLlm::new("The answer is grounded [doc:0].")),
+            Arc::new(move |id: &str| rag2.doc_title(id)),
+            Arc::new(crate::web::NoopWebSearch),
+            None,
+        );
+        (svc, a_id, b_id)
+    }
+
+    fn brief_vault_opts() -> AskOptions {
+        AskOptions {
+            brief_vault: Some("Brief A".to_string()),
+            refine_terms: Vec::new(),
+        }
+    }
+
+    #[tokio::test]
+    async fn brief_vault_refuses_cross_brief_question() {
+        // Piece 12: with Brief vault ON, a question whose evidence
+        // lives in another brief can never cite that brief. Against
+        // brief A's document the unrelated question's citations stay
+        // inside A (retrieval is nearest-neighbour, so the guarantee
+        // is containment, stamped with the mode's note); against an
+        // EMPTY brief — zero in-scope evidence — the mode refuses
+        // outright instead of widening, while the same question with
+        // the mode OFF falls back to the full vault as today.
+        let (svc, a_id, _b_id) = seeded_two_briefs().await;
+        let q = "What notice did Beta Properties serve for rent arrears?";
+        let on = svc
+            .query_opts(q, QueryMode::Mix, 3, Some(vec![a_id.clone()]), true, &brief_vault_opts(), CitatorContext::default())
+            .await
+            .unwrap();
+        assert!(
+            on.citations.iter().all(|c| c.doc_title.as_deref() == Some("nda.txt")),
+            "brief-vault must cite nothing outside the brief: {:?}",
+            on.citations.iter().map(|c| &c.doc_title).collect::<Vec<_>>()
+        );
+        assert_eq!(
+            on.scope_note.as_deref(),
+            Some(brief_vault_note_hit("Brief A").as_str())
+        );
+        // Zero in-scope evidence: grounded refusal, no fallback.
+        let refused = svc
+            .query_opts(q, QueryMode::Mix, 3, Some(Vec::new()), true, &brief_vault_opts(), CitatorContext::default())
+            .await
+            .unwrap();
+        assert!(
+            refused.citations.is_empty(),
+            "an empty brief answers from nothing: {:?}",
+            refused.citations.iter().map(|c| &c.doc_title).collect::<Vec<_>>()
+        );
+        assert_eq!(
+            refused.scope_note.as_deref(),
+            Some(brief_vault_note_empty("Brief A").as_str())
+        );
+        // Control — mode OFF (today's soft scoping): widened + noted.
+        let off = svc
+            .query_scoped(q, QueryMode::Mix, 3, Vec::new(), CitatorContext::default())
+            .await
+            .unwrap();
+        assert!(!off.citations.is_empty(), "soft mode falls back to the full vault");
+        assert!(
+            off.citations.iter().any(|c| c.doc_title.as_deref() == Some("rent.txt")),
+            "fallback reaches the other brief's document: {:?}",
+            off.citations.iter().map(|c| &c.doc_title).collect::<Vec<_>>()
+        );
+        assert!(
+            off.scope_note
+                .as_deref()
+                .is_some_and(|n| n.contains("answered from the full vault")),
+            "note: {:?}",
+            off.scope_note
+        );
+    }
+
+    #[tokio::test]
+    async fn brief_vault_in_brief_answer_is_brief_only_and_noted() {
+        let (svc, a_id, _b_id) = seeded_two_briefs().await;
+        let ans = svc
+            .query_opts(
+                "What did Acme agree to?",
+                QueryMode::Mix,
+                3,
+                Some(vec![a_id]),
+                true,
+                &brief_vault_opts(),
+                CitatorContext::default(),
+            )
+            .await
+            .unwrap();
+        assert!(!ans.citations.is_empty(), "in-brief evidence answers");
+        assert!(
+            ans.citations.iter().all(|c| c.doc_title.as_deref() == Some("nda.txt")),
+            "every citation is the brief's document: {:?}",
+            ans.citations.iter().map(|c| &c.doc_title).collect::<Vec<_>>()
+        );
+        assert_eq!(
+            ans.scope_note.as_deref(),
+            Some(brief_vault_note_hit("Brief A").as_str())
+        );
+    }
+
+    #[tokio::test]
+    async fn brief_vault_cache_never_cross_serves() {
+        // Piece 12: the semantic cache is partitioned by mode. Over
+        // an empty brief, run the cross-brief question with the mode
+        // OFF first — the full-vault fallback answer is cached under
+        // the soft key — then ON: the cached fallback must NOT be
+        // served; the hard mode refuses instead. And the reverse
+        // order on a fresh service: ON first (refusal), OFF still
+        // falls back.
+        let q = "What notice did Beta Properties serve for rent arrears?";
+        let (svc, _a_id, _b_id) = seeded_two_briefs().await;
+        let off = svc
+            .query_scoped(q, QueryMode::Mix, 3, Vec::new(), CitatorContext::default())
+            .await
+            .unwrap();
+        assert!(!off.citations.is_empty(), "soft ask populates the cache");
+        let on = svc
+            .query_opts(q, QueryMode::Mix, 3, Some(Vec::new()), true, &brief_vault_opts(), CitatorContext::default())
+            .await
+            .unwrap();
+        assert!(
+            on.citations.is_empty(),
+            "the cached full-vault answer must never serve a brief-vault ask"
+        );
+        assert_eq!(
+            on.scope_note.as_deref(),
+            Some(brief_vault_note_empty("Brief A").as_str())
+        );
+        // The soft answer is still intact for soft asks.
+        let off2 = svc
+            .query_scoped(q, QueryMode::Mix, 3, Vec::new(), CitatorContext::default())
+            .await
+            .unwrap();
+        assert!(!off2.citations.is_empty());
+
+        let (svc2, _a2, _b2) = seeded_two_briefs().await;
+        let on_first = svc2
+            .query_opts(q, QueryMode::Mix, 3, Some(Vec::new()), true, &brief_vault_opts(), CitatorContext::default())
+            .await
+            .unwrap();
+        assert!(on_first.citations.is_empty());
+        let off_after = svc2
+            .query_scoped(q, QueryMode::Mix, 3, Vec::new(), CitatorContext::default())
+            .await
+            .unwrap();
+        assert!(
+            !off_after.citations.is_empty(),
+            "a brief-vault refusal must not poison the soft mode"
+        );
+    }
+
+    #[tokio::test]
+    async fn brief_vault_with_web_keeps_corpus_brief_only() {
+        // Piece 12 (d): Web stays an independent toggle — the web
+        // leg's outcome note composes with the brief-vault note, and
+        // corpus citations remain brief-only.
+        let (svc, a_id, _b_id) = seeded_two_briefs().await;
+        let ans = svc
+            .query_with_web(
+                "What did Acme agree to?",
+                QueryMode::Mix,
+                3,
+                2,
+                Some(vec![a_id.clone()]),
+                true,
+                CitatorContext::default(),
+                &brief_vault_opts(),
+            )
+            .await
+            .unwrap();
+        assert!(!ans.citations.is_empty());
+        assert!(
+            ans.citations.iter().all(|c| c.doc_title.as_deref() == Some("nda.txt")),
+            "corpus citations stay inside the brief"
+        );
+        let note = ans.scope_note.clone().unwrap_or_default();
+        assert!(note.contains("Brief vault"), "note: {note}");
+        assert!(
+            note.contains("Live web search"),
+            "the web outcome note composes after the brief note: {note}"
+        );
+        // Cross-brief with web on: corpus citations stay inside the
+        // brief (any web citations are the web leg's own, allowed).
+        let cross = svc
+            .query_with_web(
+                "What notice did Beta Properties serve for rent arrears?",
+                QueryMode::Mix,
+                3,
+                2,
+                Some(vec![a_id]),
+                true,
+                CitatorContext::default(),
+                &brief_vault_opts(),
+            )
+            .await
+            .unwrap();
+        assert!(
+            cross
+                .citations
+                .iter()
+                .filter(|c| c.doc_id.starts_with("doc:"))
+                .all(|c| c.doc_title.as_deref() == Some("nda.txt")),
+            "no corpus citations from outside the brief: {:?}",
+            cross.citations.iter().map(|c| &c.doc_title).collect::<Vec<_>>()
+        );
+        assert!(
+            cross.scope_note.as_deref().is_some_and(|n| n.contains("Brief vault")),
+            "note: {:?}",
+            cross.scope_note
+        );
+    }
+
+    #[tokio::test]
+    async fn brief_vault_stream_carries_scope_note_status() {
+        // Piece 12 (e): streaming parity — the scope note rides the
+        // stream's Status mechanism, and the stream still completes.
+        let (svc, _a_id, _b_id) = seeded_two_briefs().await;
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<QueryEvent>();
+        svc.query_stream_scoped(
+            "What notice did Beta Properties serve for rent arrears?",
+            QueryMode::Mix,
+            3,
+            false,
+            3,
+            Some(Vec::new()),
+            &[],
+            true,
+            None,
+            CitatorContext::default(),
+            &brief_vault_opts(),
+            tx,
+        )
+        .await
+        .unwrap();
+        let mut saw_note = false;
+        let mut saw_done = false;
+        while let Ok(ev) = rx.try_recv() {
+            match ev {
+                QueryEvent::Status { message } => {
+                    if message == brief_vault_note_empty("Brief A") {
+                        saw_note = true;
+                    }
+                }
+                QueryEvent::Done { .. } => saw_done = true,
+                _ => {}
+            }
+        }
+        assert!(saw_note, "the brief-vault scope note rides a Status event");
+        assert!(saw_done, "the stream completes with Done");
+    }
+
     #[tokio::test]
     async fn answer_scope_key_separates_citator_context() {
         // FIX 3: a cached answer bakes in its request's governing line,
         // so state/applicant must partition the cache — same context
         // replays, different context never does.
         let (svc, _) = seeded().await;
-        let base = svc.answer_scope_key(QueryMode::Mix, 3, None, "fp", &CitatorContext::default());
-        let same = svc.answer_scope_key(QueryMode::Mix, 3, None, "fp", &CitatorContext::default());
+        let base = svc.answer_scope_key(QueryMode::Mix, 3, None, "fp", &CitatorContext::default(), false);
+        let same = svc.answer_scope_key(QueryMode::Mix, 3, None, "fp", &CitatorContext::default(), false);
         assert_eq!(base, same);
         let mh = svc.answer_scope_key(
             QueryMode::Mix,
@@ -3439,6 +3869,7 @@ mod tests {
             None,
             "fp",
             &CitatorContext { state: Some("MH".to_string()), applicant: None },
+            false,
         );
         assert_ne!(base, mh);
         let app = svc.answer_scope_key(
@@ -3450,9 +3881,14 @@ mod tests {
                 state: None,
                 applicant: Some("Nexa Traders Pvt Ltd".to_string()),
             },
+            false,
         );
         assert_ne!(base, app);
         assert_ne!(mh, app);
+        // Piece 12: brief-vault mode partitions the cache from the soft
+        // mode over the identical scope — the two must never cross-serve.
+        let hard = svc.answer_scope_key(QueryMode::Mix, 3, None, "fp", &CitatorContext::default(), true);
+        assert_ne!(base, hard);
     }
 
     /// Phase 2A helper: district + reversing-HC docs indexed through
@@ -3652,7 +4088,7 @@ mod tests {
     async fn verdict_first_format_for_corpus_and_web() {
         let (svc, _) = seeded().await;
         let (system, _, _, _, _, _) = svc
-            .prepare_context("What did Acme agree to?", QueryMode::Mix, 3, &[], None, &[], false, &CitatorContext::default())
+            .prepare_context("What did Acme agree to?", QueryMode::Mix, 3, &[], None, &[], false, &CitatorContext::default(), &AskOptions::default())
             .await
             .unwrap();
         assert!(system.contains("## Verdict"), "corpus answers must carry the verdict-first format");
@@ -3665,13 +4101,13 @@ mod tests {
             date: None,
         };
         let (web_system, _, _, _, _, _) = svc
-            .prepare_context("What did Acme agree to?", QueryMode::Mix, 3, &[page], None, &[], false, &CitatorContext::default())
+            .prepare_context("What did Acme agree to?", QueryMode::Mix, 3, &[page], None, &[], false, &CitatorContext::default(), &AskOptions::default())
             .await
             .unwrap();
         assert!(web_system.contains("## Verdict"), "web answers keep the verdict-first format");
         assert!(web_system.contains("WEB-AUGMENTED ANSWER FORMAT"));
         let (bypass_system, _, _, _, _, _) = svc
-            .prepare_context("What is a contract?", QueryMode::Bypass, 3, &[], None, &[], false, &CitatorContext::default())
+            .prepare_context("What is a contract?", QueryMode::Bypass, 3, &[], None, &[], false, &CitatorContext::default(), &AskOptions::default())
             .await
             .unwrap();
         assert!(!bypass_system.contains("## Verdict"), "bypass answers get no format contract");
@@ -4266,6 +4702,7 @@ mod tests {
                 None,
                 false,
                 CitatorContext::default(),
+                &AskOptions::default(),
             )
             .await
             .expect("web failure must never fail the ask");
@@ -4293,6 +4730,7 @@ mod tests {
                 None,
                 false,
                 CitatorContext::default(),
+                &AskOptions::default(),
             )
             .await
             .unwrap();

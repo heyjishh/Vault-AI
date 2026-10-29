@@ -140,7 +140,7 @@ impl AutonomousAgent {
                     };
                     let answer = if plan.action == "search_web" {
                         self.query
-                            .query_with_web(&q, QueryMode::Mix, 4, 3, scope_docs.clone(), false, crate::query::CitatorContext::default())
+                            .query_with_web(&q, QueryMode::Mix, 4, 3, scope_docs.clone(), false, crate::query::CitatorContext::default(), &crate::query::AskOptions::default())
                             .await?
                     } else if let Some(docs) = &scope_docs {
                         self.query

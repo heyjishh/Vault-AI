@@ -270,7 +270,7 @@ impl WorkflowEngine {
                 format!("{question}\n\nFocus: {}", step.focus)
             };
             let answer = if step.use_web {
-                self.query.query_with_web(&focused, step.mode, step.top_k, 2, None, false, crate::query::CitatorContext::default()).await?
+                self.query.query_with_web(&focused, step.mode, step.top_k, 2, None, false, crate::query::CitatorContext::default(), &crate::query::AskOptions::default()).await?
             } else {
                 self.query.query(&focused, step.mode, step.top_k, crate::query::CitatorContext::default()).await?
             };

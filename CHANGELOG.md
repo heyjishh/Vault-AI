@@ -15,6 +15,34 @@ live**, what is **built but unverified**, and what is **roadmap**.
 ## [Unreleased]
 
 ### Added
+- **Ask: "Brief vault" mode (29 Oct 2026)**: Ask gains a toggle beside
+  Web / Private. Off (default) is exactly today's behavior — Ask draws
+  on the whole corpus, preferring the active brief and widening to the
+  full vault with a disclosed scope note when the brief has no hits.
+  On, the corpus leg is **hard-scoped to the active brief's filed
+  documents, server-enforced, with no fallback**: a question the brief
+  cannot answer gets a grounded refusal whose scope note states the
+  restriction ("Brief vault: no documents in <Brief> matched —
+  nothing outside this brief was searched"), and every answer in the
+  mode carries the note naming the brief. Web stays an independent
+  toggle (web citations remain allowed alongside brief-only corpus
+  citations); Private is unchanged. The mode is part of the semantic
+  answer-cache key, so hard- and soft-scoped answers to the same
+  question over the same brief never cross-serve (regression-tested
+  both orders); streaming carries the note via the existing Status
+  scope mechanism, including on verified/cache replays. The Ask
+  banner reconciles the standing mode with the one-off "Search full
+  vault instead" escape: while Brief vault is on, the escape reads
+  "Turn off Brief vault & search full vault" and visibly switches the
+  toggle off (with a toast) as it widens — it never silently defeats
+  the mode. New `brief_vault` flag on `POST /knowledge/query` and
+  `/knowledge/query/stream`; with no matter named, the mode binds to
+  the default brief (a brief is always active after the brief-only
+  vault change). **Verified live on :3001** (see the verification
+  record in this changelog's arc notes): cross-brief question ON →
+  refusal with the explicit note; OFF → answered via the disclosed
+  fallback; in-brief question ON → answered, brief citations only.
+  Workspace tests 214 → 219 for this piece.
 - **Upload + indexing progress UI (29 Oct 2026)**: uploads now show
   real stage progress instead of a spinner. Per file: **Uploading**
   with a determinate byte-progress bar (the transport's upload

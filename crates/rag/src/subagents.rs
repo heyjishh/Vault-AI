@@ -439,12 +439,12 @@ impl SubAgentOrchestrator {
         match scope_docs {
             Some(docs) => {
                 self.query
-                    .query_with_web(branch, QueryMode::Mix, 4, 2, Some(docs.clone()), true, ctx)
+                    .query_with_web(branch, QueryMode::Mix, 4, 2, Some(docs.clone()), true, ctx, &crate::query::AskOptions::default())
                     .await
             }
             None => {
                 self.query
-                    .query_with_web(branch, QueryMode::Mix, 4, 2, None, false, ctx)
+                    .query_with_web(branch, QueryMode::Mix, 4, 2, None, false, ctx, &crate::query::AskOptions::default())
                     .await
             }
         }
@@ -567,6 +567,7 @@ impl SubAgentOrchestrator {
                                     Some(docs.clone()),
                                     true,
                                     ctx_child,
+                                    &crate::query::AskOptions::default(),
                                 )
                                 .await
                             }
@@ -579,6 +580,7 @@ impl SubAgentOrchestrator {
                                     None,
                                     false,
                                     ctx_child,
+                                    &crate::query::AskOptions::default(),
                                 )
                                 .await
                             }

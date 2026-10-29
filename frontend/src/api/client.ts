@@ -80,9 +80,9 @@ export const authApi = {
 }
 
 export const ragApi = {
-  async query(q: string, mode: QueryMode, top_k: number, web: boolean, web_results = 3, matter_id?: string, priv?: boolean): Promise<QueryAnswer> {
+  async query(q: string, mode: QueryMode, top_k: number, web: boolean, web_results = 3, matter_id?: string, priv?: boolean, brief_vault?: boolean): Promise<QueryAnswer> {
     try {
-      const r = await api.post<QueryAnswer>('/knowledge/query', { query: q, mode, top_k, web, web_results, matter_id, private: priv || undefined })
+      const r = await api.post<QueryAnswer>('/knowledge/query', { query: q, mode, top_k, web, web_results, matter_id, private: priv || undefined, brief_vault: brief_vault || undefined })
       return r.data
     } catch (e) { throw new Error(err(e)) }
   },
@@ -452,7 +452,7 @@ export interface StreamHandlers {
  * Uses fetch + ReadableStream (axios can't stream in the browser).
  */
 export async function queryStream(
-  payload: { query: string; mode: QueryMode; top_k: number; web: boolean; web_results?: number; matter_id?: string; private?: boolean; as_of?: string; jurisdiction?: string },
+  payload: { query: string; mode: QueryMode; top_k: number; web: boolean; web_results?: number; matter_id?: string; private?: boolean; brief_vault?: boolean; as_of?: string; jurisdiction?: string },
   handlers: StreamHandlers,
   signal?: AbortSignal,
 ): Promise<void> {

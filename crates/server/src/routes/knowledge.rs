@@ -19,6 +19,12 @@ pub struct QueryRequest {
     pub web_results: Option<usize>,
     /// When set, scope retrieval to this matter's documents.
     pub matter_id: Option<String>,
+    /// Brief-vault mode (Piece 12): when true, the corpus leg is
+    /// HARD-scoped to the active brief's vault — no fallback to the
+    /// full vault — and the answer's scope note names the brief. The
+    /// active brief is `matter_id`, or the default brief when no
+    /// matter is named (after Piece 11 a brief is always active).
+    pub brief_vault: Option<bool>,
     /// When true, also search the user's confidential vault (must be
     /// unlocked) and blend its top hits as `[private:N]` citations.
     pub private: Option<bool>,
@@ -132,6 +138,57 @@ fn doc_scope(
     }
 }
 
+/// Piece 12 — brief-vault resolution for one Ask request. Flag off:
+/// the request's matter passes through and there is no label (today's
+/// behavior, soft scoping with the disclosed zero-hit fallback). Flag
+/// on: the effective matter is the request's matter or, when none is
+/// named, the default brief; its documents are resolved with the
+/// caller's read access enforced, and the brief's title rides along —
+/// the query layer hard-scopes to those documents and stamps the
+/// label into the answer's scope note.
+struct BriefVaultScope {
+    matter_id: Option<String>,
+    docs: Option<Vec<String>>,
+    label: Option<String>,
+}
+
+fn brief_vault_scope(
+    state: &AppState,
+    body: &QueryRequest,
+    user: &legal_rag_auth::User,
+) -> Result<BriefVaultScope, ApiError> {
+    if !body.brief_vault.unwrap_or(false) {
+        return Ok(BriefVaultScope {
+            matter_id: body.matter_id.clone(),
+            docs: None,
+            label: None,
+        });
+    }
+    let mid = body
+        .matter_id
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string)
+        .or_else(|| state.matters.default_id())
+        .ok_or_else(|| {
+            ApiError::from(legal_rag_common::Error::BadRequest(
+                "Brief vault mode needs an active brief".to_string(),
+            ))
+        })?;
+    let docs = crate::routes::matters::scope_docs(state, &mid, user)?;
+    let label = state
+        .matters
+        .get(&mid)
+        .map(|m| m.title)
+        .unwrap_or_else(|| "this brief".to_string());
+    Ok(BriefVaultScope {
+        matter_id: Some(mid),
+        docs: Some(docs),
+        label: Some(label),
+    })
+}
+
 /// Ask a question; returns a grounded answer with citations.
 pub async fn query(
     State(state): State<AppState>,
@@ -145,8 +202,19 @@ pub async fn query(
     let mode = body.mode.unwrap_or_else(|| settings_mode(&state));
     let top_k = body.top_k.unwrap_or(state.config.default_top_k);
     let ctx = citator_ctx(&body);
-    let docs = doc_scope(&state, &body.matter_id, &user)?;
+    let bv = brief_vault_scope(&state, &body, &user)?;
+    let docs = match bv.docs.clone() {
+        Some(d) => Some(d),
+        None => doc_scope(&state, &body.matter_id, &user)?,
+    };
     let (docs, strict) = filtered_scope(&state, docs, &body);
+    // Brief-vault mode is a hard boundary regardless of the
+    // legal-validity filters (which can only narrow it further).
+    let strict = strict || bv.label.is_some();
+    let opts = legal_rag_rag::AskOptions {
+        brief_vault: bv.label.clone(),
+        refine_terms: Vec::new(),
+    };
     let want_private = body.private.unwrap_or(false);
     let extra = private_sources(&state, &user.id, &body.query, want_private).await?;
     let scope = legal_rag_rag::usage::new_scope();
@@ -155,7 +223,7 @@ pub async fn query(
             // Confidential sources take precedence over web blending.
             state
                 .query
-                .query_full(&body.query, mode, top_k, docs.clone(), extra, strict, state.private_llm.clone(), ctx.clone())
+                .query_full(&body.query, mode, top_k, docs.clone(), extra, strict, state.private_llm.clone(), ctx.clone(), &opts)
                 .await
         } else if body.web.unwrap_or(false) {
             state
@@ -168,16 +236,14 @@ pub async fn query(
                     docs.clone(),
                     strict,
                     ctx.clone(),
+                    &opts,
                 )
                 .await
-        } else if let Some(docs) = &docs {
-            if strict {
-                state.query.query_scoped_strict(&body.query, mode, top_k, docs.clone(), ctx.clone()).await
-            } else {
-                state.query.query_scoped(&body.query, mode, top_k, docs.clone(), ctx.clone()).await
-            }
         } else {
-            state.query.query(&body.query, mode, top_k, ctx.clone()).await
+            state
+                .query
+                .query_opts(&body.query, mode, top_k, docs.clone(), strict, &opts, ctx.clone())
+                .await
         }
     })
     .await?;
@@ -204,7 +270,7 @@ pub async fn query(
         &format!("{:?}", mode).to_lowercase(),
         &activity_result,
         answer.citations.len(),
-        body.matter_id.clone(),
+        bv.matter_id.clone(),
         payload,
     );
     Ok(Json(answer))
@@ -309,9 +375,19 @@ pub async fn query_stream(
     let ctx = citator_ctx(&body);
     let web = body.web.unwrap_or(false);
     let web_results = body.web_results.unwrap_or(3).clamp(1, 5);
-    let docs = doc_scope(&state, &body.matter_id, &user)?;
+    let bv = brief_vault_scope(&state, &body, &user)?;
+    let docs = match bv.docs.clone() {
+        Some(d) => Some(d),
+        None => doc_scope(&state, &body.matter_id, &user)?,
+    };
     let (docs, strict) = filtered_scope(&state, docs, &body);
-    let matter_id = body.matter_id.clone();
+    // Brief-vault mode is a hard boundary on the stream too.
+    let strict = strict || bv.label.is_some();
+    let opts = legal_rag_rag::AskOptions {
+        brief_vault: bv.label.clone(),
+        refine_terms: Vec::new(),
+    };
+    let matter_id = bv.matter_id.clone();
     let want_private = body.private.unwrap_or(false);
     let extra = private_sources(&state, &user.id, &body.query, want_private).await?;
 
@@ -336,10 +412,11 @@ pub async fn query_stream(
         let question2 = question.clone();
         let docs2 = docs.clone();
         let extra2 = extra.clone();
+        let opts2 = opts.clone();
         let run = tokio::spawn(async move {
             legal_rag_rag::usage::scope_usage(scope_in, async move {
                 svc2.query_stream_scoped(
-                    &question2, mode, top_k, web, web_results, docs2, &extra2, strict, private_llm, ctx, inner_tx,
+                    &question2, mode, top_k, web, web_results, docs2, &extra2, strict, private_llm, ctx, &opts2, inner_tx,
                 )
                 .await
             })
