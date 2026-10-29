@@ -15,6 +15,30 @@ live**, what is **built but unverified**, and what is **roadmap**.
 ## [Unreleased]
 
 ### Added
+- **Multiple-file selection on the Brief and Vault pages
+  (30 Oct 2026)**: the Brief page's and the Vault page's file
+  pickers only ever took a single file (`files?.[0]`, no
+  `multiple`) — Interact's pickers were the only multi-file intake
+  (user report, 30 Oct). Now: the Brief page's "Upload files"
+  input takes many files at once and gains an "Upload folder"
+  picker (`webkitdirectory`) beside it, every selected file
+  enqueueing into the panel's staged queue with its own name as
+  its title; the Vault page's picker takes many files, its drop
+  takes every dropped file (traversing dropped folders instead of
+  only the first file), and its single-upload state is replaced by
+  the same per-file staged queue. The batch intake helpers (caps
+  of 20 files / 10 folders per batch, overflow kept as
+  skipped-with-reason rows, batch labelling, drop flattening) now
+  live in the shared upload module, so all three surfaces apply
+  one implementation — no divergent copies. A lone Vault file with
+  the Title field filled keeps using that title; otherwise files
+  are titled by their own names. Frontend-only — no backend
+  change; the shared frontend dist means prod serves the fix
+  immediately. Verified: workspace tests 238 passed / 0 failed,
+  frontend build clean, the built bundle carries `multiple` on
+  all three pickers and `webkitdirectory` on both folder pickers,
+  and two files ingested back-to-back into a probe brief on the
+  test instance both filed with confirmed reports.
 - **Staged upload/indexing progress on every ingest surface
   (29 Oct 2026)**: the Brief page's Add-documents panel no longer
   sits on a bare "Indexing…" button label for the whole ingest
