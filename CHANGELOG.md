@@ -15,6 +15,27 @@ live**, what is **built but unverified**, and what is **roadmap**.
 ## [Unreleased]
 
 ### Added
+- **Interact: multi-document selection + brief scoping (29 Oct 2026)**:
+  the Interact picker is now a multi-select (checkboxes, selected
+  count shown, cap of 5 stated in the UI and enforced by the API —
+  the 24k-char analysis budget is split across the selection, so a
+  single document keeps the full historical budget and prompt
+  format). The API accepts `document_ids` (legacy `document_id`
+  still works); the analysis prompt presents each document as a
+  labelled section with an attribution instruction, so
+  cross-document questions answer per document, and the response
+  carries a per-document `documents[]` (title, truncation, citator
+  treatment resolved per document, never merged). Empty selection →
+  400 "no documents selected"; over-cap → 400. Also fixed: the
+  standalone Interact view ignored the active brief (AppShell never
+  passed it) and always listed the whole vault — it now receives the
+  "Working in" brief like Ask/Draft, defaults the picker to the
+  brief's filed documents, and offers a This brief / Full vault
+  toggle (switching keeps only selected documents present in the new
+  list). Live-verified on :3001: 2-document chat across the citator
+  briefs (200, both documents covered), legacy single-doc summary
+  (200), brief-scoped list returns only the brief's document vs 31
+  in the full vault. Workspace tests 190 → 198.
 - **Citator V2 — appellate chains, ladders, governing authority**
   (27 Oct 2026, standalone crate + integration, kill switch defaults to
   V1). New crate `~/workspace/citator-v2/` (own git repo, zero deps,

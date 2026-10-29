@@ -59,32 +59,178 @@ fn interact_instruction(action: &str, question: Option<&str>) -> Result<String, 
     Ok(instruction)
 }
 
+/// Maximum documents one Interact run may cover. The total analysis
+/// budget (DOC_CHAR_BUDGET) is split across the selection, so the cap
+/// keeps every document's share usable; the UI states the same cap.
+pub(crate) const MAX_INTERACT_DOCS: usize = 5;
+
 #[derive(Deserialize)]
 pub struct InteractRequest {
-    pub document_id: String,
+    /// Legacy single-document field (still accepted).
+    pub document_id: Option<String>,
+    /// Multi-document selection (Piece 5). Takes precedence over
+    /// `document_id` when non-empty.
+    pub document_ids: Option<Vec<String>>,
     pub action: String,
     pub question: Option<String>,
 }
 
+/// Resolve the effective selection: `document_ids` (deduped, order
+/// preserved) wins; otherwise the single `document_id`. An empty
+/// selection and an over-cap selection are both clean 400s.
+fn resolve_selection(body: &InteractRequest) -> Result<Vec<String>, ApiError> {
+    let mut ids: Vec<String> = Vec::new();
+    if let Some(list) = &body.document_ids {
+        for raw in list {
+            let id = raw.trim();
+            if !id.is_empty() && !ids.iter().any(|x| x == id) {
+                ids.push(id.to_string());
+            }
+        }
+    }
+    if ids.is_empty() {
+        if let Some(single) = body
+            .document_id
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+        {
+            ids.push(single.to_string());
+        }
+    }
+    if ids.is_empty() {
+        return Err(legal_rag_common::Error::BadRequest(
+            "no documents selected".into(),
+        )
+        .into());
+    }
+    if ids.len() > MAX_INTERACT_DOCS {
+        return Err(legal_rag_common::Error::BadRequest(format!(
+            "interact supports at most {MAX_INTERACT_DOCS} documents at once"
+        ))
+        .into());
+    }
+    Ok(ids)
+}
+
+/// Per-document share of the analysis budget. A single document gets
+/// the full historical budget, so single-doc behaviour is unchanged.
+fn doc_budget(selection_len: usize) -> usize {
+    DOC_CHAR_BUDGET / selection_len.max(1)
+}
+
+/// Assemble the analysis prompt. One document keeps the exact legacy
+/// format; several documents are presented as labelled sections with
+/// an attribution instruction, so cross-document answers cite the
+/// document each point comes from.
+fn build_interact_prompt(docs: &[(String, String)], instruction: &str) -> String {
+    if docs.len() == 1 {
+        let (title, text) = &docs[0];
+        return format!("Document: {title}\n\n{text}\n\n---\nTask: {instruction}");
+    }
+    let mut prompt = format!(
+        "Analyse the following {} documents together. Attribute every point to the \
+         document it comes from, by title.\n",
+        docs.len()
+    );
+    for (i, (title, text)) in docs.iter().enumerate() {
+        prompt.push_str(&format!(
+            "\n===== Document {} of {}: {title} =====\n{text}\n",
+            i + 1,
+            docs.len()
+        ));
+    }
+    prompt.push_str(&format!("\n---\nTask: {instruction}"));
+    prompt
+}
+
+#[derive(Serialize)]
+pub struct InteractDocumentResult {
+    pub document_id: String,
+    pub document_title: String,
+    /// True when this document was longer than its budget share.
+    pub truncated: bool,
+    /// Citator V2 treatment of THIS document (None when the switch is
+    /// off) — resolved per document, never merged across the set.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub treatment: Option<legal_rag_rag::CitationTreatment>,
+}
+
 #[derive(Serialize)]
 pub struct InteractResponse {
+    /// First document of the selection (legacy field).
     pub document_id: String,
+    /// First document's title (legacy field).
     pub document_title: String,
     pub action: String,
     pub output: String,
-    /// True when the document was longer than the analysis budget.
+    /// True when any selected document was longer than its budget share.
     pub truncated: bool,
-    /// Citator V2 treatment of the document itself (None when the
-    /// switch is off). Interact works a single document and never
-    /// calls query(), so there is no query call to thread
-    /// state/applicant into — the citator-meaningful surface here is
-    /// flagging an overruled/reversed document under analysis. Note a
-    /// single-doc view cannot determine "governing" (that needs a
-    /// chain), only the document's own treatment; an overruled
-    /// document is flagged even when the treating judgment is not the
-    /// interact target, because stored edges are scope-free here.
+    /// Per-document results for the whole selection, in selection
+    /// order — titles, truncation and treatments stay per document.
+    pub documents: Vec<InteractDocumentResult>,
+    /// Citator V2 treatment of the (first) document itself (None when
+    /// the switch is off). Interact never calls query(), so there is
+    /// no query call to thread state/applicant into — the
+    /// citator-meaningful surface here is flagging an
+    /// overruled/reversed document under analysis. Note a single-doc
+    /// view cannot determine "governing" (that needs a chain), only
+    /// the document's own treatment; an overruled document is flagged
+    /// even when the treating judgment is not in the selection,
+    /// because stored edges are scope-free here.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub treatment: Option<legal_rag_rag::CitationTreatment>,
+}
+
+/// Citator V2 treatment of one document under analysis (switch on
+/// only), resolved over a synthesized single citation for that
+/// document: stored V2 edges (full-text ingest) + V1 edges + stored
+/// metadata, with the real→positional map so stored JudgmentId edges
+/// match. Ingest never creates self-edges and the adapter's self-only
+/// guard drops a same-caption affirmance when no lower judgment
+/// shares the caption, so a document cannot self-affirm here.
+fn doc_treatment(
+    state: &AppState,
+    document_id: &str,
+    title: &str,
+    text: &str,
+) -> Option<legal_rag_rag::CitationTreatment> {
+    if !legal_rag_rag::citator_v2::citator_v2_enabled() {
+        return None;
+    }
+    let citation = legal_rag_rag::Citation {
+        doc_title: Some(title.to_string()),
+        stale: None,
+        sentence: None,
+        snippet: text.chars().take(1500).collect(),
+        doc_id: "doc:0".to_string(),
+        chunk_id: String::new(),
+        ordinal: 0,
+        score: 1.0,
+        source_url: None,
+        source_date: None,
+        treatment: None,
+    };
+    let mut meta_map = std::collections::HashMap::new();
+    if let Some(m) = state.rag.document_meta(document_id) {
+        meta_map.insert("doc:0".to_string(), m.clone());
+        meta_map.insert(document_id.to_string(), m);
+    }
+    let mut real_to_positional = std::collections::HashMap::new();
+    real_to_positional.insert(document_id.to_string(), "doc:0".to_string());
+    let res = legal_rag_rag::citator_v2::resolve_v2(
+        std::slice::from_ref(&citation),
+        &state.rag.treatments().all(),
+        &state.rag.v2_treatments().all(),
+        None,
+        &meta_map,
+        &legal_rag_rag::CitatorContext::default(),
+        &real_to_positional,
+    );
+    res.treatments
+        .into_iter()
+        .find(|(id, _)| id == "doc:0")
+        .map(|(_, t)| t)
 }
 
 pub async fn interact(
@@ -93,64 +239,55 @@ pub async fn interact(
     Json(body): Json<InteractRequest>,
 ) -> Result<Json<InteractResponse>, ApiError> {
     crate::routes::billing::ensure_quota(&state, &user.id)?;
-    let title = state
-        .rag
-        .doc_title(&body.document_id)
-        .ok_or_else(|| legal_rag_common::Error::NotFound("document not found".into()))?;
+    let ids = resolve_selection(&body)?;
     let instruction = interact_instruction(&body.action, body.question.as_deref())?;
-    let full_len = state.rag.document_text(&body.document_id, usize::MAX).await?.len();
-    let text = state.rag.document_text(&body.document_id, DOC_CHAR_BUDGET).await?;
-    if text.trim().is_empty() {
-        return Err(legal_rag_common::Error::BadRequest(
-            "document has no extractable text".into(),
-        )
-        .into());
-    }
-    // Citator V2 treatment of this document (switch on only). The
-    // resolution runs over a synthesized single citation: stored V2
-    // edges (full-text ingest) + V1 edges + stored metadata, with the
-    // real→positional map so stored JudgmentId edges match. Ingest
-    // never creates self-edges and the adapter's self-only guard drops
-    // a same-caption affirmance when no lower judgment shares the
-    // caption, so a document cannot self-affirm here.
-    let treatment = if legal_rag_rag::citator_v2::citator_v2_enabled() {
-        let citation = legal_rag_rag::Citation {
-            doc_title: Some(title.clone()),
-            stale: None,
-            sentence: None,
-            snippet: text.chars().take(1500).collect(),
-            doc_id: "doc:0".to_string(),
-            chunk_id: String::new(),
-            ordinal: 0,
-            score: 1.0,
-            source_url: None,
-            source_date: None,
-            treatment: None,
-        };
-        let mut meta_map = std::collections::HashMap::new();
-        if let Some(m) = state.rag.document_meta(&body.document_id) {
-            meta_map.insert("doc:0".to_string(), m.clone());
-            meta_map.insert(body.document_id.clone(), m);
+    // Load every selected document with its share of the budget. Any
+    // missing or text-less document fails the run with a clear error
+    // (the single-document behaviour, applied per document) — a
+    // silent hole in a cross-document analysis would be worse.
+    let per_doc = doc_budget(ids.len());
+    let mut docs: Vec<(String, String, String, bool)> = Vec::new();
+    for id in &ids {
+        let title = state
+            .rag
+            .doc_title(id)
+            .ok_or_else(|| legal_rag_common::Error::NotFound("document not found".into()))?;
+        let full_len = state.rag.document_text(id, usize::MAX).await?.len();
+        let text = state.rag.document_text(id, per_doc).await?;
+        if text.trim().is_empty() {
+            return Err(legal_rag_common::Error::BadRequest(if ids.len() == 1 {
+                "document has no extractable text".to_string()
+            } else {
+                format!("document has no extractable text: {title}")
+            })
+            .into());
         }
-        let mut real_to_positional = std::collections::HashMap::new();
-        real_to_positional.insert(body.document_id.clone(), "doc:0".to_string());
-        let res = legal_rag_rag::citator_v2::resolve_v2(
-            std::slice::from_ref(&citation),
-            &state.rag.treatments().all(),
-            &state.rag.v2_treatments().all(),
-            None,
-            &meta_map,
-            &legal_rag_rag::CitatorContext::default(),
-            &real_to_positional,
-        );
-        res.treatments
-            .into_iter()
-            .find(|(id, _)| id == "doc:0")
-            .map(|(_, t)| t)
+        docs.push((id.clone(), title, text, full_len > per_doc));
+    }
+    // Treatments resolve per document — never merged across the set.
+    let documents: Vec<InteractDocumentResult> = docs
+        .iter()
+        .map(|(id, title, text, truncated)| InteractDocumentResult {
+            document_id: id.clone(),
+            document_title: title.clone(),
+            truncated: *truncated,
+            treatment: doc_treatment(&state, id, title, text),
+        })
+        .collect();
+    let prompt_docs: Vec<(String, String)> = docs
+        .iter()
+        .map(|(_, title, text, _)| (title.clone(), text.clone()))
+        .collect();
+    let prompt = build_interact_prompt(&prompt_docs, &instruction);
+    let first_id = docs[0].0.clone();
+    let first_title = docs[0].1.clone();
+    let any_truncated = documents.iter().any(|d| d.truncated);
+    let first_treatment = documents.first().and_then(|d| d.treatment.clone());
+    let activity_title = if docs.len() == 1 {
+        first_title.clone()
     } else {
-        None
+        format!("{first_title} +{} more", docs.len() - 1)
     };
-    let prompt = format!("Document: {title}\n\n{text}\n\n---\nTask: {instruction}");
     let analyst_system = state
         .settings
         .get()
@@ -167,27 +304,29 @@ pub async fn interact(
         &user,
         &scope,
         "interact",
-        &title,
+        &activity_title,
         &body.action,
         &output,
         0,
-        // Interact work belongs to the matter holding the document.
-        state.matters.matter_of_document(&body.document_id),
+        // Interact work belongs to the matter holding the (first) document.
+        state.matters.matter_of_document(&first_id),
         Some(serde_json::json!({
-            "document_id": body.document_id,
-            "document_title": title,
+            "document_id": first_id,
+            "document_title": first_title,
+            "document_ids": ids,
             "action": body.action,
             "output": output,
-            "truncated": full_len > DOC_CHAR_BUDGET,
+            "truncated": any_truncated,
         })),
     );
     Ok(Json(InteractResponse {
-        document_id: body.document_id,
-        document_title: title,
+        document_id: first_id,
+        document_title: first_title,
         action: body.action,
         output,
-        truncated: full_len > DOC_CHAR_BUDGET,
-        treatment,
+        truncated: any_truncated,
+        documents,
+        treatment: first_treatment,
     }))
 }
 
@@ -323,4 +462,98 @@ pub async fn draft(
         })),
     );
     Ok(Json(DraftResponse { kind: body.kind, draft: draft_text, citations }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn req(document_id: Option<&str>, document_ids: Option<Vec<&str>>) -> InteractRequest {
+        InteractRequest {
+            document_id: document_id.map(str::to_string),
+            document_ids: document_ids
+                .map(|v| v.into_iter().map(str::to_string).collect()),
+            action: "summary".to_string(),
+            question: None,
+        }
+    }
+
+    #[test]
+    fn selection_prefers_document_ids_and_dedupes() {
+        let ids = resolve_selection(&req(
+            Some("legacy"),
+            Some(vec!["a", "b", "a", " ", "c"]),
+        ))
+        .ok()
+        .expect("selection resolves");
+        assert_eq!(ids, vec!["a", "b", "c"]);
+    }
+
+    #[test]
+    fn selection_falls_back_to_single_document_id() {
+        let ids = resolve_selection(&req(Some("only"), None))
+            .ok()
+            .expect("selection resolves");
+        assert_eq!(ids, vec!["only"]);
+        // An empty document_ids list also falls back.
+        let ids = resolve_selection(&req(Some("only"), Some(vec![])))
+            .ok()
+            .expect("selection resolves");
+        assert_eq!(ids, vec!["only"]);
+    }
+
+    #[test]
+    fn empty_selection_rejected_cleanly() {
+        assert!(resolve_selection(&req(None, None)).is_err());
+        assert!(resolve_selection(&req(Some("  "), Some(vec![""]))).is_err());
+    }
+
+    #[test]
+    fn over_cap_selection_rejected() {
+        let six: Vec<&str> = vec!["1", "2", "3", "4", "5", "6"];
+        match resolve_selection(&req(None, Some(six))) {
+            Ok(_) => panic!("six documents must be rejected"),
+            Err(e) => assert!(e.0.to_string().contains("at most"), "{}", e.0),
+        }
+        let five: Vec<&str> = vec!["1", "2", "3", "4", "5"];
+        assert_eq!(
+            resolve_selection(&req(None, Some(five)))
+                .ok()
+                .expect("five documents allowed")
+                .len(),
+            5
+        );
+    }
+
+    #[test]
+    fn budget_splits_and_single_doc_keeps_full_budget() {
+        assert_eq!(doc_budget(1), DOC_CHAR_BUDGET);
+        assert_eq!(doc_budget(2), DOC_CHAR_BUDGET / 2);
+        assert_eq!(doc_budget(5), DOC_CHAR_BUDGET / 5);
+    }
+
+    #[test]
+    fn single_doc_prompt_is_the_legacy_format() {
+        let p = build_interact_prompt(
+            &[("Title A".to_string(), "body a".to_string())],
+            "Do the thing.",
+        );
+        assert_eq!(p, "Document: Title A\n\nbody a\n\n---\nTask: Do the thing.");
+    }
+
+    #[test]
+    fn multi_doc_prompt_covers_every_document() {
+        let p = build_interact_prompt(
+            &[
+                ("Alpha v Beta".to_string(), "alpha body".to_string()),
+                ("Gamma Order".to_string(), "gamma body".to_string()),
+            ],
+            "Compare them.",
+        );
+        assert!(p.contains("Attribute every point"), "{p}");
+        assert!(p.contains("Document 1 of 2: Alpha v Beta"));
+        assert!(p.contains("Document 2 of 2: Gamma Order"));
+        assert!(p.contains("alpha body") && p.contains("gamma body"));
+        assert!(p.ends_with("Task: Compare them."));
+    }
 }

@@ -117,7 +117,7 @@ export default function AppShell() {
             <span className="ml-auto text-[10px] text-ivory/50 font-normal">⌘⇧N</span>
           </button>
 
-          {/* Matter switcher: scopes Ask, Draft and uploads to one matter. */}
+          {/* Matter switcher: scopes Ask, Draft, Interact and uploads to one matter. */}
           <div className="mt-3">
             <p className="text-[11px] uppercase tracking-wider text-stone-400 font-medium px-1">Working in</p>
             <select
@@ -282,7 +282,9 @@ export default function AppShell() {
                   go={(v) => { setActiveTabId(null); setView(v as View) }}
                 />
               )}
-              {view === 'interact' && <InteractPage />}
+              {view === 'interact' && (
+                <InteractPage matterId={currentMatterId ?? undefined} allowScopeToggle />
+              )}
               {view === 'draft' && <DraftPage go={(v) => { setActiveTabId(null); setView(v as View) }} />}
               {view === 'research' && <ResearchPage go={(v) => { setActiveTabId(null); setView(v as View) }} />}
               {view === 'agents' && <AgentsPage go={(v) => { setActiveTabId(null); setView(v as View) }} />}

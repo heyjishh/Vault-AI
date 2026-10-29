@@ -313,6 +313,16 @@ live round-trip not verified, no credentials in this environment).
   leg degrades the report (recorded in open points), never the request.
   Prompts are admin-editable; overrides must preserve the JSON verdict
   contract.
+- **Interact** (`routes/create.rs`): document analysis (summary /
+  chronology / clauses / risks / chat) over a selection of 1–5
+  documents. The 24k-char budget splits across the selection (a single
+  document keeps the full budget and the legacy prompt format);
+  multi-document prompts present labelled per-document sections with
+  an attribution instruction, and the response carries per-document
+  results (title, truncation, citator treatment resolved per
+  document). The standalone view is scoped by the active brief
+  (AppShell passes it, as for Ask/Draft) with a This brief / Full
+  vault picker toggle; a brief's own Interact tab is always scoped.
 - **Workflows** (`agent.rs`): fixed step pipelines — `contract_review` (5),
   `due_diligence` (4, incl. web), `memo_draft` (4, IRAC). Each step retrieves,
   generates, and cites; a final report synthesizes.

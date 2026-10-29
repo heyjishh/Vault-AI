@@ -1,6 +1,6 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios'
 import type {
-  AuthResponse, CacheStats, ChunkAug, Citation, CitationAudit, CorpusStats, DocMeta, DocSearchHit, DocumentInfo, GraphView, Space,
+  AuthResponse, CacheStats, ChunkAug, Citation, CitationAudit, CitationTreatment, CorpusStats, DocMeta, DocSearchHit, DocumentInfo, GraphView, Space,
   IngestReport, Matter, MatterDetail, MatterMemory, MatterSummary, PrivateDocMeta, PublicSettings,
   QueryAnswer, QueryMode, ResearchReport, SourceDocument, TimelineItem, TokenPair,
   WorkflowDef, WorkflowRun, AutonomousRun,
@@ -262,12 +262,22 @@ export const dashboardApi = {
   },
 }
 
+export interface InteractDocumentResult {
+  document_id: string
+  document_title: string
+  truncated: boolean
+  treatment?: CitationTreatment | null
+}
+
 export interface InteractResponse {
   document_id: string
   document_title: string
   action: string
   output: string
   truncated: boolean
+  /** Per-document results for the whole selection (Piece 5). */
+  documents?: InteractDocumentResult[]
+  treatment?: CitationTreatment | null
 }
 
 export interface DraftResponse {
@@ -277,9 +287,14 @@ export interface DraftResponse {
 }
 
 export const createApi = {
-  async interact(document_id: string, action: string, question?: string): Promise<InteractResponse> {
+  async interact(document_ids: string[], action: string, question?: string): Promise<InteractResponse> {
     try {
-      const r = await api.post<InteractResponse>('/knowledge/interact', { document_id, action, question })
+      const r = await api.post<InteractResponse>('/knowledge/interact', {
+        document_id: document_ids[0],
+        document_ids,
+        action,
+        question,
+      })
       return r.data
     } catch (e) { throw new Error(err(e)) }
   },
