@@ -60,6 +60,25 @@ live**, what is **built but unverified**, and what is **roadmap**.
   Server cap/budget tests updated to the new numbers (workspace
   tests unchanged at 202). Live verification on :3001 recorded with
   the arc's final entry below.
+- **Verification — caps / brief-wide / progress arc (29 Oct 2026)**:
+  verified live on :3001 (release build of this arc; workspace
+  tests **202 green**, count unchanged). Interact with 21 documents
+  → clean 400 "interact supports at most 20 documents at once";
+  a 20-document chat over the General brief's own first 20 filed
+  documents → 200 in 58s, 20 per-document entries with exact
+  truncation flags, output attributed per document. The General
+  brief files 30 documents, so the brief-wide picker state covers
+  20 and states 10 not covered. The served bundle contains the
+  brief-wide row, the batch-cap skip reasons ("batch limit of 20
+  files / 10 folders reached") and the Uploading/Indexing progress
+  labels. Upload through the shared ingest route re-verified
+  (txt → 200 with doc_id; probe document deleted afterwards).
+  Batch caps and progress bars are client-side UI, verified from
+  the served bundle and code path; the ingest route itself is
+  unchanged. Note: a sandbox VM replacement during verification
+  killed the whole stack; the standard restore brought both
+  instances back, so :3000 also runs this build (infrastructure
+  recovery, not a separate deploy decision).
 - **Interact: upload files and folders in place (29 Oct 2026)**: the
   Interact page gains Upload files / Upload folder controls plus
   drag-and-drop of files and folders (dropped folders are traversed
