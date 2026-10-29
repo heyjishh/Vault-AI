@@ -652,6 +652,41 @@ live**, what is **built but unverified**, and what is **roadmap**.
   surfaced as a flaky failure in the Piece 4 regression test.
 
 ### Fixed
+- **Corpus durability: restarts can no longer silently erase indexed
+  documents, and chunk loss is now detected and recoverable
+  (30 Oct 2026, Piece 20).** The data-loss class, plainly: chunks
+  live in the vector store and are mirrored to `chunks.json` on every
+  snapshot save, and the snapshot is upserted back into the store at
+  boot. When the database died uncleanly (sandbox replacements kill
+  it hard — 49 starts in its log) it came back missing committed
+  chunks; the next snapshot save then dumped the *thinned* store over
+  `chunks.json`, propagating the loss into the only backup instead of
+  healing from it. On prod this hollowed out 4 of 5 registered
+  documents (Section 86 IT Act, Gazette of India 1947, the Hindi Act
+  scan, and a Section 1 document): their registry metadata survived,
+  but their chunk text and embeddings were gone — Interact failed
+  with "document has no extractable text" and Ask silently could not
+  cite them. What now prevents and detects it: (1) the chunk snapshot
+  is **monotonic** — every save unions the active chunk set with the
+  snapshot on disk, the store's record winning per chunk id, and
+  disk-only records survive only while their document is still in the
+  registry, so deletions still shrink the corpus and deleted chunks
+  never resurrect; (2) **hollow detection** — after boot restore and
+  on every snapshot save, registered documents the store holds no
+  chunks for are recomputed and logged as loud `HOLLOW DOCUMENT`
+  warnings naming the document with expected vs found counts, and
+  `/health` reports `documents_total` / `documents_hollow` (the
+  health watch prints an alert-only `HOLLOW <n>` line — a restart
+  cannot heal hollowness, so it never triggers one); (3) recovery is
+  staged in **`recover-chunks.py`**, which imports registry-named
+  chunk records from a donor snapshot (dry-run against a copy of prod
+  data with `data-test/chunks.json` as donor recovers 10 of the 11
+  lost chunks — Section 86 ×2, Gazette ×7, Hindi scan ×1, embeddings
+  intact; the Section 1 document's chunk is in no surviving snapshot
+  and must be re-ingested from source). Regression tests cover the
+  merge union, the registry filter, boot-restore healing, and exact
+  hollow flagging. The prod recovery itself is executed separately
+  with the deploy restart; this entry records the mechanism.
 - **Brief-vault and soft Asks no longer share one cached completion
   (29 Oct 2026, Piece 15, defect 2).** Piece 12 partitioned the
   semantic ANSWER cache by mode, but the completion cache below it
