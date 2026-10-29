@@ -7,13 +7,34 @@
 #   HEALTHY
 #   RESTORED <what was down>
 #   STILL_DOWN <what is still down>
-# Appends the same line, timestamped, to health-check.log beside this script.
+# Plus, when prod reports hollow documents (registered documents whose
+# chunks the vector store lost), one additional alert-only line:
+#   HOLLOW <n>
+# Hollowness is NEVER a restore trigger — a restart cannot heal it.
+# Appends the same lines, timestamped, to health-check.log beside this script.
 set -u
 cd "$(dirname "$0")"
 LOG="$PWD/health-check.log"
 
 port_up() { ss -tln 2>/dev/null | grep -q ":$1 "; }
 http_ok() { [ "$(curl -s --noproxy '*' -m 6 -o /dev/null -w '%{http_code}' "http://127.0.0.1:$1/health" 2>/dev/null)" = "200" ]; }
+
+# documents_hollow from prod's /health JSON (0 when unreachable/unparsable).
+hollow_count() {
+  curl -s --noproxy '*' -m 6 "http://127.0.0.1:3000/health" 2>/dev/null \
+    | python3 -c 'import sys, json; print(json.load(sys.stdin).get("documents_hollow", 0))' 2>/dev/null \
+    || echo 0
+}
+
+# Alert-only: prints + logs "HOLLOW <n>" when prod has hollow documents.
+emit_hollow() {
+  local n
+  n="$(hollow_count)"
+  if [ "${n:-0}" -gt 0 ] 2>/dev/null; then
+    echo "$(date -Is) HOLLOW $n" >> "$LOG"
+    echo "HOLLOW $n"
+  fi
+}
 
 check_all() {
   DOWN=""
@@ -32,6 +53,7 @@ DOWN="$(check_all)"
 if [ -z "$DOWN" ]; then
   echo "$(date -Is) HEALTHY" >> "$LOG"
   echo "HEALTHY"
+  emit_hollow
   exit 0
 fi
 
@@ -50,9 +72,11 @@ done
 if [ -z "$REMAINING" ]; then
   echo "$(date -Is) RESTORED was:$DOWN" >> "$LOG"
   echo "RESTORED was:$DOWN"
+  emit_hollow
   exit 0
 else
   echo "$(date -Is) STILL_DOWN:$REMAINING (restore attempted for:$DOWN)" >> "$LOG"
   echo "STILL_DOWN:$REMAINING (restore attempted for:$DOWN)"
+  emit_hollow
   exit 1
 fi

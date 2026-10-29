@@ -1,5 +1,6 @@
+use axum::extract::State;
 use axum::routing::{delete, get, patch, post};
-use axum::Router;
+use axum::{Json, Router};
 
 use crate::state::AppState;
 
@@ -159,6 +160,17 @@ pub fn router(state: AppState) -> Router {
         .fallback(crate::frontend::fallback)
 }
 
-async fn health() -> &'static str {
-    "ok"
+/// Liveness + corpus-durability surface. `documents_total` counts the
+/// registered documents; `documents_hollow` counts registered documents
+/// the vector store holds no chunks for (Piece 20) — the health watch
+/// alerts on hollowness but never restarts for it, since a restart
+/// cannot heal it.
+async fn health(State(state): State<AppState>) -> Json<serde_json::Value> {
+    let documents = state.rag.list_documents();
+    let hollow = crate::durability::hollow_documents(state.store.as_ref(), &documents).await;
+    Json(serde_json::json!({
+        "status": "ok",
+        "documents_total": documents.len(),
+        "documents_hollow": hollow.len(),
+    }))
 }
