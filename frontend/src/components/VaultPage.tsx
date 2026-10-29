@@ -10,13 +10,27 @@ import { EmptyState, Pager, Spinner, usePagination } from './ui'
 
 export default function VaultPage() {
   const qc = useQueryClient()
-  const matterId = useMatter((s) => s.currentMatterId) ?? undefined
+  const storeMatterId = useMatter((s) => s.currentMatterId)
   const { data: matterList } = useQuery({ queryKey: ['matters'], queryFn: mattersApi.list })
+  // Brief-only vault: the Vault shows ONLY the active brief's
+  // documents — there is no full-vault view. The active brief is
+  // the stored pick when it still exists, otherwise the default
+  // brief (the fallback AppShell also resolves into the store).
+  const matterId =
+    (storeMatterId && matterList?.some((m) => m.id === storeMatterId)
+      ? storeMatterId
+      : undefined) ??
+    matterList?.find((m) => m.is_default)?.id ??
+    matterList?.[0]?.id ??
+    storeMatterId ??
+    undefined
   const scopeTitle = matterList?.find((m) => m.id === matterId)?.title
-  const { data: docs, isLoading } = useQuery({
-    queryKey: ['docs', matterId ?? 'all'],
-    queryFn: () => (matterId ? vaultApi.listInMatter(matterId) : vaultApi.list()),
+  const { data: docs, isPending } = useQuery({
+    queryKey: ['docs', matterId ?? 'pending'],
+    queryFn: () => vaultApi.listInMatter(matterId!),
+    enabled: !!matterId,
   })
+  const isLoading = !matterId || isPending
   const [title, setTitle] = useState('')
   const [paste, setPaste] = useState('')
   const [prefix, setPrefix] = useState('')
@@ -112,7 +126,7 @@ export default function VaultPage() {
       </p>
       {matterId && (
         <p className="mt-2 inline-flex rounded-full bg-stone-500/10 text-stone-600 px-3 py-1 text-[12px] font-medium">
-          Showing documents in {scopeTitle ?? 'the selected brief'} — uploads file here
+          Showing documents in {scopeTitle ?? 'the active brief'} — uploads file here
         </p>
       )}
 
@@ -187,7 +201,8 @@ export default function VaultPage() {
           <h3 className="font-medium text-[15px]">Ingest from S3 / R2</h3>
           <p className="text-[13px] text-stone-500 mt-2 leading-relaxed">
             Pulls every supported file under a prefix from the bucket configured on the server
-            (works with AWS S3 and Cloudflare R2 endpoints).
+            (works with AWS S3 and Cloudflare R2 endpoints). Bulk-ingested documents are filed
+            into the default brief.
           </p>
           <input
             value={prefix} onChange={(e) => setPrefix(e.target.value)}
@@ -217,7 +232,7 @@ export default function VaultPage() {
       {isLoading ? (
         <Spinner label="Loading vault…" />
       ) : !docs || docs.length === 0 ? (
-        <EmptyState title="No documents yet" hint="Drop a PDF above or ingest from S3 to build your corpus." />
+        <EmptyState title="No documents in this brief yet" hint="Drop a PDF above to file the first one here — documents live inside briefs, and this page shows only the active brief." />
       ) : filteredDocs.length === 0 ? (
         <EmptyState title="No documents match" hint="Try a different search term." />
       ) : (

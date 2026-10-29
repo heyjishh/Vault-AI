@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
@@ -51,6 +51,38 @@ export default function AppShell() {
   const currentMatterId = useMatter((s) => s.currentMatterId)
   const setCurrentMatter = useMatter((s) => s.setCurrentMatter)
   const { data: mattersList } = useQuery({ queryKey: ['matters'], queryFn: mattersApi.list })
+  // Brief-only vault: an active brief always exists. When nothing
+  // is chosen (or the stored pick no longer exists), the active
+  // brief is the default brief — the same fallback uploads use
+  // server-side. The resolution is written back to the store once
+  // the list first loads; surfaces that must never be unscoped
+  // (Vault, Interact) resolve the same fallback locally, so no
+  // surface ever renders a "full vault".
+  const defaultMatterId = mattersList?.find((m) => m.is_default)?.id ?? mattersList?.[0]?.id
+  const currentIsValid = !!currentMatterId && !!mattersList?.some((m) => m.id === currentMatterId)
+  const effectiveMatterId = currentIsValid
+    ? currentMatterId
+    : mattersList
+      ? (defaultMatterId ?? null)
+      : currentMatterId
+  const resolvedOnce = useRef(false)
+  useEffect(() => {
+    if (!mattersList || resolvedOnce.current) return
+    resolvedOnce.current = true
+    if (effectiveMatterId && effectiveMatterId !== currentMatterId) {
+      setCurrentMatter(effectiveMatterId)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mattersList])
+  // A stored pick pointing at a brief that no longer exists (e.g.
+  // deleted elsewhere) falls back to the default brief. A null pick
+  // after load is left alone — that is Ask's in-session widening,
+  // and Ask's behaviour is unchanged by the brief-only model.
+  useEffect(() => {
+    if (mattersList && currentMatterId && !currentIsValid && defaultMatterId) {
+      setCurrentMatter(defaultMatterId)
+    }
+  }, [mattersList, currentMatterId, currentIsValid, defaultMatterId, setCurrentMatter])
   const { data: pubSettings } = useQuery({ queryKey: ['public-settings'], queryFn: publicSettingsApi.get })
   const [activeTabId, setActiveTabId] = useState<string | null>(null)
   const brand = pubSettings?.brand ?? { product_name: 'Juris Vault AI', tagline: 'Legal Research, With Memory' }
@@ -117,22 +149,23 @@ export default function AppShell() {
             <span className="ml-auto text-[10px] text-ivory/50 font-normal">⌘⇧N</span>
           </button>
 
-          {/* Matter switcher: scopes Ask, Draft, Interact and uploads to one matter. */}
+          {/* Matter switcher: scopes Ask, Draft, Interact, Vault and
+              uploads to one brief. Brief-only vault — the switcher
+              only chooses WHICH brief; there is no full-vault view. */}
           <div className="mt-3">
             <p className="text-[11px] uppercase tracking-wider text-stone-400 font-medium px-1">Working in</p>
             <select
-              value={currentMatterId ?? ''}
-              onChange={(e) => setCurrentMatter(e.target.value || null)}
+              value={effectiveMatterId ?? ''}
+              onChange={(e) => setCurrentMatter(e.target.value)}
               className="mt-1.5 w-full rounded-lex border border-stone-200 bg-white px-2.5 py-2 text-[13px] outline-none focus:border-stone-400"
             >
-              <option value="">Full vault (all briefs)</option>
               {(mattersList ?? []).map((m) => (
                 <option key={m.id} value={m.id}>{m.title}</option>
               ))}
             </select>
-            {currentMatterId && (
+            {effectiveMatterId && (
               <button
-                onClick={() => openMatter(currentMatterId)}
+                onClick={() => openMatter(effectiveMatterId)}
                 className="mt-1.5 px-1 text-[12px] text-stone-500 hover:text-ink font-medium"
               >
                 Open this brief →
@@ -283,7 +316,7 @@ export default function AppShell() {
                 />
               )}
               {view === 'interact' && (
-                <InteractPage matterId={currentMatterId ?? undefined} allowScopeToggle />
+                <InteractPage matterId={effectiveMatterId ?? undefined} />
               )}
               {view === 'draft' && <DraftPage go={(v) => { setActiveTabId(null); setView(v as View) }} />}
               {view === 'research' && <ResearchPage go={(v) => { setActiveTabId(null); setView(v as View) }} />}

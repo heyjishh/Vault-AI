@@ -114,7 +114,7 @@ function treatmentChip(status: string) {
   return 'bg-amber-100 text-amber-800'
 }
 
-export default function InteractPage({ matterId, allowScopeToggle }: { matterId?: string; allowScopeToggle?: boolean } = {}) {
+export default function InteractPage({ matterId }: { matterId?: string } = {}) {
   const toast = useSession((s) => s.toast)
   const qc = useQueryClient()
   // History restore: reopen the exact analysis on its document set.
@@ -143,31 +143,17 @@ export default function InteractPage({ matterId, allowScopeToggle }: { matterId?
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [restore])
 
-  // Brief scoping (standalone view only): with an active brief the
-  // picker defaults to the brief's documents; the toggle widens it to
-  // the full vault. Switching scope keeps only selected documents
-  // that are present in the newly shown list.
-  const canToggle = Boolean(allowScopeToggle && matterId)
-  const [scope, setScope] = useState<'brief' | 'vault'>('brief')
-  const effectiveMatterId = canToggle
-    ? (scope === 'brief' ? matterId : undefined)
-    : matterId
+  // Brief-only vault: the document universe is exactly the active
+  // brief — there is no full-vault scope or toggle. AppShell passes
+  // the resolved active brief (the stored pick, or the default
+  // brief when none is chosen); a brief page's Interact tab passes
+  // its own brief.
+  const effectiveMatterId = matterId
   const docs = useQuery({
-    queryKey: ['vault-docs', effectiveMatterId ?? 'all'],
-    queryFn: () => (effectiveMatterId ? vaultApi.listInMatter(effectiveMatterId) : vaultApi.list()),
+    queryKey: ['vault-docs', effectiveMatterId ?? 'none'],
+    queryFn: () => vaultApi.listInMatter(effectiveMatterId!),
+    enabled: !!effectiveMatterId,
   })
-  const pruneOnNextData = useRef(false)
-  useEffect(() => {
-    if (!pruneOnNextData.current || !docs.data) return
-    pruneOnNextData.current = false
-    const visible = new Set(docs.data.map((d) => d.id))
-    setSelectedIds((prev) => prev.filter((id) => visible.has(id)))
-  }, [docs.data])
-  const switchScope = (next: 'brief' | 'vault') => {
-    if (next === scope) return
-    pruneOnNextData.current = true
-    setScope(next)
-  }
 
   // Brief-wide derivation: whenever the shown brief (or its document
   // list) changes, the working set re-derives to the brief's first
@@ -192,14 +178,12 @@ export default function InteractPage({ matterId, allowScopeToggle }: { matterId?
   }, [briefWide, briefWideKey, docs.data])
 
   useEffect(() => {
-    // Arriving from document search? Select that document directly;
-    // widen to the full vault so it is visible in the picker.
+    // Arriving from document search? Select that document directly.
     const fromSearch = sessionStorage.getItem('jurisvault.interactDoc')
     if (!fromSearch) return
     sessionStorage.removeItem('jurisvault.interactDoc')
     setBriefWide(false)
     setSelectedIds([fromSearch])
-    if (canToggle) setScope('vault')
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
   const [question, setQuestion] = useState('')
@@ -335,30 +319,7 @@ export default function InteractPage({ matterId, allowScopeToggle }: { matterId?
             Documents — {selectedIds.length} selected (max {MAX_INTERACT_DOCS})
             {effectiveMatterId && briefWide ? ' · all of this brief' : ''}
           </span>
-          {canToggle && (
-            <div className="flex items-center gap-1.5">
-              <button
-                onClick={() => switchScope('brief')}
-                className={`rounded-lex px-2.5 py-1 text-[12.5px] border ${scope === 'brief' ? 'bg-ink text-white border-ink' : 'border-stone-300 text-stone-600'}`}
-              >
-                This brief
-              </button>
-              <button
-                onClick={() => switchScope('vault')}
-                className={`rounded-lex px-2.5 py-1 text-[12.5px] border ${scope === 'vault' ? 'bg-ink text-white border-ink' : 'border-stone-300 text-stone-600'}`}
-              >
-                Full vault
-              </button>
-            </div>
-          )}
         </div>
-        {canToggle && (
-          <p className="text-[12px] text-stone-400 mt-1.5">
-            {scope === 'brief'
-              ? 'Showing this brief’s filed documents. Switching scope keeps only selected documents that are in the new list.'
-              : 'Showing the whole vault. Switching scope keeps only selected documents that are in the new list.'}
-          </p>
-        )}
         {effectiveMatterId && docs.data && (
           <div className="mt-3 rounded-lex border border-stone-200 bg-stone-50 px-3 py-2.5">
             <label className="flex items-start gap-2.5 cursor-pointer">
@@ -405,7 +366,7 @@ export default function InteractPage({ matterId, allowScopeToggle }: { matterId?
             <FolderUp size={14} /> Upload folder
           </button>
           <span className="text-[12.5px] text-stone-400">
-            or drop files/folders anywhere here — up to {MAX_BATCH_FILES} files and {MAX_BATCH_FOLDERS} folders per batch; uploads join the vault and are selected automatically
+            or drop files/folders anywhere here — up to {MAX_BATCH_FILES} files and {MAX_BATCH_FOLDERS} folders per batch; uploads file into this brief and are selected automatically
           </span>
           <input
             ref={fileInputRef}
@@ -529,12 +490,15 @@ export default function InteractPage({ matterId, allowScopeToggle }: { matterId?
               <span className="text-[12px] text-stone-400">{d.chunks} chunks</span>
             </label>
           ))}
-          {docs.isPending && <p className="px-3 py-2.5 text-[13.5px] text-stone-400">Loading documents…</p>}
+          {!effectiveMatterId && (
+            <p className="px-3 py-2.5 text-[13.5px] text-stone-500">
+              No brief is active yet — pick one in the “Working in” switcher.
+            </p>
+          )}
+          {effectiveMatterId && docs.isPending && <p className="px-3 py-2.5 text-[13.5px] text-stone-400">Loading documents…</p>}
           {docs.data && docs.data.length === 0 && (
             <p className="px-3 py-2.5 text-[13.5px] text-stone-500">
-              {canToggle && scope === 'brief'
-                ? 'No documents are filed in this brief yet — switch to Full vault, or file documents from the brief page.'
-                : 'The vault is empty — upload a document first, then come back here to work it.'}
+              No documents are filed in this brief yet — upload above, or file documents from the brief page.
             </p>
           )}
         </div>
