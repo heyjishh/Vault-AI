@@ -12,6 +12,7 @@ pub mod spaces;
 pub mod private_vault;
 pub mod settings;
 pub mod billing;
+pub mod durability;
 pub mod error;
 pub mod frontend;
 pub mod feedback;

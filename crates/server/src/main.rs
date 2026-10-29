@@ -16,7 +16,7 @@ use legal_rag_rag::{
     S3VectorsStore, SemanticCache, SereneDbVectorStore,
     StealthWebSearch, VectorStore, WebSearch,
 };
-use legal_rag_server::{routes, AppState};
+use legal_rag_server::{durability, routes, AppState};
 use tracing::info;
 
 fn use_mocks() -> bool {
@@ -520,22 +520,71 @@ impl SnapshotHandles {
     /// Full snapshot: with an external vector store (SereneDB) the chunk
     /// snapshot is dumped from the active store, so a later boot on the
     /// in-memory fallback still finds every chunk on disk.
+    ///
+    /// Durability (Piece 20): the chunk snapshot is MONOTONIC — it is
+    /// merged with the snapshot already on disk (registry-filtered)
+    /// instead of replacing it, so a store that came back from an
+    /// unclean shutdown missing committed chunks cannot propagate that
+    /// loss into the backup. After each save, hollow documents
+    /// (registered, but chunk-less in the store) are recomputed and
+    /// re-logged while any exist.
     async fn save_all(&self) -> legal_rag_common::Result<()> {
         if self.mem_store.is_none() {
             match self.store.all_chunks().await {
                 Ok(chunks) => {
-                    legal_rag_rag::persist::save_json(&self.data_dir, "chunks.json", &chunks)?;
+                    let merged = self.merge_with_disk(chunks);
+                    legal_rag_rag::persist::save_json(&self.data_dir, "chunks.json", &merged)?;
                 }
                 Err(e) => tracing::warn!(error = %e, "chunk dump from vector store failed"),
             }
         }
-        self.save()
+        let result = self.save();
+        self.report_hollow("snapshot save").await;
+        result
+    }
+
+    /// Union an active chunk set with the `chunks.json` already on disk,
+    /// keeping disk-only records whose document is still registered.
+    /// The registry is read from the live pipeline — the same registry
+    /// `save` writes to `documents.json` in this pass.
+    fn merge_with_disk(
+        &self,
+        active: Vec<legal_rag_rag::ChunkRecord>,
+    ) -> Vec<legal_rag_rag::ChunkRecord> {
+        use legal_rag_rag::persist;
+        let on_disk: Vec<legal_rag_rag::ChunkRecord> =
+            match persist::load_json(&self.data_dir, "chunks.json") {
+                Ok(Some(chunks)) => chunks,
+                Ok(None) => Vec::new(),
+                Err(e) => {
+                    tracing::warn!(
+                        error = %e,
+                        "existing chunk snapshot unreadable; writing the active set only"
+                    );
+                    Vec::new()
+                }
+            };
+        let (documents, _status) = self.rag.snapshot_documents();
+        let registered: std::collections::HashSet<String> =
+            documents.keys().cloned().collect();
+        durability::merge_chunk_snapshot(active, on_disk, &registered)
+    }
+
+    /// Recompute hollow documents against the active store and log them.
+    async fn report_hollow(&self, when: &str) {
+        let documents = self.rag.list_documents();
+        if documents.is_empty() {
+            return;
+        }
+        let hollow = durability::hollow_documents(self.store.as_ref(), &documents).await;
+        durability::report_hollow(&hollow, when);
     }
 
     fn save(&self) -> legal_rag_common::Result<()> {
         use legal_rag_rag::persist;
         if let Some(store) = &self.mem_store {
-            persist::save_json(&self.data_dir, "chunks.json", &store.snapshot())?;
+            let merged = self.merge_with_disk(store.snapshot());
+            persist::save_json(&self.data_dir, "chunks.json", &merged)?;
         }
         let (entities, relations) = self.graph_store.snapshot();
         persist::save_json(
@@ -580,8 +629,11 @@ async fn restore_snapshots(
             } else {
                 // External store (SereneDB): load the snapshot corpus into
                 // it — without this the running corpus is invisible to the
-                // backed store on first boot.
-                match store.upsert(chunks).await {
+                // backed store on first boot. This upsert is also the
+                // heal path for a store that lost committed chunks to an
+                // unclean shutdown (Piece 20): the monotonic snapshot
+                // still holds them.
+                match durability::restore_chunk_snapshot(store.as_ref(), chunks).await {
                     Ok(()) => info!("chunk snapshot loaded into the vector store"),
                     Err(e) => tracing::warn!(error = %e, "chunk snapshot upsert failed"),
                 }
@@ -644,5 +696,14 @@ async fn restore_snapshots(
         }
         Ok(None) => {}
         Err(e) => tracing::warn!(error = %e, "user snapshot load failed"),
+    }
+    // Corpus durability (Piece 20): with registry and store both
+    // restored, name every registered document the store holds no
+    // chunks for — loudly, at boot, instead of letting Interact/Ask
+    // discover it per-request.
+    let documents = rag.list_documents();
+    if !documents.is_empty() {
+        let hollow = durability::hollow_documents(store.as_ref(), &documents).await;
+        durability::report_hollow(&hollow, "boot restore");
     }
 }
