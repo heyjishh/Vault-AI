@@ -7,6 +7,7 @@ import { RefineControls, useRefine } from './RefineControls'
 import type { ResearchReport } from '../api/types'
 import { CitationCard, Spinner, StatusBadge } from './ui'
 import { CitedText, SourceModal } from './SourceModal'
+import { ResponseDownload, exportCitations } from './ResponseDownload'
 import type { Citation } from '../api/types'
 
 export default function ResearchPage({ go }: { go?: (view: string) => void } = {}) {
@@ -83,6 +84,31 @@ export default function ResearchPage({ go }: { go?: (view: string) => void } = {
       {report && !run.isPending && (
         <div className="mt-8 fade-up">
           <h2 className="font-display text-2xl tracking-tight">{report.question}</h2>
+          <div className="mt-3">
+            <ResponseDownload
+              question={report.question}
+              title="Research report"
+              answerMarkdown={[
+                '## Conclusion',
+                report.conclusion,
+                '',
+                '## Hypotheses',
+                ...report.hypotheses.flatMap((h) => [
+                  `### ${h.question} — ${h.status}`,
+                  `Prediction: ${h.prediction}`,
+                  ...h.evidence.map((ev) => `- ${ev.claim} [${ev.source}]`),
+                  '',
+                ]),
+                ...(report.conflicts.length > 0
+                  ? ['## Conflicts', ...report.conflicts.flatMap((c) => [`### ${c.topic}`, `A: ${c.position_a}`, `B: ${c.position_b}`, ''])]
+                  : []),
+                ...(report.open_points.length > 0
+                  ? ['## Open points', ...report.open_points.map((p) => `- ${p}`)]
+                  : []),
+              ].join('\n')}
+              citations={exportCitations(report.citations)}
+            />
+          </div>
           <div className="mt-4 rounded-lex-lg border border-stone-200 bg-white shadow-lex p-5">
             <p className="text-meta uppercase tracking-wider text-stone-400 font-medium">Conclusion</p>
             <p className="text-[15px] leading-relaxed mt-2 whitespace-pre-wrap">

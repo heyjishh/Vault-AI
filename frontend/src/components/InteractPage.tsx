@@ -9,6 +9,7 @@ import { useSession } from '../stores/session'
 import { RefineControls, useRefine } from './RefineControls'
 import AssistantAvatar from './AssistantAvatar'
 import { SourceModal, citeMarkdownComponents, linkifyCitations } from './SourceModal'
+import { ResponseDownload, exportCitations } from './ResponseDownload'
 import { EmptyState } from './ui'
 import {
   UploadProgressList, UPLOAD_ACCEPT, UPLOAD_FORMATS_HINT, MAX_BATCH_FILES, MAX_BATCH_FOLDERS,
@@ -744,6 +745,15 @@ function TurnView({ turn, onRetry, onCite, retryDisabled }: {
             >
               <Copy size={13} /> Copy
             </button>
+            <ResponseDownload
+              question={
+                turn.action === 'chat'
+                  ? turn.question ?? ''
+                  : `${actionLabel} — ${turn.documents.length > 0 ? turn.documents.map((d) => d.document_title).join(', ') : turn.documentTitle || 'documents'}`
+              }
+              answerMarkdown={turn.output}
+              citations={exportCitations(turn.citations)}
+            />
             {turn.elapsedMs != null && (
               <span className="text-[12px] text-stone-400">answered in {(turn.elapsedMs / 1000).toFixed(1)}s</span>
             )}

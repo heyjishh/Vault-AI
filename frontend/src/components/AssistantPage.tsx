@@ -10,6 +10,7 @@ import { mattersApi, privateVaultApi, publicSettingsApi, queryStream, ragApi } f
 import AssistantAvatar from './AssistantAvatar'
 import { RefineControls, useRefine, type RefineCtl } from './RefineControls'
 import { SourceModal, citeMarkdownComponents, linkifyCitations } from './SourceModal'
+import { ResponseDownload, exportCitations } from './ResponseDownload'
 import type { Citation, CitationAudit, QueryMode } from '../api/types'
 import { useSession } from '../stores/session'
 import { useMatter } from '../stores/matter'
@@ -690,6 +691,11 @@ function TurnView({ turn, onCopy, onRegenerate, onFollowUp, onCite, onShowSource
                 <button onClick={onCopy} className="flex items-center gap-1.5 rounded-lex border border-stone-200 bg-white px-2.5 py-1.5 text-[12px] font-medium text-stone-600 hover:text-ink hover:border-stone-300 transition-colors">
                   <Copy size={13} /> Copy
                 </button>
+                <ResponseDownload
+                  question={turn.question}
+                  answerMarkdown={turn.answer}
+                  citations={exportCitations(turn.citations)}
+                />
                 <button onClick={onRegenerate} className="flex items-center gap-1.5 rounded-lex border border-stone-200 bg-white px-2.5 py-1.5 text-[12px] font-medium text-stone-600 hover:text-ink hover:border-stone-300 transition-colors">
                   <RotateCcw size={13} /> Regenerate
                 </button>
