@@ -55,5 +55,12 @@ export no_proxy="localhost,127.0.0.1"
 # mid-flight and the whole OCR fails). An hour matches this
 # deployment's reality: OCR is slow here, not broken.
 export SURYA_INFERENCE_TIMEOUT_SECONDS="${SURYA_INFERENCE_TIMEOUT_SECONDS:-3600}"
+# Memory: Surya spawns its backend with 8 parallel slots by default
+# (a ~98k-token KV cache). On this 8 GB host — where the app stack
+# (embeddings/reranker/colbert sidecars) already holds several GB —
+# the backend then dies during load from memory pressure. Two slots
+# (~24k ctx) keep the cache small; OCR here is throughput-bound by
+# CPU anyway, not by slot parallelism.
+export SURYA_INFERENCE_PARALLEL="${SURYA_INFERENCE_PARALLEL:-2}"
 
 exec python3 "$REPO/tools/ocr/surya_sidecar.py"
