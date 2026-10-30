@@ -652,6 +652,29 @@ live**, what is **built but unverified**, and what is **roadmap**.
   surfaced as a flaky failure in the Piece 4 regression test.
 
 ### Fixed
+- **Ask now streams through the public tunnel instead of sitting
+  on "Connecting…" until the answer is complete (30 Oct 2026,
+  Piece 22 — built and rehearsal-verified; Worker deploy pending
+  the owner's Cloudflare credentials).** The app itself always
+  streamed (SSE Status → Sources → Deltas → Done), but both ends
+  of the public relay buffered whole responses: the VM agent
+  collected the entire app body before sending one WebSocket
+  message, the Worker awaited that single message before
+  returning anything, and the agent killed any app response
+  taking over 50 seconds. Through the public URL the browser
+  therefore received zero bytes until generation finished (or
+  the 50s kill). Now the agent sends a head frame the moment the
+  app returns headers, one frame per response chunk, and an end
+  frame; the Worker resolves the response on the head frame and
+  pipes chunks through a TransformStream; the 50s total deadline
+  is replaced by a 300s idle timeout on both ends (long
+  generations survive while bytes keep flowing). The Worker
+  still accepts the previous agent's whole-body messages, so the
+  rollout order is: deploy Worker, then restart the agent —
+  never the reverse. Dress-rehearsal verified locally (wrangler
+  dev + both agent builds against a timed SSE source): chunks
+  arrived at the client every ~400ms as produced, not batched,
+  and a legacy agent answered correctly through the new Worker.
 - **SereneDB restore path can no longer empty the corpus
   (30 Oct 2026, Piece 21).** The second half of the Piece 20
   incident: executing that recovery exposed a worse bug in the
