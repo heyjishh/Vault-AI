@@ -15,6 +15,34 @@ live**, what is **built but unverified**, and what is **roadmap**.
 ## [Unreleased]
 
 ### Added
+- **Open the original source document (31 Oct 2026, Piece 29).**
+  Clicking a source could only ever show extracted text: the
+  uploaded file itself was never retained. Now `run_upload` (the
+  single funnel for direct and chunked uploads) keeps the raw
+  bytes under `<data_dir>/originals/` with the original filename,
+  and `GET /vault/documents/{id}/original` serves it inline
+  (auth + document-visibility checked; single-doc delete and the
+  admin purge remove it too). The source viewer, the Ask
+  Sources panel, and Vault rows gained "Open original document";
+  documents uploaded before this fix have no retained original —
+  the open returns a clear "original file not retained" and the
+  UI falls back to the full-text view instead of dead-ending.
+  Pasted text is kept as a `.txt` original. S3-batch ingest does
+  not retain originals yet (same clear 404). The Confidential
+  Vault is unchanged by design: no plaintext originals are ever
+  stored for sealed documents. Verified live on :3001: fresh
+  upload's original returned byte-for-byte identical; a
+  pre-existing document 404s with the named message; deleting a
+  document removes its original.
+- **Download any response as PDF or RTF (31 Oct 2026, Piece 28).**
+  Every completed Ask turn, Interact turn, and Research report
+  has a Download button with a format chooser. Both files are
+  generated in the browser (dependency-free): product header,
+  the user's exact question, the response with its headings,
+  lists, and bold structure kept, a Sources list, and a dated
+  footer. The PDF is a hand-written valid PDF 1.4 (verified with
+  pdfinfo/pdftotext); the RTF opens in Word/LibreOffice with
+  styled headings and bold runs.
 - **Universal upload intake — multi-file and folder pickers on
   every surface (30 Oct 2026)**: the user's directive was
   explicit — multi-file AND folder selection everywhere (through
@@ -652,6 +680,19 @@ live**, what is **built but unverified**, and what is **roadmap**.
   surfaced as a flaky failure in the Piece 4 regression test.
 
 ### Fixed
+- **Deleting a Brief now deletes its history (31 Oct 2026,
+  Piece 27).** A deleted Brief's Ask / Interact / research /
+  draft history stayed in the activity store — still listed on
+  the dashboard and still reopenable — after the Brief itself
+  was gone. `delete_matter` now removes every activity entry
+  tagged to the Brief (system purge records excepted) and
+  returns a receipt (`history_removed`, `documents_rehomed`);
+  the Briefs-page confirmation states the policy up front.
+  Documents still re-file into the default brief, unchanged.
+  **Payment and token-usage records are a separate store and
+  are never touched** — verified live on :3001: history_removed
+  1, documents_rehomed 1, dashboard entries for the Brief = 0,
+  tokens_used identical before and after.
 - **Uploads rebuilt: no more 413 wall, 100 MB per file, every
   document/spreadsheet/image format (30 Oct 2026, Piece 25).**
   Uploads silently capped out at ~1.5 MB: no body limit was
