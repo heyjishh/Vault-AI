@@ -97,7 +97,13 @@ impl Default for RagAnythingConfig {
             ocr_dpi: 300,
             // Surya is the only OCR engine (see ocr.rs for the
             // benchmark rationale; Tesseract was removed 2026-10-20).
-            ocr_primary_cmd: "python3 tools/ocr/surya_sidecar.py".into(),
+            // The wrapper script wires the deployment env the bare
+            // sidecar needs (venv PATH, llama.cpp backend, local GGUF
+            // weights) and is a passthrough where Surya is installed
+            // normally — `bash` as argv[0] also keeps CommandOcr's
+            // `available()` probe (`bash --version`) from executing
+            // the sidecar itself.
+            ocr_primary_cmd: "bash tools/ocr/surya_sidecar.sh".into(),
             pdftoppm_cmd: "pdftoppm".into(),
         }
     }
