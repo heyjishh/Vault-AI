@@ -8,6 +8,7 @@
 pub mod activity;
 pub mod annotations;
 pub mod matters;
+pub mod originals;
 pub mod spaces;
 pub mod private_vault;
 pub mod settings;

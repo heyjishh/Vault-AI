@@ -295,7 +295,7 @@ pub async fn vault_complete(
         decided_on: None,
         applicant: None,
     };
-    crate::routes::vault::run_upload(&state, &user, req, bytes)
+    crate::routes::vault::run_upload(&state, &user, req, bytes, false)
         .await
         .map(Json)
 }

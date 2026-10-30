@@ -139,6 +139,9 @@ pub async fn delete_user_data(
     for doc in &docs {
         chunks_removed += state.rag.remove_document(&doc.id).await?;
         filings_removed += state.matters.unfile_document_everywhere(&doc.id);
+        // The retained original upload (Piece 29) is part of the
+        // document — the purge removes it too.
+        crate::originals::delete_original(&doc.id);
     }
     let history_removed = state.activity.remove_for_user(&user.id);
     let receipt = serde_json::json!({

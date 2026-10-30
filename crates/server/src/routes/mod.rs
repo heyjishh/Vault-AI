@@ -80,6 +80,7 @@ pub fn router(state: AppState) -> Router {
         .route("/api/v1/vault/search", get(vault::search_documents))
         .route("/api/v1/vault/documents", get(vault::list_documents))
         .route("/api/v1/vault/documents/{id}", delete(vault::delete_document))
+        .route("/api/v1/vault/documents/{id}/original", get(vault::download_original))
         .route("/api/v1/vault/documents/{id}/chunks", get(vault::document_chunks))
         .route(
             "/api/v1/vault/documents/{id}/metadata",

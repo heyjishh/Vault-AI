@@ -6,7 +6,7 @@ import {
   ArrowUp, BadgeCheck, Briefcase, Check, ChevronDown, Copy, ExternalLink, Globe, Lock, PanelRight, RotateCcw, ShieldCheck, Square, ThumbsDown, ThumbsUp, X,
 } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
-import { mattersApi, privateVaultApi, publicSettingsApi, queryStream, ragApi } from '../api/client'
+import { mattersApi, openOriginalDocument, privateVaultApi, publicSettingsApi, queryStream, ragApi } from '../api/client'
 import AssistantAvatar from './AssistantAvatar'
 import { RefineControls, useRefine, type RefineCtl } from './RefineControls'
 import { SourceModal, citeMarkdownComponents, linkifyCitations } from './SourceModal'
@@ -460,6 +460,19 @@ function SourcesSidebar({ turn, selectedChunkId, onClose, go, onOpenSource }: {
               onOpenSource(c)
             }
           }
+          // Piece 29: open the ORIGINAL uploaded file. When none was
+          // retained (older document), fall back to the source modal
+          // so the click never dead-ends.
+          const openOriginal = async () => {
+            try {
+              const resolved = await ragApi.sourceDocument({ chunk_id: c.chunk_id })
+              if (!resolved.document_id) throw new Error('unresolved')
+              const res = await openOriginalDocument(resolved.document_id)
+              if (res !== 'opened') onOpenSource(c)
+            } catch {
+              onOpenSource(c)
+            }
+          }
           return (
             <div
               key={c.chunk_id}
@@ -535,14 +548,25 @@ function SourcesSidebar({ turn, selectedChunkId, onClose, go, onOpenSource }: {
                   </span>
                 </a>
               )}
-              {isDoc && go && (
-                <button
-                  onClick={(e) => { e.stopPropagation(); openDoc() }}
-                  className="mt-3 flex items-center gap-1.5 border-t border-stone-100 pt-2.5 text-[12.5px] font-medium text-ink hover:underline underline-offset-2"
-                >
-                  <PanelRight size={12} />
-                  Open this document in Interact
-                </button>
+              {isDoc && (
+                <div className="mt-3 flex flex-col gap-2 border-t border-stone-100 pt-2.5">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); void openOriginal() }}
+                    className="flex items-center gap-1.5 text-[12.5px] font-medium text-ink hover:underline underline-offset-2"
+                  >
+                    <ExternalLink size={12} />
+                    Open original document
+                  </button>
+                  {go && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); openDoc() }}
+                      className="flex items-center gap-1.5 text-[12.5px] font-medium text-ink hover:underline underline-offset-2"
+                    >
+                      <PanelRight size={12} />
+                      Open this document in Interact
+                    </button>
+                  )}
+                </div>
               )}
               {isPrivate && go && (
                 <button

@@ -194,13 +194,20 @@ pub async fn upload_document(
 ) -> Result<Json<IngestReport>, ApiError> {
     use base64::Engine as _;
     crate::routes::billing::ensure_quota(&state, &user.id)?;
-    let bytes: Vec<u8> = match (body.content_base64.take(), body.text.take()) {
-        (Some(b64), _) => base64::engine::general_purpose::STANDARD
-            .decode(b64.trim())
-            .map_err(|e| {
-                legal_rag_common::Error::BadRequest(format!("invalid base64 content: {e}"))
-            })?,
-        (None, Some(text)) => text.into_bytes(),
+    // `pasted` distinguishes typed/pasted text from an uploaded file:
+    // both reach the same ingest, but their retained originals differ
+    // (Piece 29) — a file keeps its bytes and name, pasted text is
+    // stored as a .txt named after its title.
+    let (bytes, pasted): (Vec<u8>, bool) = match (body.content_base64.take(), body.text.take()) {
+        (Some(b64), _) => (
+            base64::engine::general_purpose::STANDARD
+                .decode(b64.trim())
+                .map_err(|e| {
+                    legal_rag_common::Error::BadRequest(format!("invalid base64 content: {e}"))
+                })?,
+            false,
+        ),
+        (None, Some(text)) => (text.into_bytes(), true),
         (None, None) => {
             return Err(legal_rag_common::Error::BadRequest(
                 "upload needs either text or content_base64".to_string(),
@@ -208,7 +215,7 @@ pub async fn upload_document(
             .into())
         }
     };
-    run_upload(&state, &user, body, bytes).await.map(Json)
+    run_upload(&state, &user, body, bytes, pasted).await.map(Json)
 }
 
 /// Shared completion for every vault upload path — the single-shot
@@ -220,6 +227,7 @@ pub(crate) async fn run_upload(
     user: &legal_rag_auth::User,
     mut body: UploadRequest,
     bytes: Vec<u8>,
+    pasted_text: bool,
 ) -> Result<IngestReport, ApiError> {
     if bytes.is_empty() {
         return Err(legal_rag_common::Error::BadRequest("empty upload".to_string()).into());
@@ -272,6 +280,32 @@ pub(crate) async fn run_upload(
     }
     drop(file_password);
     let report = report_result?;
+    // Piece 29: retain the ORIGINAL upload alongside the indexed
+    // document, so a source can later open the file the user actually
+    // sent — not just its extracted text. A failed save only logs:
+    // the document is already indexed and searchable, and ingest must
+    // never fail because bookkeeping did. (The Confidential Vault
+    // seals through a different path and never lands here, so no
+    // plaintext original of a private document is ever written.)
+    {
+        let (display_name, forced_ext) = if pasted_text {
+            (format!("{}.txt", body.title.trim()), Some("txt"))
+        } else {
+            (body.file_name.clone(), None)
+        };
+        if let Err(e) = crate::originals::save_original(
+            &report.doc_id,
+            &display_name,
+            forced_ext,
+            &bytes,
+        ) {
+            tracing::warn!(
+                doc_id = %report.doc_id,
+                error = %e,
+                "could not retain the original upload; the document is indexed without one"
+            );
+        }
+    }
     if let Some(mid) = &target_matter {
         state.matters.add_document(mid, &report.doc_id);
     }
@@ -697,7 +731,50 @@ pub async fn delete_document(
     // Unfile it from every matter holding it (a document can be filed
     // in several briefs; the old code unfiled only the first).
     state.matters.unfile_document_everywhere(&id);
+    // Its retained original (Piece 29) goes with it.
+    crate::originals::delete_original(&id);
     Ok(Json(HashMap::from([("removed_chunks".to_string(), removed)])))
+}
+
+/// GET /api/v1/vault/documents/{id}/original — the ORIGINAL uploaded
+/// file (Piece 29), served inline under its original name. Visibility
+/// follows the same Spaces rule as the source-document route. Only
+/// documents ingested since originals were kept have one; older
+/// documents 404 with an explanation the UI shows verbatim.
+pub async fn download_original(
+    State(state): State<AppState>,
+    AuthUser(user): AuthUser,
+    Path(id): Path<String>,
+) -> Result<axum::response::Response, ApiError> {
+    use axum::response::IntoResponse;
+    if state.rag.doc_info(&id).is_none()
+        || !crate::routes::matters::doc_visible(&state, &user, &id)
+    {
+        return Err(legal_rag_common::Error::NotFound("document not found".to_string()).into());
+    }
+    let Some((path, file_name, content_type)) = crate::originals::resolve_original(&id) else {
+        return Err(legal_rag_common::Error::NotFound(
+            "original file not retained for this document".to_string(),
+        )
+        .into());
+    };
+    let bytes = tokio::fs::read(&path).await.map_err(|_| {
+        ApiError(legal_rag_common::Error::NotFound(
+            "original file not retained for this document".to_string(),
+        ))
+    })?;
+    let disposition = format!(
+        "inline; filename=\"{}\"",
+        file_name.replace(['"', '\\', '\n', '\r'], "")
+    );
+    Ok((
+        [
+            (axum::http::header::CONTENT_TYPE, content_type.to_string()),
+            (axum::http::header::CONTENT_DISPOSITION, disposition),
+        ],
+        bytes,
+    )
+        .into_response())
 }
 
 #[cfg(test)]

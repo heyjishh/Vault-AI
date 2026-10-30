@@ -1,8 +1,8 @@
 import { useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { FileText, FileUp, FolderUp, Loader2, Scale, ScanText, Trash2, X } from 'lucide-react'
-import { mattersApi, vaultApi } from '../api/client'
+import { ExternalLink, FileText, FileUp, FolderUp, Loader2, Scale, ScanText, Trash2, X } from 'lucide-react'
+import { mattersApi, openOriginalDocument, vaultApi } from '../api/client'
 import type { DocumentInfo, IngestReport } from '../api/types'
 import { useSession } from '../stores/session'
 import { useMatter } from '../stores/matter'
@@ -411,6 +411,20 @@ export default function VaultPage() {
                   </p>
                 )}
               </div>
+              <button
+                onClick={async () => {
+                  const res = await openOriginalDocument(d.id)
+                  if (res === 'not-retained') {
+                    toast('info', "The original file wasn't retained for this document — it was uploaded before originals were kept. Its extracted text is what exists.")
+                  } else if (res === 'error') {
+                    toast('error', 'Could not open the original document')
+                  }
+                }}
+                title="Original — open the file as it was uploaded"
+                className="p-2 rounded-lex text-stone-400 hover:text-ink hover:bg-stone-100 transition-colors"
+              >
+                <ExternalLink size={15} />
+              </button>
               <button
                 onClick={() => setIndexDocId(indexDocId === d.id ? null : d.id)}
                 title="Indexing — keywords, generated questions and statute hyperedges per chunk"

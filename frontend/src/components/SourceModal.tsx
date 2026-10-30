@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { ExternalLink, Loader2, Lock, PanelRight, X } from 'lucide-react'
-import { ragApi } from '../api/client'
+import { openOriginalDocument, ragApi } from '../api/client'
 import type { Citation, SourceDocument } from '../api/types'
 
 /** Collapse whitespace runs to single spaces, keeping a map from each
@@ -80,7 +80,17 @@ export function SourceModal({ citation: c, onClose, go }: {
   const isDoc = c.doc_id.startsWith('doc:')
   const [doc, setDoc] = useState<SourceDocument | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // Piece 29: set when the document predates retained originals.
+  const [originalMissing, setOriginalMissing] = useState(false)
   const markRef = useRef<HTMLElement | null>(null)
+
+  const openOriginal = async () => {
+    const target = doc?.document_id
+    if (!target) return
+    const res = await openOriginalDocument(target)
+    if (res === 'not-retained') setOriginalMissing(true)
+    else if (res === 'error') setError('Could not open the original document')
+  }
 
   useEffect(() => {
     if (isPrivate) return
@@ -199,6 +209,13 @@ export function SourceModal({ citation: c, onClose, go }: {
           )}
         </div>
 
+        {originalMissing && (
+          <div className="border-t border-stone-200 bg-[#fdf6e3] px-6 py-2.5 text-[12.5px] text-[#7a5b12]">
+            The original file wasn't retained for this document — it was uploaded before originals were
+            kept. The full extracted text above is what exists.
+          </div>
+        )}
+
         <div className="flex items-center justify-between border-t border-stone-200 px-6 py-3">
           <span className="inline-flex items-center gap-1.5 text-[12px] text-stone-500">
             <span className="inline-block h-3 w-4 rounded-sm bg-[#fdf3d7]" /> Cited passage
@@ -212,20 +229,31 @@ export function SourceModal({ citation: c, onClose, go }: {
             >
               <ExternalLink size={12} /> Open original{domain && <> · {domain}</>}
             </a>
-          ) : isDoc && go ? (
-            <button
-              onClick={() => {
-                const target = doc?.document_id
-                if (!target) return
-                try {
-                  sessionStorage.setItem('jurisvault.interactDoc', target)
-                } catch { /* ignore */ }
-                go('interact')
-              }}
-              className="inline-flex items-center gap-1.5 text-[12.5px] font-medium text-ink hover:underline underline-offset-2"
-            >
-              <PanelRight size={12} /> Open in Interact
-            </button>
+          ) : isDoc ? (
+            <span className="inline-flex items-center gap-4">
+              <button
+                onClick={() => void openOriginal()}
+                disabled={!doc?.document_id}
+                className="inline-flex items-center gap-1.5 text-[12.5px] font-medium text-ink hover:underline underline-offset-2 disabled:opacity-40"
+              >
+                <ExternalLink size={12} /> Open original document
+              </button>
+              {go && (
+                <button
+                  onClick={() => {
+                    const target = doc?.document_id
+                    if (!target) return
+                    try {
+                      sessionStorage.setItem('jurisvault.interactDoc', target)
+                    } catch { /* ignore */ }
+                    go('interact')
+                  }}
+                  className="inline-flex items-center gap-1.5 text-[12.5px] font-medium text-ink hover:underline underline-offset-2"
+                >
+                  <PanelRight size={12} /> Open in Interact
+                </button>
+              )}
+            </span>
           ) : (
             <span />
           )}

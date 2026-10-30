@@ -65,6 +65,21 @@ function err(e: unknown): string {
   return String(e)
 }
 
+/** The server has no retained original for this document (it was
+ *  uploaded before originals were kept). Distinguished from real
+ *  failures so the UI can fall back to the extracted text. */
+export class OriginalNotRetainedError extends Error {
+  constructor() {
+    super('original file not retained for this document')
+    this.name = 'OriginalNotRetainedError'
+  }
+}
+
+export function isOriginalNotRetained(e: unknown): boolean {
+  return e instanceof OriginalNotRetainedError
+    || (e instanceof Error && e.message === 'original file not retained for this document')
+}
+
 export const authApi = {
   async register(email: string, password: string): Promise<AuthResponse> {
     try { const r = await api.post<AuthResponse>('/auth/register', { email, password }); return r.data }
@@ -105,6 +120,20 @@ export const ragApi = {
       return r.data
     } catch (e) { throw new Error(err(e)) }
   },
+  /** Piece 29: the ORIGINAL uploaded file behind a document, as a
+   *  Blob (the endpoint needs the auth header, so a plain link can't
+   *  fetch it). Documents ingested before originals were retained
+   *  have none — that 404 surfaces as OriginalNotRetainedError so
+   *  callers can explain instead of dead-ending. */
+  async originalDocument(id: string): Promise<Blob> {
+    try {
+      const r = await api.get<Blob>(`/vault/documents/${id}/original`, { responseType: 'blob' })
+      return r.data
+    } catch (e) {
+      if (axios.isAxiosError(e) && e.response?.status === 404) throw new OriginalNotRetainedError()
+      throw new Error(err(e))
+    }
+  },
   async research(query: string, web: boolean, refine_terms?: string[]): Promise<ResearchReport> {
     try { const r = await api.post<ResearchReport>('/knowledge/research', { query, web, refine_terms: refine_terms?.length ? refine_terms : undefined }); return r.data }
     catch (e) { throw new Error(err(e)) }
@@ -133,6 +162,32 @@ export const ragApi = {
       return r.data
     } catch (e) { throw new Error(err(e)) }
   },
+}
+
+export type OpenOriginalResult = 'opened' | 'not-retained' | 'error'
+
+/**
+ * Piece 29, shared by every "Open original document" surface
+ * (SourceModal, Ask sources panel, Vault rows): fetch the retained
+ * original as an authed Blob and open it in a new tab via an object
+ * URL. Returns 'not-retained' for pre-retention documents so each
+ * surface can fall back its own way (modal note, source modal, or
+ * toast) instead of the click dead-ending.
+ */
+export async function openOriginalDocument(id: string): Promise<OpenOriginalResult> {
+  try {
+    const blob = await ragApi.originalDocument(id)
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.target = '_blank'
+    a.rel = 'noopener'
+    a.click()
+    window.setTimeout(() => URL.revokeObjectURL(url), 60_000)
+    return 'opened'
+  } catch (e) {
+    return isOriginalNotRetained(e) ? 'not-retained' : 'error'
+  }
 }
 
 /** Per-file size cap (100 MB), enforced identically by the server;
