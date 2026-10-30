@@ -561,4 +561,131 @@ mod tests {
             "I am having trouble locating any royalty clause in these bye-laws."
         ));
     }
+
+    /// Piece 23 fake: a provider whose streaming call fails the way
+    /// the Gemini bridge's does ("llm stream returned no content")
+    /// while the plain completion works.
+    struct StreamDeadLlm {
+        answer: String,
+        completion_called: std::sync::atomic::AtomicBool,
+    }
+
+    #[async_trait]
+    impl LlmClient for StreamDeadLlm {
+        async fn complete(&self, _system: &str, _user: &str) -> Result<String> {
+            self.completion_called
+                .store(true, std::sync::atomic::Ordering::SeqCst);
+            Ok(self.answer.clone())
+        }
+
+        async fn complete_stream(
+            &self,
+            _system: &str,
+            _user: &str,
+            _sink: &mut ChunkSink<'_>,
+        ) -> Result<String> {
+            Err(Error::Upstream("llm stream returned no content".into()))
+        }
+    }
+
+    #[tokio::test]
+    async fn stream_failure_falls_back_to_completion_and_reveals_chunks() {
+        let llm = StreamDeadLlm {
+            answer: "The royalty is Rs 310 per tonne, payable quarterly.".to_string(),
+            completion_called: std::sync::atomic::AtomicBool::new(false),
+        };
+        let mut chunks: Vec<String> = Vec::new();
+        let mut sink = |t: &str| chunks.push(t.to_string());
+        let full = generate_with_fallback(&llm, "sys", "user", &mut sink)
+            .await
+            .expect("the fallback must succeed when complete() works");
+        assert_eq!(full, llm.answer);
+        assert!(llm
+            .completion_called
+            .load(std::sync::atomic::Ordering::SeqCst));
+        assert!(
+            chunks.len() > 3,
+            "fallback must reveal the answer in word chunks, got {} chunk(s)",
+            chunks.len()
+        );
+        assert_eq!(chunks.concat(), full);
+    }
+
+    /// Piece 23 fake: the stream "succeeds" but yields no content.
+    struct StreamEmptyLlm {
+        answer: String,
+    }
+
+    #[async_trait]
+    impl LlmClient for StreamEmptyLlm {
+        async fn complete(&self, _system: &str, _user: &str) -> Result<String> {
+            Ok(self.answer.clone())
+        }
+
+        async fn complete_stream(
+            &self,
+            _system: &str,
+            _user: &str,
+            _sink: &mut ChunkSink<'_>,
+        ) -> Result<String> {
+            Ok(String::new())
+        }
+    }
+
+    #[tokio::test]
+    async fn stream_with_no_content_falls_back_to_completion() {
+        let llm = StreamEmptyLlm {
+            answer: "A stream that returns nothing must not end the answer.".to_string(),
+        };
+        let mut chunks: Vec<String> = Vec::new();
+        let mut sink = |t: &str| chunks.push(t.to_string());
+        let full = generate_with_fallback(&llm, "sys", "user", &mut sink)
+            .await
+            .expect("an empty stream must fall back, not succeed empty");
+        assert_eq!(full, llm.answer);
+        assert_eq!(chunks.concat(), full);
+    }
+
+    /// Piece 23 fake: a healthy streaming provider — the fallback
+    /// must stay out of its way entirely.
+    struct StreamOkLlm {
+        completion_called: std::sync::atomic::AtomicBool,
+    }
+
+    #[async_trait]
+    impl LlmClient for StreamOkLlm {
+        async fn complete(&self, _system: &str, _user: &str) -> Result<String> {
+            self.completion_called
+                .store(true, std::sync::atomic::Ordering::SeqCst);
+            Ok("the fallback answer that must never be used".to_string())
+        }
+
+        async fn complete_stream(
+            &self,
+            _system: &str,
+            _user: &str,
+            sink: &mut ChunkSink<'_>,
+        ) -> Result<String> {
+            sink("Streamed ");
+            sink("answer.");
+            Ok("Streamed answer.".to_string())
+        }
+    }
+
+    #[tokio::test]
+    async fn healthy_stream_never_calls_the_fallback() {
+        let llm = StreamOkLlm {
+            completion_called: std::sync::atomic::AtomicBool::new(false),
+        };
+        let mut chunks: Vec<String> = Vec::new();
+        let mut sink = |t: &str| chunks.push(t.to_string());
+        let full = generate_with_fallback(&llm, "sys", "user", &mut sink)
+            .await
+            .expect("a healthy stream succeeds as-is");
+        assert_eq!(full, "Streamed answer.");
+        assert_eq!(chunks, vec!["Streamed ".to_string(), "answer.".to_string()]);
+        assert!(!llm
+            .completion_called
+            .load(std::sync::atomic::Ordering::SeqCst));
+    }
 }
