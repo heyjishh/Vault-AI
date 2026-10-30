@@ -57,9 +57,15 @@ export default function MattersPage({ open }: { open: (id: string) => void }) {
 
   const remove = useMutation({
     mutationFn: (id: string) => mattersApi.remove(id),
-    onSuccess: () => {
+    onSuccess: (r) => {
       qc.invalidateQueries({ queryKey: ['matters'] })
-      toast('success', 'Brief deleted — its documents stay in the Vault')
+      const n = r.history_removed
+      toast(
+        'success',
+        n != null
+          ? `Brief deleted — ${n} histor${n === 1 ? 'y entry' : 'y entries'} permanently removed; its documents moved to the default brief`
+          : 'Brief deleted — its history was permanently removed; its documents moved to the default brief',
+      )
     },
     onError: (e) => toast('error', (e as Error).message),
   })
@@ -189,7 +195,12 @@ export default function MattersPage({ open }: { open: (id: string) => void }) {
           <div className="grid sm:grid-cols-2 gap-3">
             {pagedMatters.pageItems.map((m) => (
               <MatterCard key={m.id} matter={m} spaceName={spaceName(m.space_id)} onOpen={() => open(m.id)} onDelete={() => {
-                if (window.confirm(`Delete brief “${m.title}”? Its documents stay in the Vault.`)) remove.mutate(m.id)
+                if (window.confirm(
+                  `Delete brief “${m.title}”?\n\n` +
+                  `• Its history — every Ask, Interact, research and draft entry made in this brief — will be PERMANENTLY deleted.\n` +
+                  `• Its documents are not deleted: they move to the default brief.\n` +
+                  `• Payment and token-usage records are not affected.`,
+                )) remove.mutate(m.id)
               }} />
             ))}
           </div>

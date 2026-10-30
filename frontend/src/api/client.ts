@@ -498,8 +498,15 @@ export const mattersApi = {
       const r = await api.patch<Matter>(`/matters/${id}`, patch); return r.data
     } catch (e) { throw new Error(err(e)) }
   },
-  async remove(id: string): Promise<void> {
-    try { await api.delete(`/matters/${id}`) }
+  /** Delete a brief. Piece 27: the server also permanently deletes
+   *  the brief's history and reports how many entries went; documents
+   *  are re-filed into the default brief (count in the response too).
+   *  Payment/token-usage records are never part of this. */
+  async remove(id: string): Promise<{ deleted: boolean; history_removed?: number; documents_rehomed?: number }> {
+    try {
+      const r = await api.delete<{ deleted: boolean; history_removed?: number; documents_rehomed?: number }>(`/matters/${id}`)
+      return r.data
+    }
     catch (e) { throw new Error(err(e)) }
   },
   async attach(id: string, doc_id: string): Promise<Matter> {

@@ -193,6 +193,32 @@ impl ActivityStore {
         }
         removed
     }
+
+    /// Remove ALL history entries belonging to one matter (Brief) —
+    /// used when the brief is deleted: its Ask / Interact / research /
+    /// draft / upload history goes with it, so a deleted brief leaves
+    /// nothing restorable behind. A brief is a shared scope, so the
+    /// removal crosses users. System purge records
+    /// (`PURGE_KIND`) are never removed, even when tagged to the
+    /// matter — that audit trail is system data. Unscoped events and
+    /// other matters' events are untouched. Billing, token-usage and
+    /// payment records live in other stores and are NOT touched here —
+    /// only this history store. Returns how many entries were removed.
+    /// Idempotent: a second call removes nothing.
+    pub fn remove_for_matter(&self, matter_id: &str) -> usize {
+        let removed = {
+            let mut events = self.events.write().unwrap();
+            let before = events.len();
+            events.retain(|e| {
+                e.matter_id.as_deref() != Some(matter_id) || e.kind == Self::PURGE_KIND
+            });
+            before - events.len()
+        };
+        if removed > 0 {
+            self.save();
+        }
+        removed
+    }
 }
 
 #[cfg(test)]
@@ -243,6 +269,44 @@ mod tests {
 
         // Idempotent, and persisted to disk.
         assert_eq!(store.remove_for_user("user-b"), 0);
+        let reloaded = ActivityStore::load(path.clone());
+        assert_eq!(reloaded.all().len(), 3);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// The brief-delete contract (Piece 27): deleting a brief removes
+    /// every history entry tagged to it, across users — but never a
+    /// system purge record, never an unscoped entry, and never another
+    /// brief's history. Idempotent and persisted.
+    #[test]
+    fn remove_for_matter_takes_only_that_matters_history() {
+        let (store, path) = temp_store();
+        store.record(ev("user-a", "query").with_matter(Some("matter-1".into())));
+        store.record(ev("user-b", "interact").with_matter(Some("matter-1".into())));
+        store.record(ev("user-a", "research").with_matter(Some("matter-2".into())));
+        store.record(ev("user-a", "query")); // unscoped
+        store
+            .record(ev("admin-1", ActivityStore::PURGE_KIND).with_matter(Some("matter-1".into())));
+
+        assert_eq!(store.remove_for_matter("matter-1"), 2);
+
+        let remaining = store.all();
+        assert_eq!(remaining.len(), 3);
+        assert!(remaining
+            .iter()
+            .all(|e| e.matter_id.as_deref() != Some("matter-1")
+                || e.kind == ActivityStore::PURGE_KIND));
+        assert_eq!(
+            remaining
+                .iter()
+                .filter(|e| e.matter_id.as_deref() == Some("matter-2"))
+                .count(),
+            1
+        );
+        assert_eq!(remaining.iter().filter(|e| e.matter_id.is_none()).count(), 1);
+
+        // Idempotent, and persisted to disk.
+        assert_eq!(store.remove_for_matter("matter-1"), 0);
         let reloaded = ActivityStore::load(path.clone());
         assert_eq!(reloaded.all().len(), 3);
         let _ = std::fs::remove_file(&path);

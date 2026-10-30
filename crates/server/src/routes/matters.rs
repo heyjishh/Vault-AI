@@ -245,7 +245,12 @@ pub async fn update_matter(
 /// Delete a matter workspace. Its documents stay in the vault: any
 /// document that was filed ONLY here is re-filed into the default
 /// brief (the brief-only vault has no unfiled state — a document
-/// must always be reachable inside some brief).
+/// must always be reachable inside some brief). Its HISTORY goes
+/// with it (Piece 27): every activity entry scoped to this brief —
+/// Ask, Interact, research, draft, upload — is permanently removed,
+/// so a deleted brief leaves nothing restorable in the Dashboard
+/// history. Payment and token-usage records are NOT history: they
+/// live in the billing/usage stores, which this never touches.
 pub async fn delete_matter(
     State(state): State<AppState>,
     AuthUser(user): AuthUser,
@@ -262,14 +267,18 @@ pub async fn delete_matter(
     let filed = matter.document_ids.clone();
     state.matters.delete(&id);
     let adopted = state.matters.adopt_unfiled(&filed);
-    if adopted > 0 {
-        tracing::info!(
-            adopted,
-            brief = %id,
-            "deleted brief: re-filed its orphaned documents into the default brief"
-        );
-    }
-    Ok(Json(serde_json::json!({ "deleted": true })))
+    let history_removed = state.activity.remove_for_matter(&id);
+    tracing::info!(
+        history_removed,
+        documents_rehomed = adopted,
+        brief = %id,
+        "deleted brief: history removed, orphaned documents re-filed into the default brief"
+    );
+    Ok(Json(serde_json::json!({
+        "deleted": true,
+        "history_removed": history_removed,
+        "documents_rehomed": adopted,
+    })))
 }
 
 #[derive(Deserialize)]
