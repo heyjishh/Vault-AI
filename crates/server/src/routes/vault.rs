@@ -542,6 +542,67 @@ pub struct DocSearchHit {
     pub snippets: Vec<String>,
 }
 
+/// Split a search query into lowercase terms. Document search is a TERM
+/// search (the UI promises "any word inside them"): every term must
+/// appear somewhere in the title or the text, in any order or position.
+/// The previous implementation treated the whole query as ONE literal
+/// phrase, so "incomes 86" matched nothing — not even the document
+/// headed "Other incomes / 86. Income-tax shall not be payable…", where
+/// the two words sit a punctuation mark apart.
+fn search_terms(q: &str) -> Vec<String> {
+    let q = q.trim().to_lowercase();
+    if q.chars().count() < 2 {
+        return Vec::new();
+    }
+    let mut terms: Vec<String> = q
+        .split_whitespace()
+        .map(|t| t.trim_matches(|c: char| !c.is_alphanumeric()).to_string())
+        .filter(|t| !t.is_empty())
+        .collect();
+    terms.dedup();
+    terms
+}
+
+struct DocMatch {
+    /// Total text occurrences across all terms.
+    count: usize,
+    /// Every term appears in the title.
+    title_match: bool,
+    /// (byte index, term length) for each text occurrence, position-sorted.
+    positions: Vec<(usize, usize)>,
+}
+
+/// AND-of-terms match against a document's lowercased title and text:
+/// each term must occur in the title or the text. Returns None when any
+/// term is absent from both.
+fn match_document(terms: &[String], title_l: &str, text_l: &str) -> Option<DocMatch> {
+    let mut count = 0usize;
+    let mut positions: Vec<(usize, usize)> = Vec::new();
+    let mut title_all = true;
+    for term in terms {
+        let in_title = title_l.contains(term.as_str());
+        if !in_title {
+            title_all = false;
+        }
+        let mut term_positions: Vec<(usize, usize)> = text_l
+            .match_indices(term.as_str())
+            .map(|(i, _)| (i, term.len()))
+            .collect();
+        if !in_title && term_positions.is_empty() {
+            return None;
+        }
+        count += term_positions.len();
+        positions.append(&mut term_positions);
+    }
+    positions.sort_unstable();
+    positions.dedup();
+    Some(DocMatch {
+        count,
+        title_match: title_all,
+        positions,
+    })
+}
+
 /// Keyword search across the corpus — titles and full document text —
 /// returning context snippets around each match. (Semantic questions
 /// belong to Ask; this is "find the document that mentions X".)
@@ -550,8 +611,8 @@ pub async fn search_documents(
     AuthUser(_user): AuthUser,
     Query(q): Query<SearchDocsQuery>,
 ) -> Json<Vec<DocSearchHit>> {
-    let needle = q.q.trim().to_lowercase();
-    if needle.chars().count() < 2 {
+    let terms = search_terms(&q.q);
+    if terms.is_empty() {
         return Json(Vec::new());
     }
     let snap = |text: &str, mut i: usize, back: bool| -> usize {
@@ -569,39 +630,39 @@ pub async fn search_documents(
     };
     let mut hits: Vec<DocSearchHit> = Vec::new();
     for doc in state.rag.list_documents() {
-        let title_match = doc.title.to_lowercase().contains(&needle);
         let text = state
             .rag
             .document_text(&doc.id, 200_000)
             .await
             .unwrap_or_default();
         let lower = text.to_lowercase();
+        let title_l = doc.title.to_lowercase();
+        let Some(m) = match_document(&terms, &title_l, &lower) else {
+            continue;
+        };
         let mut snippets: Vec<String> = Vec::new();
-        let mut count = 0usize;
-        for (idx, _) in lower.match_indices(&needle) {
-            count += 1;
-            if snippets.len() < 3 {
-                let start = snap(&text, idx.saturating_sub(90), true);
-                let end = snap(&text, (idx + needle.len() + 110).min(text.len()), false);
-                let mut snippet = text[start..end].replace('\n', " ");
-                if start > 0 {
-                    snippet = format!("…{snippet}");
-                }
-                if end < text.len() {
-                    snippet.push('…');
-                }
-                snippets.push(snippet);
+        for (idx, term_len) in &m.positions {
+            if snippets.len() >= 3 {
+                break;
             }
+            let start = snap(&text, idx.saturating_sub(90), true);
+            let end = snap(&text, (idx + term_len + 110).min(text.len()), false);
+            let mut snippet = text[start..end].replace('\n', " ");
+            if start > 0 {
+                snippet = format!("…{snippet}");
+            }
+            if end < text.len() {
+                snippet.push('…');
+            }
+            snippets.push(snippet);
         }
-        if count > 0 || title_match {
-            hits.push(DocSearchHit {
-                doc_id: doc.id,
-                title: doc.title,
-                matches: count,
-                title_match,
-                snippets,
-            });
-        }
+        hits.push(DocSearchHit {
+            doc_id: doc.id,
+            title: doc.title,
+            matches: m.count,
+            title_match: m.title_match,
+            snippets,
+        });
     }
     hits.sort_by(|a, b| {
         (b.title_match, b.matches)
@@ -647,5 +708,51 @@ mod tests {
             vec!["plain.pdf", "notes.txt"]
         );
         assert_eq!(skipped, vec!["enc-aes256.pdf".to_string()]);
+    }
+
+    #[test]
+    fn search_terms_split_trim_and_reject_tiny_queries() {
+        assert_eq!(search_terms("  Incomes  86. "), vec!["incomes", "86"]);
+        assert_eq!(search_terms("royalty"), vec!["royalty"]);
+        assert!(search_terms("x").is_empty());
+        assert!(search_terms("   ").is_empty());
+    }
+
+    /// Regression: "incomes 86" found nothing under the old whole-phrase
+    /// matcher, in the very document headed "Other incomes / 86.".
+    #[test]
+    fn multi_term_search_matches_terms_in_any_position() {
+        let terms = search_terms("incomes 86");
+        let m = match_document(
+            &terms,
+            "section 86 it act",
+            "other incomes  86. income-tax shall not be payable by an assessee",
+        )
+        .expect("both terms are present, just not adjacent");
+        assert!(m.count >= 2);
+        assert!(!m.positions.is_empty());
+    }
+
+    #[test]
+    fn multi_term_search_requires_every_term() {
+        let terms = search_terms("incomes 999");
+        assert!(match_document(
+            &terms,
+            "section 86 it act",
+            "other incomes  86. income-tax shall not be payable",
+        )
+        .is_none());
+    }
+
+    #[test]
+    fn title_match_needs_every_term_in_the_title() {
+        let terms = search_terms("section 86");
+        let m = match_document(&terms, "section 86 it act", "no numbers here")
+            .expect("title alone can satisfy a term search");
+        assert!(m.title_match);
+        let terms = search_terms("section royalty");
+        let m = match_document(&terms, "section 86 it act", "royalty is rs 310 per tonne")
+            .expect("terms split across title and text still match");
+        assert!(!m.title_match);
     }
 }

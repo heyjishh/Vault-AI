@@ -652,6 +652,19 @@ live**, what is **built but unverified**, and what is **roadmap**.
   surfaced as a flaky failure in the Piece 4 regression test.
 
 ### Fixed
+- **Document search is now a term search, as its own UI promises
+  (30 Oct 2026, Piece 24).** The Search documents endpoint treated
+  the whole query as one literal phrase, so "incomes 86" returned
+  no matches — in the very document headed "Other incomes / 86.
+  Income-tax shall not be payable…" the words sit a punctuation
+  mark apart, and number-plus-word searches failed generally.
+  Queries now split into terms and a document matches when every
+  term appears somewhere in its title or text, in any order;
+  ranking (title first, then match count) and snippets are
+  unchanged in shape. Verified live on the test instance:
+  "incomes 86" → Section 86 IT Act, "royalty 310" → Kankar Mines
+  Lease, single-term behaviour unchanged. 4 new unit tests
+  (253 total, all green).
 - **Ask streaming can no longer die at generation time: a
   non-streaming fallback guarantees answer text (30 Oct 2026,
   Piece 23).** Diagnosis (raw-socket probe against the test
