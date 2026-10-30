@@ -35,6 +35,13 @@ Responses stream end-to-end so SSE (Ask) reaches the browser progressively:
 - The Worker resolves the client `Response` on the head frame and pipes
   chunk frames through a `TransformStream`. It still accepts the previous
   agent's single whole-body message `{id, status, headers, body}`.
+- The agent holds the first body frame for a 200ms settle window after
+  the head frame (Piece 22b): on the production path, chunk writes that
+  reach the Durable Object in the same burst as the head are discarded
+  because the response stream is not yet wired through to the client —
+  the end frame then closes an empty body (200, Content-Length 0).
+  wrangler dev buffers such early writes, so rehearsals do not show
+  this. Later frames stream without added delay.
 - Timeouts are idle-based, not total: 55s for the first frame, 300s without
   a frame mid-stream (agent and Worker) — long generations (Research) are
   fine while bytes keep flowing.

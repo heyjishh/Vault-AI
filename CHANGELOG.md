@@ -654,8 +654,8 @@ live**, what is **built but unverified**, and what is **roadmap**.
 ### Fixed
 - **Ask now streams through the public tunnel instead of sitting
   on "Connecting…" until the answer is complete (30 Oct 2026,
-  Piece 22 — built and rehearsal-verified; Worker deploy pending
-  the owner's Cloudflare credentials).** The app itself always
+  Piece 22 + 22b — DEPLOYED and live-verified 30 Oct 2026;
+  streaming is live on the public site).** The app itself always
   streamed (SSE Status → Sources → Deltas → Done), but both ends
   of the public relay buffered whole responses: the VM agent
   collected the entire app body before sending one WebSocket
@@ -675,6 +675,32 @@ live**, what is **built but unverified**, and what is **roadmap**.
   dev + both agent builds against a timed SSE source): chunks
   arrived at the client every ~400ms as produced, not batched,
   and a legacy agent answered correctly through the new Worker.
+  Deployed the same day — and the first live swap of the new
+  agent exposed a production-only failure the rehearsal could
+  not: responses came back 200 with empty bodies. Piece 22b
+  root-caused it with frame-level live probes: the agent emitted
+  head/chunk/end correctly and in order over the live proxy/TLS
+  path, but body frames reaching the Durable Object in the same
+  burst as the head frame were discarded — the Object resolves
+  the client Response from the head, but the runtime has not yet
+  wired the response stream through to the client, and chunk
+  writes landing in that window are dropped (wrangler dev
+  buffers such early writes, which is why the rehearsal passed);
+  the end frame then closed an empty body. The agent now holds
+  the first body frame for a 200ms settle window after the head
+  and serializes body frames through a per-request promise chain
+  (gates of 100ms and 400ms were both live-verified before the
+  value was chosen); later frames stream with no added delay.
+  Live verification of the deployed fix: /health returns its
+  full JSON body, the 777,931-byte SPA bundle downloads
+  byte-identical (SHA-256 match) with first byte at ~0.6s of a
+  ~1.7s transfer, an unauthenticated stream POST returns its
+  401 promptly, the tunnel socket stays up with no reconnect
+  cycles, and health-check reports HEALTHY. The canonical
+  public address is now
+  https://legal-rag-relay.jurisvault.workers.dev (the account
+  subdomain was renamed at the owner's request; the previous
+  jishan-legal-rag address is retired).
 - **SereneDB restore path can no longer empty the corpus
   (30 Oct 2026, Piece 21).** The second half of the Piece 20
   incident: executing that recovery exposed a worse bug in the
