@@ -652,6 +652,34 @@ live**, what is **built but unverified**, and what is **roadmap**.
   surfaced as a flaky failure in the Piece 4 regression test.
 
 ### Fixed
+- **Ask streaming can no longer die at generation time: a
+  non-streaming fallback guarantees answer text (30 Oct 2026,
+  Piece 23).** Diagnosis (raw-socket probe against the test
+  instance): statuses and sources streamed correctly, then the
+  provider's streaming call returned "llm stream returned no
+  content" and the stream closed — zero deltas, no Done —
+  because the Gemini bridge answers a plain completion but
+  cannot serve the OpenAI-style streaming call. The same
+  failure family left prod Ask sitting on "Searching the vault
+  and the web…" with no text ever generated. Now generation in
+  the streaming path tries the stream first — real
+  token-by-token streaming where the provider supports it —
+  and if the stream errors or yields no text, it falls back to
+  the provider's non-streaming completion with the same prompt
+  and reveals the answer in word chunks (one shared chunker,
+  also adopted by the cache-replay paths), converging on the
+  same failure-page guard, citation audit, treatment note and
+  Done as the streamed path. Only if both calls fail does the
+  turn end in the client's (already visible) error state. Web
+  mode also reports its own progress now — "Searching the
+  web…", then "Reading N web sources…" — so the status line
+  advances through the web phase instead of sitting on the
+  opening label for the leg's whole budget. Three unit tests
+  pin the fallback branches: stream error → chunked fallback;
+  empty stream → fallback; healthy stream → fallback never
+  called. Honest naming: on a provider that cannot stream, the
+  reveal is a chunked replay of a completed answer, not live
+  token generation — but it is never a dead stream.
 - **Ask now streams through the public tunnel instead of sitting
   on "Connecting…" until the answer is complete (30 Oct 2026,
   Piece 22 + 22b — DEPLOYED and live-verified 30 Oct 2026;
