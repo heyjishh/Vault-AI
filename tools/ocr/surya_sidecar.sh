@@ -39,8 +39,17 @@ if [ -n "$SNAP" ]; then
 fi
 
 export HF_HUB_OFFLINE="${HF_HUB_OFFLINE:-1}"
-export NO_PROXY="${NO_PROXY:+$NO_PROXY,}localhost,127.0.0.1"
-export no_proxy="${no_proxy:+$no_proxy,}localhost,127.0.0.1"
+# OCR is purely local (llama-server on 127.0.0.1, local weights), and
+# an inherited proxy environment actively breaks it here: Surya's
+# health probe for its llama.cpp backend goes through httpx, whose
+# proxy parsing chokes on this sandbox's proxy variables (IPv6
+# entries in no_proxy -> "InvalidURL: Invalid port: ':1]'"), so the
+# probe never succeeds and Surya kills the backend after its 600 s
+# startup timeout — every OCR silently fails. Strip the proxy vars
+# for the OCR subprocess; nothing it does needs the network.
+unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY all_proxy ALL_PROXY
+export NO_PROXY="localhost,127.0.0.1"
+export no_proxy="localhost,127.0.0.1"
 # Surya's per-request inference timeout defaults to 600 s, which a
 # dense page/photo exceeds on a small CPU box (the request is killed
 # mid-flight and the whole OCR fails). An hour matches this

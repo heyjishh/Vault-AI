@@ -680,11 +680,16 @@ live**, what is **built but unverified**, and what is **roadmap**.
   command now runs through an environment wrapper
   (`tools/ocr/surya_sidecar.sh`) that wires the local Surya
   install (the bare command could not run here at all — this
-  also revives the scanned-PDF OCR fallback) and raises
-  Surya's 600 s per-request inference timeout, which a dense
-  page or photo exceeds on a small CPU box. Honest limit: OCR
-  on this host is slow (many minutes for a dense page/photo) —
-  the upload completes when recognition finishes.
+  also revives the scanned-PDF OCR fallback), strips the
+  sandbox's proxy variables for the OCR subprocess (their
+  IPv6 entries break the HTTP client's URL parsing, which
+  silently failed Surya's health probe for its local
+  llama.cpp backend — every OCR died at the 600 s startup
+  timeout without ever starting), and raises Surya's
+  per-request inference timeout for this slow CPU host.
+  Honest limit: OCR on this host is slow (many minutes for a
+  dense page/photo) — the upload completes when recognition
+  finishes.
 - **Refine now writes a detailed legal research brief instead of
   a near-copy of the input (30 Oct 2026, Piece 26).** Live probes
   showed the old clarity-pass contract returning short prompts
