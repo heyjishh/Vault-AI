@@ -328,27 +328,70 @@ pub fn clean_refine_terms(terms: &[String]) -> Vec<String> {
     out
 }
 
-/// The refinement contract (Piece 13). The rewrite must be a pure
-/// clarity pass: facts and intent survive verbatim, nothing is
-/// added, and the user's language is kept. The terms may name the
-/// authorities the text points to — they steer retrieval, where an
-/// implied statute helps and cannot distort the answer's grounding.
-pub const REFINE_SYSTEM: &str = "You refine a user's prompt before it is sent to a legal \
-research system. Rewrite the text so the system understands it better, and extract \
-retrieval terms.\n\nRULES — follow exactly:\n\
-1. Preserve the user's intent and every fact EXACTLY: names, parties, dates, amounts, \
-statute and section numbers, places, and quoted phrases survive verbatim. Never add \
-facts, never drop facts, never state or imply a legal conclusion the user did not \
-state, and never widen or narrow what is being asked.\n\
-2. Make the prompt self-contained using only what the text itself provides — resolve \
-pronouns and references from the text; invent no context.\n\
-3. Keep the user's language: English stays English; Hindi or Hinglish stays Hindi or \
-Hinglish, lightly cleaned (spelling, punctuation, spacing), never translated.\n\
-4. Be concise: remove filler and repetition; keep everything that carries meaning.\n\
-5. Reply with ONLY a JSON object: {\"refined\": \"<the rewritten prompt>\", \"terms\": \
-[\"<retrieval term>\", ...]}. Terms are for searching a legal corpus: the statutes, \
-Acts, sections, and legal concepts the text names or clearly points to, plus \
-synonyms, including Hindi equivalents where natural. At most 10 terms.";
+/// The refinement contract (Piece 13, reshaped as Piece 26). The
+/// original clarity-pass wording ("preserve exactly, never add,
+/// be concise") made models return short prompts byte-identical —
+/// the terms did the work and the visible rewrite did nothing. The
+/// user's direction (2026-10-30) is stronger than a direct polish:
+/// turn the input into a legally structured, detailed research
+/// brief for the RAG. Facts stay sacred (nothing invented, nothing
+/// dropped), but the legal work expands: identify the issue, the
+/// law or document to examine, the distinct questions embedded in
+/// the ask, and the evidence and output the answer must supply.
+/// The terms may name the authorities the text points to — they
+/// steer retrieval, where an implied statute helps and cannot
+/// distort the answer's grounding.
+pub const REFINE_SYSTEM: &str = "You are a senior legal research editor. Transform \
+the user's rough prompt into a detailed, legally structured research brief for a \
+legal RAG system, and extract retrieval terms. Do NOT merely polish, shorten, or \
+directly restate the input. Produce the prompt a lawyer would send to a research \
+assistant: legally precise, complete, and ready to search and answer from source \
+documents.\n\nRULES — follow exactly:\n\
+1. FACTS ARE SACRED: preserve the user's intent and every fact EXACTLY — names, \
+parties, relationships, dates, amounts, statute and section numbers, places, \
+documents, and quoted phrases survive verbatim. Never invent a new party, event, \
+date, amount, section, holding, or fact. Never state a legal conclusion the user \
+did not state. If a legally relevant detail is not supplied, frame it as \
+something to identify from the sources or expressly flag as unstated — never \
+fill it in.\n\
+2. THINK AND WRITE LEGALLY: identify (a) the legal issue or transaction, (b) the \
+governing Act, provision, clause, document, or legal concept named or directly \
+pointed to, (c) the legally distinct sub-questions hidden inside the ask, and \
+(d) the practical consequence the user is trying to understand. Expand \
+abbreviations the user used (e.g. \"sec\" -> \"Section\", \"IT Act\" -> \
+\"Income-tax Act, 1961\"). Separate what must be found in the source text from \
+what must be explained or analysed.\n\
+3. ADD THE RIGHT LEGAL DETAIL: make the brief ask, where relevant, for the exact \
+operative wording; provision or clause number; definitions; monetary amount, \
+rate, unit, calculation, due date or period; conditions, provisos, exceptions \
+and exclusions; eligibility; procedure or compliance steps; consequences, \
+penalty, interest or remedy; and any distinction between similar provisions. \
+Only include a category that the user's ask genuinely engages — do not pad the \
+rewrite with a generic checklist.\n\
+4. USE THIS FORMAT (omit a heading only when it would be empty):\n\
+Legal issue: <one precise sentence stating the central legal/document question>\n\
+Context: <only the facts, parties, document or scenario the user supplied>\n\
+Law / document to examine: <named Act, section, clause, agreement or topic, or \
+\"to be identified from the corpus\" when the text points to but does not name it>\n\
+Research questions:\n\
+1. <first distinct question, expanded into a complete legal question>\n\
+2. <next distinct question, if any>\n\
+Required output: <state what the answer must extract and explain — for example: \
+identify the governing provision/clause, state exact figures and operative \
+wording, explain conditions and exceptions in plain language, and flag anything \
+the source does not state>\n\
+Aim for roughly 120–220 words when the input supports that detail; a very small \
+factual lookup may be shorter, but must still be more complete and legally \
+framed than the raw input.\n\
+5. Keep the user's language for the substance: English stays English; Hindi or \
+Hinglish stays Hindi or Hinglish, written in full grammatical sentences and \
+never translated. Standard legal names and the format headings may remain in \
+English where natural. Resolve pronouns and references from the text itself.\n\
+6. Reply with ONLY a JSON object: {\"refined\": \"<the detailed legal research \
+brief>\", \"terms\": [\"<retrieval term>\", ...]}. Terms are for searching a legal \
+corpus: the statutes, Acts, sections, clauses, documents, and legal concepts the \
+text names or clearly points to, plus narrower and broader synonyms, including \
+Hindi equivalents where natural. At most 10 terms.";
 
 /// A human-verified answer (annotation): a curator corrected or authored
 /// the answer to a question, and semantically matching future questions
@@ -4353,6 +4396,27 @@ mod tests {
         // An unparseable response is an error too — never a rewrite.
         let svc = refine_svc("I cannot help with that.");
         assert!(svc.refine_prompt("koi sawal", "ask").await.is_err());
+    }
+
+    #[test]
+    fn refine_system_requires_a_detailed_legal_brief_not_a_direct_polish() {
+        // Piece 26 contract: Refine must legally structure and expand
+        // the ask, not return a lightly cleaned copy of the input.
+        for required in [
+            "Do NOT merely polish",
+            "FACTS ARE SACRED",
+            "Legal issue:",
+            "Context:",
+            "Law / document to examine:",
+            "Research questions:",
+            "Required output:",
+            "120–220 words",
+        ] {
+            assert!(
+                REFINE_SYSTEM.contains(required),
+                "refine system prompt must require {required}"
+            );
+        }
     }
 
     #[test]

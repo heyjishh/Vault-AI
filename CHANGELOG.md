@@ -652,6 +652,20 @@ live**, what is **built but unverified**, and what is **roadmap**.
   surfaced as a flaky failure in the Piece 4 regression test.
 
 ### Fixed
+- **Refine now writes a detailed legal research brief instead of
+  a near-copy of the input (30 Oct 2026, Piece 26).** Live probes
+  showed the old clarity-pass contract returning short prompts
+  byte-identical (only the retrieval terms did any work). The
+  refine instruction now directs a legally structured expansion —
+  Legal issue / Context / Law or document to examine / numbered
+  Research questions / Required output — at roughly 120–220
+  words: facts, names, amounts, sections and quoted phrases stay
+  verbatim and nothing may be invented, but abbreviations are
+  expanded, hidden sub-questions are separated, and the brief
+  states exactly what the answer must extract (operative wording,
+  figures, periods, conditions, provisos, exceptions). A unit
+  test pins the new contract so Refine cannot silently regress
+  to a direct polish.
 - **Document search is now a term search, as its own UI promises
   (30 Oct 2026, Piece 24).** The Search documents endpoint treated
   the whole query as one literal phrase, so "incomes 86" returned
