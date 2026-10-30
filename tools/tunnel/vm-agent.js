@@ -155,13 +155,34 @@ function forwardToApp(msg, send) {
   let headSent = false;
   let done = false;
   const frame = (obj) => { try { send(JSON.stringify(obj)); } catch (e) {} };
+  // Production finding (Piece 22b): body frames that reach the Worker in
+  // the same burst as the head frame are lost. The Durable Object resolves
+  // the client Response from the head, but the runtime has not yet wired
+  // the response stream through to the client, and chunk writes landing
+  // in that window are discarded — the end frame then closes an empty
+  // body (live symptom: 200 with Content-Length 0). wrangler dev buffers
+  // such early writes, which is why the local rehearsal passed while the
+  // live path failed. Fix: hold the FIRST body frame (chunk, end, or
+  // error) for a short settle window after the head, and serialize every
+  // body frame through a per-request promise chain so order is exact and
+  // later frames stream with no added delay. (Verified live: gates of
+  // 100ms and 400ms both deliver complete bodies; 200ms ships as the
+  // margin between the proven floor and generation latency.)
+  const HEAD_SETTLE_MS = 200;
+  let bodyChain = null;
+  const bodyFrame = (obj) => {
+    if (!bodyChain) {
+      bodyChain = new Promise((r) => setTimeout(r, HEAD_SETTLE_MS));
+    }
+    bodyChain = bodyChain.then(() => frame(obj));
+  };
   const fail = (message) => {
     if (done) return;
     done = true;
     if (!headSent) {
       frame({ id: msg.id, status: 502, headers: {}, body: Buffer.from('app error: ' + message).toString('base64') });
     } else {
-      frame({ id: msg.id, stream: 1, error: message });
+      bodyFrame({ id: msg.id, stream: 1, error: message });
     }
   };
   const req = http.request(
@@ -169,11 +190,11 @@ function forwardToApp(msg, send) {
     (res) => {
       headSent = true;
       frame({ id: msg.id, stream: 1, status: res.statusCode, headers: res.headers });
-      res.on('data', (c) => frame({ id: msg.id, stream: 1, chunk: c.toString('base64') }));
+      res.on('data', (c) => bodyFrame({ id: msg.id, stream: 1, chunk: c.toString('base64') }));
       res.on('end', () => {
         if (done) return;
         done = true;
-        frame({ id: msg.id, stream: 1, end: true });
+        bodyFrame({ id: msg.id, stream: 1, end: true });
       });
       res.on('error', (e) => fail(e.message));
     }
