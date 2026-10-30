@@ -138,28 +138,53 @@ class WsConn {
   }
 }
 
-function forwardToApp(msg) {
-  return new Promise((resolve) => {
-    const body = msg.body ? Buffer.from(msg.body, 'base64') : null;
-    const headers = { ...msg.headers, host: `${APP_HOST}:${APP_PORT}` };
-    delete headers['content-length'];
-    const req = http.request(
-      { host: APP_HOST, port: APP_PORT, path: msg.path, method: msg.method, headers },
-      (res) => {
-        const chunks = [];
-        res.on('data', (c) => chunks.push(c));
-        res.on('end', () => {
-          const out = { id: msg.id, status: res.statusCode, headers: res.headers,
-            body: Buffer.concat(chunks).toString('base64') };
-          resolve(out);
-        });
-      }
-    );
-    req.on('error', (e) => resolve({ id: msg.id, status: 502, headers: {}, body: Buffer.from('app error: ' + e.message).toString('base64') }));
-    req.setTimeout(50000, () => req.destroy(new Error('app timeout')));
-    if (body) req.write(body);
-    req.end();
-  });
+/* Stream the app response to the Worker as it is produced: a head frame
+ * {id, stream:1, status, headers} when the app sends headers, one
+ * {id, stream:1, chunk:<base64>} frame per app chunk, and a closing
+ * {id, stream:1, end:true}. A failure before headers falls back to the
+ * legacy single-message 502 shape so any Worker build renders it safely;
+ * a failure mid-stream sends {id, stream:1, error} and the Worker aborts
+ * the response body. Requires the streaming Worker — deploy the Worker
+ * BEFORE restarting this agent (an old Worker would mistake the head
+ * frame for a complete response). Frames for concurrent requests
+ * interleave on the socket and are demultiplexed by id at the Worker. */
+function forwardToApp(msg, send) {
+  const body = msg.body ? Buffer.from(msg.body, 'base64') : null;
+  const headers = { ...msg.headers, host: `${APP_HOST}:${APP_PORT}` };
+  delete headers['content-length'];
+  let headSent = false;
+  let done = false;
+  const frame = (obj) => { try { send(JSON.stringify(obj)); } catch (e) {} };
+  const fail = (message) => {
+    if (done) return;
+    done = true;
+    if (!headSent) {
+      frame({ id: msg.id, status: 502, headers: {}, body: Buffer.from('app error: ' + message).toString('base64') });
+    } else {
+      frame({ id: msg.id, stream: 1, error: message });
+    }
+  };
+  const req = http.request(
+    { host: APP_HOST, port: APP_PORT, path: msg.path, method: msg.method, headers },
+    (res) => {
+      headSent = true;
+      frame({ id: msg.id, stream: 1, status: res.statusCode, headers: res.headers });
+      res.on('data', (c) => frame({ id: msg.id, stream: 1, chunk: c.toString('base64') }));
+      res.on('end', () => {
+        if (done) return;
+        done = true;
+        frame({ id: msg.id, stream: 1, end: true });
+      });
+      res.on('error', (e) => fail(e.message));
+    }
+  );
+  req.on('error', (e) => fail(e.message));
+  // Idle timeout, not a total deadline: Node resets the socket timer on
+  // activity, so a long generation survives while bytes keep flowing
+  // (SSE phases/heartbeats do); only a 300s silent stall kills it.
+  req.setTimeout(300000, () => { fail('app idle timeout'); req.destroy(); });
+  if (body) req.write(body);
+  req.end();
 }
 
 async function runOnce() {
@@ -209,15 +234,17 @@ async function runOnce() {
       try { sock.destroy(); } catch (e) {}
     }
   }, 15000);
-  ws.on('message', async (text) => {
+  ws.on('message', (text) => {
     lastActive = Date.now();
-    let out;
+    let m;
     try {
-      out = await forwardToApp(JSON.parse(text));
+      m = JSON.parse(text);
     } catch (e) {
-      out = { id: null, status: 500, headers: {}, body: Buffer.from(String(e.message || e)).toString('base64') };
+      return;
     }
-    try { ws.sendText(JSON.stringify(out)); } catch (e) {}
+    // Fire-and-forget: forwardToApp streams frames back as the app
+    // produces them; concurrent requests interleave by id.
+    forwardToApp(m, (s) => ws.sendText(s));
   });
   await new Promise((resolve) => {
     ws.on('close', resolve);
