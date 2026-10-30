@@ -9,8 +9,8 @@ import AssistantPage from './AssistantPage'
 import InteractPage from './InteractPage'
 import DraftPage from './DraftPage'
 import {
-  UploadProgressList, applyBatchCaps, batchLabelFor,
-  MAX_BATCH_FILES, MAX_BATCH_FOLDERS, type ProgressItemView,
+  UploadProgressList, applyBatchCaps, batchLabelFor, UPLOAD_ACCEPT,
+  UPLOAD_FORMATS_HINT, MAX_BATCH_FILES, MAX_BATCH_FOLDERS, type ProgressItemView,
 } from './UploadProgress'
 
 const TABS = ['Overview', 'Documents', 'Ask', 'Interact', 'Draft', 'History', 'Notes'] as const
@@ -334,7 +334,7 @@ function Documents({ matterId }: { matterId: string }) {
           <label className="rounded-lex bg-ink text-ivory px-3.5 py-2 text-[13px] font-medium cursor-pointer hover:bg-ink-900 transition-colors">
             Upload files
             <input
-              type="file" multiple className="hidden"
+              type="file" multiple className="hidden" accept={UPLOAD_ACCEPT}
               onChange={(e) => {
                 const files = Array.from(e.target.files ?? []).map((file) => ({ file, relPath: '' }))
                 e.target.value = ''
@@ -345,7 +345,7 @@ function Documents({ matterId }: { matterId: string }) {
           <label className="rounded-lex border border-stone-300 px-3.5 py-2 text-[13px] font-medium cursor-pointer hover:bg-stone-100 transition-colors flex items-center gap-1.5">
             <FolderUp size={13} /> Upload folder
             <input
-              type="file" className="hidden"
+              type="file" className="hidden" accept={UPLOAD_ACCEPT}
               {...({ webkitdirectory: '' } as Record<string, string>)}
               onChange={(e) => {
                 const files = Array.from(e.target.files ?? []).map((file) => ({
@@ -358,7 +358,7 @@ function Documents({ matterId }: { matterId: string }) {
             />
           </label>
           <span className="text-[12.5px] text-stone-400">
-            up to {MAX_BATCH_FILES} files and {MAX_BATCH_FOLDERS} folders per batch
+            up to {MAX_BATCH_FILES} files and {MAX_BATCH_FOLDERS} folders per batch · {UPLOAD_FORMATS_HINT}
           </span>
           {unfiled.length > 0 && (
             <div className="flex items-center gap-2">

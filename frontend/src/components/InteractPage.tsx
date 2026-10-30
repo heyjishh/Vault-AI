@@ -11,7 +11,7 @@ import AssistantAvatar from './AssistantAvatar'
 import { SourceModal, citeMarkdownComponents, linkifyCitations } from './SourceModal'
 import { EmptyState } from './ui'
 import {
-  UploadProgressList, UPLOAD_ACCEPT, MAX_BATCH_FILES, MAX_BATCH_FOLDERS,
+  UploadProgressList, UPLOAD_ACCEPT, UPLOAD_FORMATS_HINT, MAX_BATCH_FILES, MAX_BATCH_FOLDERS,
   applyBatchCaps, batchLabelFor, filesFromDataTransfer,
 } from './UploadProgress'
 
@@ -472,7 +472,7 @@ export default function InteractPage({ matterId, go }: { matterId?: string; go?:
             <FolderUp size={14} /> Upload folder
           </button>
           <span className="text-[12.5px] text-stone-400">
-            or drop files/folders anywhere here — up to {MAX_BATCH_FILES} files and {MAX_BATCH_FOLDERS} folders per batch; uploads file into this brief and are selected automatically
+            or drop files/folders anywhere here — up to {MAX_BATCH_FILES} files and {MAX_BATCH_FOLDERS} folders per batch; uploads file into this brief and are selected automatically · {UPLOAD_FORMATS_HINT}
           </span>
           <input
             ref={fileInputRef}

@@ -10,7 +10,7 @@ import { EmptyState, Pager, Spinner, usePagination } from './ui'
 import {
   UploadProgressList, formatElapsed, isPendingStatus, useNow,
   applyBatchCaps, batchLabelFor, filesFromDataTransfer, UPLOAD_ACCEPT,
-  MAX_BATCH_FILES, MAX_BATCH_FOLDERS,
+  UPLOAD_FORMATS_HINT, MAX_BATCH_FILES, MAX_BATCH_FOLDERS,
   type ProgressItemView,
 } from './UploadProgress'
 
@@ -269,8 +269,8 @@ export default function VaultPage() {
             />
           </div>
         )}
-        <p className="text-[13px] text-stone-500 mt-1 flex items-center justify-center gap-1.5">
-          PDF · TXT · MD <span className="inline-flex items-center gap-1 rounded-full bg-stone-100 border border-stone-200 px-2 py-0.5 text-[11px]"><ScanText size={11} /> scanned pages auto-OCR'd</span>
+        <p className="text-[13px] text-stone-500 mt-1 flex items-center justify-center gap-1.5 flex-wrap">
+          {UPLOAD_FORMATS_HINT} <span className="inline-flex items-center gap-1 rounded-full bg-stone-100 border border-stone-200 px-2 py-0.5 text-[11px]"><ScanText size={11} /> scanned pages & photos auto-OCR'd</span>
         </p>
         <input
           ref={fileRef} type="file" multiple className="hidden"
@@ -288,6 +288,7 @@ export default function VaultPage() {
           <FolderUp size={13} /> Upload a folder
           <input
             ref={folderRef} type="file" className="hidden"
+            accept={UPLOAD_ACCEPT}
             {...({ webkitdirectory: '' } as Record<string, string>)}
             onChange={(e) => {
               const files = Array.from(e.target.files ?? []).map((file) => ({

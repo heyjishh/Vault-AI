@@ -652,6 +652,39 @@ live**, what is **built but unverified**, and what is **roadmap**.
   surfaced as a flaky failure in the Piece 4 regression test.
 
 ### Fixed
+- **Uploads rebuilt: no more 413 wall, 100 MB per file, every
+  document/spreadsheet/image format (30 Oct 2026, Piece 25).**
+  Uploads silently capped out at ~1.5 MB: no body limit was
+  configured anywhere, so the framework's 2 MB default request
+  limit rejected every real-world file with a bare "413" on every
+  surface, and only PDF/text files were accepted at all. Now:
+  (a) **the per-file limit is 100 MB**, stated in the UI next to
+  every picker/dropzone, with a client-side pre-check that fails
+  fast ("<name> is X MB — the limit is 100 MB per file") and the
+  same check server-side. Large files travel as chunked-upload
+  sessions (4 MiB parts, assembled server-side into the unchanged
+  ingest/seal completions) because a single request cannot carry
+  them on the public path — measured live: the edge caps one
+  request body at 100 MB and the tunnel's framing drops single
+  messages above ~32 MB (~24 MB of body), while a 100 MB file is
+  ~133 MB as one base64 JSON request; (b) **formats**: PDF;
+  DOC/DOCX/DOCM/ODT/RTF and legacy DOC; XLS/XLSX/XLSM/XLSB/ODS
+  plus CSV/TSV (spreadsheets extract sheet-by-sheet); TXT/MD/RST;
+  and **images PNG/JPG/JPEG/WebP/BMP/TIFF/GIF via the Surya OCR
+  stage** (first frame for GIF/TIFF), so phone photos and scans
+  upload like any other document. Embedded images inside Office
+  files are extracted as documents' text only — they are not
+  OCR'd. HEIC/HEIF is not supported (no decoder in the OCR
+  stack) and gets the standard unsupported-type error; (c) the
+  OCR stage itself is repaired in this deployment: the OCR
+  command now runs through an environment wrapper
+  (`tools/ocr/surya_sidecar.sh`) that wires the local Surya
+  install (the bare command could not run here at all — this
+  also revives the scanned-PDF OCR fallback) and raises
+  Surya's 600 s per-request inference timeout, which a dense
+  page or photo exceeds on a small CPU box. Honest limit: OCR
+  on this host is slow (many minutes for a dense page/photo) —
+  the upload completes when recognition finishes.
 - **Refine now writes a detailed legal research brief instead of
   a near-copy of the input (30 Oct 2026, Piece 26).** Live probes
   showed the old clarity-pass contract returning short prompts

@@ -50,8 +50,16 @@ export function formatElapsed(ms: number): string {
 }
 
 /** The accept set shared by every vault-ingest picker — the file
- *  pickers feed the one vault ingest pipeline, not separate paths. */
-export const UPLOAD_ACCEPT = '.pdf,.txt,.md,.doc,.docx'
+ *  pickers feed the one vault ingest pipeline, not separate paths.
+ *  This is exactly the server parser matrix (Piece 25): nothing here
+ *  that does not ingest, nothing that ingests missing here. */
+export const UPLOAD_ACCEPT =
+  '.pdf,.txt,.md,.markdown,.rst,.doc,.docx,.docm,.odt,.rtf,.xls,.xlsx,.xlsm,.xlsb,.ods,.csv,.tsv,.png,.jpg,.jpeg,.webp,.bmp,.tif,.tiff,.gif'
+
+/** The supported-formats + size line shown beside every upload
+ *  dropzone/picker. */
+export const UPLOAD_FORMATS_HINT =
+  'PDF · DOC/DOCX/DOCM/ODT/RTF · XLS/XLSX/XLSM/XLSB/ODS/CSV/TSV · TXT/MD · PNG/JPG/WebP/BMP/TIFF/GIF — up to 100 MB per file'
 
 /** Per-batch upload intake caps: at most 20 files and at most 10
  *  folders in one batch (one picker/drop action). Items beyond a cap

@@ -5,7 +5,7 @@ import { privateVaultApi, type PrivateDocMeta } from '../api/client'
 import { useSession } from '../stores/session'
 import { EmptyState, Spinner } from './ui'
 import {
-  UploadProgressList,
+  UploadProgressList, UPLOAD_ACCEPT, UPLOAD_FORMATS_HINT,
   applyBatchCaps, batchLabelFor,
   MAX_BATCH_FILES, MAX_BATCH_FOLDERS,
   type ProgressItemView,
@@ -311,7 +311,7 @@ export default function PrivateVaultPage() {
               <label className="rounded-full border border-stone-200 px-3.5 py-1.5 text-[13px] text-stone-600 hover:text-ink hover:border-stone-300 transition-colors cursor-pointer">
                 Choose files…
                 <input
-                  ref={fileRef} type="file" multiple accept=".pdf,.txt,.md,.docx" className="hidden"
+                  ref={fileRef} type="file" multiple accept={UPLOAD_ACCEPT} className="hidden"
                   onChange={(e) => {
                     const files = Array.from(e.target.files ?? []).map((file) => ({ file, relPath: '' }))
                     e.target.value = ''
@@ -322,7 +322,7 @@ export default function PrivateVaultPage() {
               <label className="rounded-full border border-stone-200 px-3.5 py-1.5 text-[13px] text-stone-600 hover:text-ink hover:border-stone-300 transition-colors cursor-pointer inline-flex items-center gap-1.5">
                 <FolderUp size={13} /> Choose folder…
                 <input
-                  ref={folderRef} type="file" accept=".pdf,.txt,.md,.docx" className="hidden"
+                  ref={folderRef} type="file" accept={UPLOAD_ACCEPT} className="hidden"
                   {...({ webkitdirectory: '' } as Record<string, string>)}
                   onChange={(e) => {
                     const files = Array.from(e.target.files ?? []).map((file) => ({
@@ -335,7 +335,7 @@ export default function PrivateVaultPage() {
                 />
               </label>
               <span className="text-[12.5px] text-stone-400">
-                up to {MAX_BATCH_FILES} files and {MAX_BATCH_FOLDERS} folders per batch
+                up to {MAX_BATCH_FILES} files and {MAX_BATCH_FOLDERS} folders per batch · {UPLOAD_FORMATS_HINT}
               </span>
             </div>
             <textarea
