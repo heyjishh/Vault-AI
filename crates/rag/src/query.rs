@@ -1343,6 +1343,24 @@ impl QueryService {
     /// in ranked order — one bot-guarded site can neither stall the
     /// leg nor sink it (no fallback candidates).
     pub(crate) async fn gather_web(&self, question: &str, max_results: usize) -> WebGather {
+        self.gather_web_with_progress(question, max_results, None).await
+    }
+
+    /// [`gather_web`](Self::gather_web) with an optional progress
+    /// reporter (Piece 23): the streaming caller passes one so the
+    /// client's status line advances through the web phase —
+    /// "Searching the web…", then "Reading N web sources…" — instead
+    /// of sitting on the opening label for the leg's whole 60s+
+    /// budget. Non-streaming callers pass None.
+    pub(crate) async fn gather_web_with_progress(
+        &self,
+        question: &str,
+        max_results: usize,
+        progress: Option<&(dyn Fn(&str) + Send + Sync)>,
+    ) -> WebGather {
+        if let Some(report) = progress {
+            report("Searching the web…");
+        }
         // Search stage: hard 60s cap (the sidecar self-limits to ~40s;
         // this guards a hung sidecar process). The provider's own
         // 120s process timeout remains the outer bound for fetches.
@@ -1378,6 +1396,9 @@ impl QueryService {
         let window = (max_results + 3).min(results.len());
         let results: Vec<crate::web::WebResult> =
             results.into_iter().take(window).collect();
+        if let Some(report) = progress {
+            report(&format!("Reading {window} web sources…"));
+        }
         let mut ok: Vec<(usize, FetchedPage)> = Vec::new();
         let mut done: Vec<bool> = vec![false; window];
 
@@ -2071,7 +2092,17 @@ impl QueryService {
             },
         });
         let pages = if web {
-            let gather = self.gather_web(question, web_results).await;
+            // Piece 23: report the web phase's own stages as Status
+            // events, so the label keeps moving during a long
+            // search/fetch instead of sitting on the opening
+            // "Searching the vault and the web…" for the whole leg.
+            let progress_tx = tx.clone();
+            let report = move |msg: &str| {
+                let _ = progress_tx.send(QueryEvent::Status { message: msg.to_string() });
+            };
+            let gather = self
+                .gather_web_with_progress(question, web_results, Some(&report))
+                .await;
             if let Some(note) = gather.outcome.note() {
                 let _ = tx.send(QueryEvent::Status { message: note });
             }
