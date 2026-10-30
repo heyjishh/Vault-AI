@@ -8,13 +8,13 @@ WebSocket relay** — pure HTTPS/WSS through the egress proxy.
 ## Architecture
 
 ```
-browser -> https://legal-rag-relay.jishan-legal-rag.workers.dev
+browser -> https://legal-rag-relay.jurisvault.workers.dev
         -> Worker -> Durable Object `Relay` (holds the VM socket)
         -> WSS /vm -> vm-agent.js -> http://127.0.0.1:3000
 ```
 
 - `relay-worker.js` — the Worker + `Relay` Durable Object. Deployed on
-  JISHAN's Cloudflare account (workers.dev subdomain `jishan-legal-rag`).
+  JISHAN's Cloudflare account (workers.dev subdomain `jurisvault`).
   The DO is required: plain Worker globals are per-isolate, so the VM's
   socket would be invisible to request handlers.
 - `vm-agent.js` — runs on the VM. Opens WSS to `<worker>/vm` through the
@@ -53,7 +53,7 @@ npx wrangler deploy
 # then restart the agent the way restore-stack.sh launches it:
 kill <vm-agent pid>
 cd ~/workspace/legal-rag && setsid nohup env \
-  WORKER_URL=https://legal-rag-relay.jishan-legal-rag.workers.dev \
+  WORKER_URL=https://legal-rag-relay.jurisvault.workers.dev \
   node tools/tunnel/vm-agent.js >> vm-agent.log 2>&1 < /dev/null &
 ```
 - `wrangler.toml` — deploy config (needs `new_sqlite_classes` on free plan).
@@ -65,11 +65,11 @@ The Worker persists on Cloudflare's side. On the VM:
 ```bash
 cd ~/workspace/legal-rag
 ./target/debug/legal-rag-server &            # from the project dir (loads .env)
-WORKER_URL=https://legal-rag-relay.jishan-legal-rag.workers.dev \
+WORKER_URL=https://legal-rag-relay.jurisvault.workers.dev \
   node tools/tunnel/vm-agent.js &
 ```
 
-Health: `curl https://legal-rag-relay.jishan-legal-rag.workers.dev/healthz`
+Health: `curl https://legal-rag-relay.jurisvault.workers.dev/healthz`
 should print `vm-connected`.
 
 ## Teardown

@@ -33,7 +33,7 @@ fi
 if ! up 3000; then
   (cd ~/workspace/legal-rag && setsid nohup env SERENEDB_URL=postgres://postgres@127.0.0.1:7890/postgres ./target/release/legal-rag-server >> server.log 2>&1 < /dev/null &)
 fi
-pgrep -f '[v]m-agent.js' >/dev/null || (cd ~/workspace/legal-rag && setsid nohup env WORKER_URL=https://legal-rag-relay.jishan-legal-rag.workers.dev node tools/tunnel/vm-agent.js >> vm-agent.log 2>&1 < /dev/null &)
+pgrep -f '[v]m-agent.js' >/dev/null || (cd ~/workspace/legal-rag && setsid nohup env WORKER_URL=https://legal-rag-relay.jurisvault.workers.dev node tools/tunnel/vm-agent.js >> vm-agent.log 2>&1 < /dev/null &)
 if ! up 3001; then
   (cd ~/workspace/legal-rag && setsid nohup ./run-test-instance.sh > /dev/null 2>&1 &)
 fi
