@@ -28,6 +28,80 @@ pub trait LlmClient: Send + Sync {
     }
 }
 
+/// Word-sized reveal chunks for an already-complete answer: the one
+/// chunking rule shared by every path that replays a finished answer
+/// to a streaming client (semantic-cache hits, verified annotations,
+/// and the non-streaming fallback in [`generate_with_fallback`]).
+/// Splitting inclusively on spaces keeps each chunk a whole word plus
+/// its trailing space, so concatenated chunks reproduce the answer
+/// byte-for-byte.
+pub fn answer_chunks(text: &str) -> impl Iterator<Item = &str> + '_ {
+    text.split_inclusive(' ').filter(|c| !c.is_empty())
+}
+
+/// Streaming generation with a non-streaming safety net (Piece 23).
+///
+/// Some providers answer the plain completion call correctly but
+/// cannot serve the streaming variant — the Gemini web bridge is the
+/// observed case: its stream yields no content at all, so a streaming
+/// Ask died after the sources with "llm stream returned no content"
+/// and zero answer text, while the blocking endpoint answered the
+/// same question fine. Generation therefore tries the stream first
+/// (real token-by-token delivery where the provider supports it) and,
+/// when the stream errors or produces no text, falls back to
+/// `complete()` with the same prompt and reveals the returned answer
+/// in word chunks, so the client still receives deltas and the
+/// caller's normal completion path (audit, metering, Done). Only
+/// when both calls fail does the error propagate.
+///
+/// Caveat: if a stream dies *mid*-answer, chunks already delivered
+/// stay delivered and the fallback re-reveals the full answer after
+/// them; the client's final render comes from the completed-answer
+/// event, which carries the authoritative text.
+pub async fn generate_with_fallback(
+    llm: &dyn LlmClient,
+    system: &str,
+    user: &str,
+    sink: &mut ChunkSink<'_>,
+) -> Result<String> {
+    match llm.complete_stream(system, user, sink).await {
+        Ok(text) if !text.trim().is_empty() => Ok(text),
+        Ok(_) => {
+            tracing::warn!(
+                "streaming generation produced no content; falling back to non-streaming completion"
+            );
+            reveal_completion(llm, system, user, sink).await
+        }
+        Err(e) => {
+            tracing::warn!(
+                error = %e,
+                "streaming generation failed; falling back to non-streaming completion"
+            );
+            reveal_completion(llm, system, user, sink).await
+        }
+    }
+}
+
+/// The fallback half of [`generate_with_fallback`]: one blocking
+/// completion, revealed to the sink in [`answer_chunks`]. An empty
+/// completion is an upstream failure, never an empty success — the
+/// caller must end in an error state, not a blank answer.
+async fn reveal_completion(
+    llm: &dyn LlmClient,
+    system: &str,
+    user: &str,
+    sink: &mut ChunkSink<'_>,
+) -> Result<String> {
+    let full = llm.complete(system, user).await?;
+    if full.trim().is_empty() {
+        return Err(Error::Upstream("llm returned no content".into()));
+    }
+    for chunk in answer_chunks(&full) {
+        sink(chunk);
+    }
+    Ok(full)
+}
+
 /// Whole-output provider failure pages, lowercased. Web-backed model
 /// bridges return their failure page as an ordinary HTTP 200 completion
 /// (the Gemini web bridge behind the test instance is the observed
@@ -401,10 +475,8 @@ impl LlmClient for MockLlm {
         sink: &mut ChunkSink<'_>,
     ) -> Result<String> {
         // Emit word-chunks so the mock path exercises the same UI code.
-        for chunk in self.response.split_inclusive(' ') {
-            if !chunk.is_empty() {
-                sink(chunk);
-            }
+        for chunk in answer_chunks(&self.response) {
+            sink(chunk);
         }
         crate::usage::record_llm(
             crate::usage::estimate_tokens(&self.response) / 4,

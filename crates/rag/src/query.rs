@@ -20,7 +20,7 @@ use crate::bm25::Bm25Index;
 use crate::cache::{hash_key, SemanticAnswerCache};
 use crate::embeddings::Embeddings;
 use crate::graph::{Entity, GraphStore, Relation};
-use crate::llm::{is_failure_output, LlmClient};
+use crate::llm::{answer_chunks, generate_with_fallback, is_failure_output, LlmClient};
 use crate::rerank::Reranker;
 use crate::vector_store::{is_searchable, parent_id, ChunkRecord, ScoredChunk, VectorStore};
 use crate::web::{FetchedPage, WebSearch};
@@ -2112,10 +2112,8 @@ impl QueryService {
                         mode,
                         verified: true,
                     });
-                    for chunk in hit.answer.split_inclusive(' ') {
-                        if !chunk.is_empty() {
-                            let _ = tx.send(QueryEvent::Delta { text: chunk.to_string() });
-                        }
+                    for chunk in answer_chunks(&hit.answer) {
+                        let _ = tx.send(QueryEvent::Delta { text: chunk.to_string() });
                     }
                     let _ = tx.send(QueryEvent::Done { answer: hit.answer, audit: None, expansions: Vec::new(), sub_agents: Vec::new() });
                     return Ok(());
@@ -2142,10 +2140,8 @@ impl QueryService {
                             mode,
                             verified: false,
                         });
-                        for chunk in hit.answer.split_inclusive(' ') {
-                            if !chunk.is_empty() {
-                                let _ = tx.send(QueryEvent::Delta { text: chunk.to_string() });
-                            }
+                        for chunk in answer_chunks(&hit.answer) {
+                            let _ = tx.send(QueryEvent::Delta { text: chunk.to_string() });
                         }
                         let _ = tx.send(QueryEvent::Done {
                             answer: hit.answer.clone(),
@@ -2204,7 +2200,14 @@ impl QueryService {
         // Only this generation call sees confidential (extra) source
         // text, so only it honors the private-LLM override.
         let gen_llm = llm_override.as_ref().unwrap_or(&self.llm);
-        let answer = gen_llm.complete_stream(&system, &user_prompt, &mut sink).await?;
+        // Piece 23: streamed generation with a non-streaming fallback —
+        // a provider that cannot stream (the Gemini bridge answers
+        // complete() but its stream yields no content) still produces
+        // answer deltas instead of a dead stream. Streamed and
+        // fallback text converge here: the failure-page guard, the
+        // citation audit, the treatment note and the Done below apply
+        // identically to both.
+        let answer = generate_with_fallback(gen_llm.as_ref(), &system, &user_prompt, &mut sink).await?;
         // Same failure-page guard as the blocking path (Piece 14):
         // no Done, no answer-cache store — the stream reports an
         // error and a retry regenerates.
