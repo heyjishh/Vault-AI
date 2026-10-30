@@ -41,5 +41,10 @@ fi
 export HF_HUB_OFFLINE="${HF_HUB_OFFLINE:-1}"
 export NO_PROXY="${NO_PROXY:+$NO_PROXY,}localhost,127.0.0.1"
 export no_proxy="${no_proxy:+$no_proxy,}localhost,127.0.0.1"
+# Surya's per-request inference timeout defaults to 600 s, which a
+# dense page/photo exceeds on a small CPU box (the request is killed
+# mid-flight and the whole OCR fails). An hour matches this
+# deployment's reality: OCR is slow here, not broken.
+export SURYA_INFERENCE_TIMEOUT_SECONDS="${SURYA_INFERENCE_TIMEOUT_SECONDS:-3600}"
 
 exec python3 "$REPO/tools/ocr/surya_sidecar.py"
