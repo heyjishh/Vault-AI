@@ -135,6 +135,34 @@ export const ragApi = {
   },
 }
 
+/** Per-file size cap (100 MB), enforced identically by the server;
+ *  checked here first so an oversize file fails fast with a clear
+ *  message instead of a raw transport error. */
+export const MAX_FILE_BYTES = 100 * 1024 * 1024
+/** Files up to this size go in one request; larger files are sent as
+ *  a sequence of parts (chunked upload sessions) because no single
+ *  request may approach the public path's per-message ceilings. */
+const SINGLE_SHOT_MAX = 8 * 1024 * 1024
+const PART_BYTES = 4 * 1024 * 1024
+
+export function fileSizeError(file: File): Error {
+  return new Error(
+    `${file.name} is ${(file.size / 1048576).toFixed(1)} MB — the limit is 100 MB per file`,
+  )
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = ''
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    binary += String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + 0x8000)))
+  }
+  return btoa(binary)
+}
+
+async function blobToBase64(blob: Blob): Promise<string> {
+  return bytesToBase64(new Uint8Array(await blob.arrayBuffer()))
+}
+
 export const vaultApi = {
   async search(q: string): Promise<DocSearchHit[]> {
     const r = await api.get<DocSearchHit[]>('/vault/search', { params: { q } }); return r.data
@@ -147,11 +175,13 @@ export const vaultApi = {
   },
   /**
    * Upload one file through the vault ingest route. `onProgress`
-   * reports the Uploading stage as a 0..1 fraction of the request
-   * body bytes sent (null when the transport cannot measure it);
-   * the promise itself resolves only when the server has finished
+   * reports the Uploading stage as a 0..1 fraction of the file's
+   * bytes sent (null when the transport cannot measure it); the
+   * promise itself resolves only when the server has finished
    * ingesting and indexing the document — that gap is the Indexing
    * stage, so a file is never "ready" before the server confirms it.
+   * Files over SINGLE_SHOT_MAX travel as chunked-upload parts and
+   * are assembled server-side into the same ingest call.
    */
   async uploadFile(
     title: string,
@@ -159,23 +189,45 @@ export const vaultApi = {
     matter_id?: string,
     onProgress?: (fraction: number | null) => void,
   ): Promise<IngestReport> {
-    const buf = await file.arrayBuffer()
-    let binary = ''
-    const bytes = new Uint8Array(buf)
-    for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i])
-    const content_base64 = btoa(binary)
+    if (file.size > MAX_FILE_BYTES) throw fileSizeError(file)
+    if (file.size <= SINGLE_SHOT_MAX) {
+      const content_base64 = await blobToBase64(file)
+      try {
+        const r = await api.post<IngestReport>(
+          '/vault/documents',
+          { title, file_name: file.name, content_base64, matter_id },
+          {
+            onUploadProgress: onProgress
+              ? (e) => onProgress(e.total ? Math.min(e.loaded / e.total, 1) : null)
+              : undefined,
+          },
+        )
+        return r.data
+      } catch (e) { throw new Error(err(e)) }
+    }
+    let uploadId: string | null = null
     try {
-      const r = await api.post<IngestReport>(
-        '/vault/documents',
-        { title, file_name: file.name, content_base64, matter_id },
-        {
-          onUploadProgress: onProgress
-            ? (e) => onProgress(e.total ? Math.min(e.loaded / e.total, 1) : null)
-            : undefined,
-        },
-      )
+      const init = await api.post<{ upload_id: string }>('/vault/uploads', {
+        file_name: file.name,
+        title,
+        total_size: file.size,
+        matter_id,
+      })
+      uploadId = init.data.upload_id
+      let sent = 0
+      for (let start = 0, idx = 0; start < file.size; start += PART_BYTES, idx++) {
+        const slice = file.slice(start, Math.min(start + PART_BYTES, file.size))
+        const content_base64 = await blobToBase64(slice)
+        await api.post(`/vault/uploads/${uploadId}/parts/${idx}`, { content_base64 })
+        sent += slice.size
+        onProgress?.(sent / file.size)
+      }
+      const r = await api.post<IngestReport>(`/vault/uploads/${uploadId}/complete`, {})
       return r.data
-    } catch (e) { throw new Error(err(e)) }
+    } catch (e) {
+      if (uploadId) api.delete(`/vault/uploads/${uploadId}`).catch(() => {})
+      throw new Error(err(e))
+    }
   },
   async uploadText(title: string, file_name: string, text: string, matter_id?: string): Promise<IngestReport> {
     try {
@@ -379,6 +431,49 @@ export const privateVaultApi = {
     try {
       const r = await api.post<PrivateDocMeta>('/private-vault/documents', body); return r.data
     } catch (e) { throw new Error(err(e)) }
+  },
+  /**
+   * Seal one file into the confidential vault. Same transport shape
+   * as the vault upload: a single-shot POST for small files, a
+   * chunked-upload session for large ones. `onBytesSent` fires when
+   * every byte has reached the server and only the sealing
+   * (parse/encrypt/embed) remains.
+   */
+  async uploadFile(
+    title: string | undefined,
+    file: File,
+    onProgress?: (fraction: number | null) => void,
+    onBytesSent?: () => void,
+  ): Promise<PrivateDocMeta> {
+    if (file.size > MAX_FILE_BYTES) throw fileSizeError(file)
+    if (file.size <= SINGLE_SHOT_MAX) {
+      const content_base64 = await blobToBase64(file)
+      onBytesSent?.()
+      return this.upload({ title, file_name: file.name, content_base64 })
+    }
+    let uploadId: string | null = null
+    try {
+      const init = await api.post<{ upload_id: string }>('/private-vault/uploads', {
+        file_name: file.name,
+        title,
+        total_size: file.size,
+      })
+      uploadId = init.data.upload_id
+      let sent = 0
+      for (let start = 0, idx = 0; start < file.size; start += PART_BYTES, idx++) {
+        const slice = file.slice(start, Math.min(start + PART_BYTES, file.size))
+        const content_base64 = await blobToBase64(slice)
+        await api.post(`/private-vault/uploads/${uploadId}/parts/${idx}`, { content_base64 })
+        sent += slice.size
+        onProgress?.(sent / file.size)
+      }
+      onBytesSent?.()
+      const r = await api.post<PrivateDocMeta>(`/private-vault/uploads/${uploadId}/complete`, {})
+      return r.data
+    } catch (e) {
+      if (uploadId) api.delete(`/private-vault/uploads/${uploadId}`).catch(() => {})
+      throw new Error(err(e))
+    }
   },
   async remove(id: string): Promise<void> {
     try { await api.delete(`/private-vault/documents/${id}`) }

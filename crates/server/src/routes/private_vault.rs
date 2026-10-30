@@ -132,7 +132,7 @@ pub struct PrivateUpload {
 pub async fn upload_document(
     State(state): State<AppState>,
     AuthUser(user): AuthUser,
-    Json(mut body): Json<PrivateUpload>,
+    Json(body): Json<PrivateUpload>,
 ) -> Result<Json<Value>, ApiError> {
     if !state.private_vault.is_unlocked(&user.id) {
         return Err(locked());
@@ -147,9 +147,29 @@ pub async fn upload_document(
     } else {
         return Err(bad_request("provide text or content_base64"));
     };
+    seal_upload(&state, &user, body, bytes).await.map(Json)
+}
+
+/// Shared completion for every confidential-vault upload path — the
+/// single-shot JSON route above and chunked-upload completion
+/// (routes::uploads): parse + chunk + embed without indexing, then
+/// seal. Identical behaviour whichever transport carried the bytes.
+pub(crate) async fn seal_upload(
+    state: &AppState,
+    user: &legal_rag_auth::User,
+    mut body: PrivateUpload,
+    bytes: Vec<u8>,
+) -> Result<Value, ApiError> {
+    if !state.private_vault.is_unlocked(&user.id) {
+        return Err(locked());
+    }
+    if body.file_name.trim().is_empty() {
+        return Err(bad_request("file_name is required"));
+    }
     if bytes.is_empty() {
         return Err(bad_request("empty document"));
     }
+    crate::routes::uploads::check_file_size(&body.file_name, bytes.len() as u64)?;
     let title = body
         .title
         .clone()
@@ -192,8 +212,8 @@ pub async fn upload_document(
     // Bill the embedding usage; log no filename, no excerpt — the activity
     // trail must not leak what the vault holds.
     settle(
-        &state,
-        &user,
+        state,
+        user,
         &usage_scope,
         "private_upload",
         "Confidential document",
@@ -201,13 +221,13 @@ pub async fn upload_document(
         "",
         chunk_count,
     );
-    Ok(Json(json!({
+    Ok(json!({
         "id": meta.id,
         "title": meta.title,
         "sha256": meta.sha256,
         "chunks": meta.chunks,
         "created_at": meta.created_at,
-    })))
+    }))
 }
 
 pub async fn delete_document(

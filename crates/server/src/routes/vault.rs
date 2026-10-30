@@ -194,7 +194,7 @@ pub async fn upload_document(
 ) -> Result<Json<IngestReport>, ApiError> {
     use base64::Engine as _;
     crate::routes::billing::ensure_quota(&state, &user.id)?;
-    let bytes: Vec<u8> = match (body.content_base64, body.text) {
+    let bytes: Vec<u8> = match (body.content_base64.take(), body.text.take()) {
         (Some(b64), _) => base64::engine::general_purpose::STANDARD
             .decode(b64.trim())
             .map_err(|e| {
@@ -208,9 +208,23 @@ pub async fn upload_document(
             .into())
         }
     };
+    run_upload(&state, &user, body, bytes).await.map(Json)
+}
+
+/// Shared completion for every vault upload path — the single-shot
+/// JSON route above and chunked-upload completion (routes::uploads):
+/// size cap, filing, metadata, ingest, billing. Identical behaviour
+/// whichever transport carried the bytes.
+pub(crate) async fn run_upload(
+    state: &AppState,
+    user: &legal_rag_auth::User,
+    mut body: UploadRequest,
+    bytes: Vec<u8>,
+) -> Result<IngestReport, ApiError> {
     if bytes.is_empty() {
         return Err(legal_rag_common::Error::BadRequest("empty upload".to_string()).into());
     }
+    crate::routes::uploads::check_file_size(&body.file_name, bytes.len() as u64)?;
     // Resolve the filing matter up front (unknown id → 404). Filing
     // into a space brief requires an editor+ role there.
     let target_matter = match &body.matter_id {
@@ -219,7 +233,7 @@ pub async fn upload_document(
                 .matters
                 .get(mid)
                 .ok_or_else(|| legal_rag_common::Error::NotFound("brief not found".to_string()))?;
-            crate::routes::matters::require_edit(&state, &user, &matter)?;
+            crate::routes::matters::require_edit(state, user, &matter)?;
             Some(mid.clone())
         }
         _ => state.matters.default_id(),
@@ -272,8 +286,8 @@ pub async fn upload_document(
     // deduped re-uploads) — the admin user-data purge keys off this.
     state.rag.set_document_owner(&report.doc_id, &user.id);
     crate::routes::billing::settle_matter(
-        &state,
-        &user,
+        state,
+        user,
         &scope,
         "upload",
         &body.file_name,
@@ -285,7 +299,7 @@ pub async fn upload_document(
         0,
         target_matter.clone(),
     );
-    Ok(Json(IngestReport {
+    Ok(IngestReport {
         documents: 1,
         chunks: report.chunks,
         entities: report.entities,
@@ -295,7 +309,7 @@ pub async fn upload_document(
         matter_id: target_matter,
         skipped_encrypted: Vec::new(),
         failed: Vec::new(),
-    }))
+    })
 }
 
 #[derive(Deserialize)]

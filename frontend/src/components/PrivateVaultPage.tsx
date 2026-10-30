@@ -95,16 +95,6 @@ export default function PrivateVaultPage() {
   }
   const patchSealItem = (key: number, patch: Partial<SealItem>) =>
     setSealItems(sealItemsRef.current.map((i) => (i.key === key ? { ...i, ...patch } : i)))
-  const readFileBase64 = (f: File): Promise<string> =>
-    new Promise((resolve, reject) => {
-      const reader = new FileReader()
-      reader.onload = () => {
-        const s = String(reader.result)
-        resolve(s.slice(s.indexOf(',') + 1))
-      }
-      reader.onerror = () => reject(new Error(`could not read ${f.name}`))
-      reader.readAsDataURL(f)
-    })
   const processSealQueue = async () => {
     if (sealProcessingRef.current) return
     sealProcessingRef.current = true
@@ -117,13 +107,12 @@ export default function PrivateVaultPage() {
           let meta: PrivateDocMeta
           if (p.kind === 'file') {
             patchSealItem(item.key, { status: 'uploading', progress: null, startedAt: Date.now() })
-            const content_base64 = await readFileBase64(p.file)
-            patchSealItem(item.key, { status: 'sealing', progress: null })
-            meta = await privateVaultApi.upload({
-              title: p.docTitle,
-              file_name: p.file.name,
-              content_base64,
-            })
+            meta = await privateVaultApi.uploadFile(
+              p.docTitle,
+              p.file,
+              (fraction) => patchSealItem(item.key, { status: 'uploading', progress: fraction }),
+              () => patchSealItem(item.key, { status: 'sealing', progress: null }),
+            )
           } else {
             patchSealItem(item.key, { status: 'sealing', progress: null, startedAt: Date.now() })
             meta = await privateVaultApi.upload({

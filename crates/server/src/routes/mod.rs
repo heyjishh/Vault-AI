@@ -1,4 +1,4 @@
-use axum::extract::State;
+use axum::extract::{DefaultBodyLimit, State};
 use axum::routing::{delete, get, patch, post};
 use axum::{Json, Router};
 
@@ -17,6 +17,7 @@ pub mod matters;
 pub mod mcp;
 pub mod spaces;
 pub mod private_vault;
+pub mod uploads;
 pub mod settings;
 pub mod vault;
 
@@ -40,6 +41,28 @@ pub(crate) fn citator_context(
 
 /// Assemble the full API router.
 pub fn router(state: AppState) -> Router {
+    // Upload body limits (Piece 25). Axum's Json extractor caps bodies
+    // at 2 MB by default, which silently 413'd every real-world file.
+    // The two document POST routes accept a whole file as base64 JSON:
+    // a 100 MB file is ~133 MB of base64, so their limit is 145 MB
+    // (the handlers enforce the exact 100 MB decoded cap). Chunked
+    // upload sessions (routes::uploads) take small parts instead —
+    // 10 MB of room for an 8 MB part plus its envelope — because no
+    // single request may approach the tunnel/edge ceilings.
+    let big_uploads = Router::new()
+        .route("/api/v1/vault/documents", post(vault::upload_document))
+        .route("/api/v1/private-vault/documents", post(private_vault::upload_document))
+        .layer(DefaultBodyLimit::max(145 * 1024 * 1024));
+    let chunked_uploads = Router::new()
+        .route("/api/v1/vault/uploads", post(uploads::vault_init))
+        .route("/api/v1/vault/uploads/{id}/parts/{index}", post(uploads::vault_part))
+        .route("/api/v1/vault/uploads/{id}/complete", post(uploads::vault_complete))
+        .route("/api/v1/vault/uploads/{id}", delete(uploads::vault_abort))
+        .route("/api/v1/private-vault/uploads", post(uploads::pv_init))
+        .route("/api/v1/private-vault/uploads/{id}/parts/{index}", post(uploads::pv_part))
+        .route("/api/v1/private-vault/uploads/{id}/complete", post(uploads::pv_complete))
+        .route("/api/v1/private-vault/uploads/{id}", delete(uploads::pv_abort))
+        .layer(DefaultBodyLimit::max(10 * 1024 * 1024));
     Router::new()
         .route("/", get(crate::frontend::index))
         .route("/admin", get(crate::frontend::admin_index))
@@ -55,7 +78,7 @@ pub fn router(state: AppState) -> Router {
         .route("/api/v1/auth/oidc/callback", get(auth::oidc_callback))
         // Vault: document ingestion (S3 + direct upload).
         .route("/api/v1/vault/search", get(vault::search_documents))
-        .route("/api/v1/vault/documents", post(vault::upload_document).get(vault::list_documents))
+        .route("/api/v1/vault/documents", get(vault::list_documents))
         .route("/api/v1/vault/documents/{id}", delete(vault::delete_document))
         .route("/api/v1/vault/documents/{id}/chunks", get(vault::document_chunks))
         .route(
@@ -118,7 +141,7 @@ pub fn router(state: AppState) -> Router {
         .route("/api/v1/private-vault/lock", post(private_vault::lock))
         .route(
             "/api/v1/private-vault/documents",
-            get(private_vault::list_documents).post(private_vault::upload_document),
+            get(private_vault::list_documents),
         )
         .route("/api/v1/private-vault/documents/{id}", delete(private_vault::delete_document))
         // Dashboard (user home).
@@ -156,6 +179,8 @@ pub fn router(state: AppState) -> Router {
         .route("/api/v1/admin/annotations/from-activity", post(annotations::from_activity))
         .route("/api/v1/admin/annotations/{id}", delete(annotations::delete_annotation))
         .route("/api/v1/admin/annotations/{id}/toggle", post(annotations::toggle_annotation))
+        .merge(big_uploads)
+        .merge(chunked_uploads)
         .with_state(state)
         .fallback(crate::frontend::fallback)
 }
