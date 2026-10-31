@@ -239,7 +239,7 @@ export default function DashboardPage({ go, openMatter }: { go: (v: View) => voi
                 <button
                   key={s}
                   onClick={() => askNow(s)}
-                  className="rounded-lex border border-stone-200 dark:border-white/10 bg-white/70 px-3 py-1.5 text-[12px] text-stone-500 dark:text-stone-400 hover:text-ink hover:border-stone-300 transition-colors"
+                  className="rounded-lex border border-stone-200 dark:border-white/10 bg-white/70 dark:bg-white/10 px-3 py-1.5 text-[12px] text-stone-500 dark:text-stone-400 hover:text-ink hover:border-stone-300 transition-colors"
                 >
                   {s}
                 </button>

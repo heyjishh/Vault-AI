@@ -15,6 +15,19 @@ live**, what is **built but unverified**, and what is **roadmap**.
 ## [Unreleased]
 
 ### Added
+- **Dashboard suggestion chips darkened + stale-tab note
+  (1 Nov 2026, Piece 59).** JISHAN reported the dark issues
+  "still not fixed" on Dashboard/Research/Agents/Vault after
+  Piece 58. A re-audit of those four pages found exactly one
+  remaining real defect — the Dashboard suggestion chips
+  (`bg-white/70`, no dark variant) — now `dark:bg-white/10`.
+  Everything else he flagged maps to defects already fixed in
+  Pieces 55–58, and the serving side checks out: the public URL
+  and both instances send `Cache-Control: no-cache` and serve
+  the current bundle — but an already-open app tab keeps running
+  the build it loaded with, so the fixes only appear after a
+  page reload. Verified: build clean, chip variant in the
+  shipped bundle, live on test + public.
 - **Dark-mode sweep — fix everywhere (1 Nov 2026, Piece 58).**
   JISHAN: "fix everywhere" — a full audit of both apps for the
   light-surface family Pieces 55–57 kept hitting one spot at a
