@@ -15,6 +15,20 @@ live**, what is **built but unverified**, and what is **roadmap**.
 ## [Unreleased]
 
 ### Added
+- **White cards made prominent (1 Nov 2026, Piece 52).** JISHAN:
+  "make all white cards more prominent and more knownable" —
+  flat white cards on a near-white page were washing out. Two
+  moves, both apps: (1) every card-pattern surface
+  (`rounded-lex-lg` + `bg-white` — the pattern all pages' cards
+  share) now carries a real resting elevation (soft 1px contact
+  shadow + a 34px drop shadow); dark-mode cards get a stronger
+  edge (white/16) plus a deep shadow. Dialogs, menus and popovers
+  (shadow-lex carriers) and the chat composers are excluded.
+  (2) The light page wash no longer starts at pure white
+  (`#f6f7f5 → #eff2ec → #e7f0e9`), so white cards read as bright
+  raised surfaces against it. Verified: builds clean, the
+  elevation rule + new wash present in both shipped bundles,
+  live on test + public incl. /admin/.
 - **The real inner ring found + removed (1 Nov 2026, Piece 51).**
   JISHAN pasted the composer HTML: "still coming the green, when
   hotting on input box" — the green ring on the input was the
