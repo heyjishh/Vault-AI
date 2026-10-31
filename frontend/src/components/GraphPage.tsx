@@ -59,7 +59,7 @@ export default function GraphPage() {
   })
 
   return (
-    <div className="max-w-5xl mx-auto px-6 py-10">
+    <div className="w-full px-6 py-10">
       <h1 className="font-display text-[2rem] tracking-tight">Knowledge Graph</h1>
       <p className="text-stone-500 mt-1.5 text-[15px]">
         Entities and relations extracted from your corpus. Click a node to inspect it.

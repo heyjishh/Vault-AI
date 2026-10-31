@@ -66,7 +66,7 @@ export default function DraftPage({ matterId: fixedMatterId, go }: { matterId?: 
   }
 
   return (
-    <div className="max-w-5xl mx-auto px-6 py-8">
+    <div className="w-full px-6 py-8">
       <h1 className="font-display text-[2rem] tracking-tight">Draft</h1>
       <p className="text-stone-500 mt-1.5 text-[15px]">
         Generate a structured first draft. Facts you don't supply become [BRACKETED PLACEHOLDERS] — the drafter never invents citations.

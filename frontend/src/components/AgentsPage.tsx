@@ -70,7 +70,7 @@ export default function AgentsPage({ go }: { go?: (view: string) => void } = {})
   })
 
   return (
-    <div className="max-w-4xl mx-auto px-6 py-10">
+    <div className="w-full px-6 py-10">
       <h1 className="font-display text-[2rem] tracking-tight flex items-center gap-3">
         <Bot className="text-stone-500" /> Agents
       </h1>

@@ -19,7 +19,7 @@ export default function OverviewPage() {
   const recent = [...(docs ?? [])].sort((a, b) => b.ingested_at.localeCompare(a.ingested_at)).slice(0, 5)
 
   return (
-    <div className="max-w-5xl mx-auto px-6 py-10">
+    <div className="w-full px-6 py-10">
       <PageHead title="Overview" sub="See, understand, act — workspace health at a glance (Harvey Command Center pattern)." />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-6">

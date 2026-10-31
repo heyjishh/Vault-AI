@@ -98,7 +98,7 @@ export default function UsersPage({ me }: { me: Me }) {
   })
 
   return (
-    <div className="max-w-5xl mx-auto px-6 py-10">
+    <div className="w-full px-6 py-10">
       <PageHead title="Users" sub="Manage workspace membership and roles. Admins can access the Command Center; grant the role sparingly." />
       {error && <div className="mt-5"><ErrorBanner message={error} /></div>}
 

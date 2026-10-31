@@ -142,7 +142,7 @@ export default function DashboardPage({ go, openMatter }: { go: (v: View) => voi
   }
 
   return (
-    <div className="max-w-5xl mx-auto px-6 py-8">
+    <div className="w-full px-6 py-8">
       {/* ——— Clause hero ——— */}
       <div className="rounded-lex-lg border border-stone-200 bg-gradient-to-br from-white via-white to-[#f4f1ea] shadow-lex px-6 py-6 sm:px-8">
         <div className="flex items-start gap-5">
@@ -156,7 +156,7 @@ export default function DashboardPage({ go, openMatter }: { go: (v: View) => voi
               Ask me anything across your briefs and vault — every answer cited to its source.
             </p>
             <form
-              className="mt-4 flex items-center gap-2 rounded-full border border-stone-200 bg-white shadow-lex-sm pl-4 pr-1.5 py-1.5 focus-within:border-stone-400 transition-colors max-w-xl"
+              className="mt-4 flex items-center gap-2 rounded-full border border-stone-200 bg-white shadow-lex-sm pl-4 pr-1.5 py-1.5 focus-within:border-stone-400 transition-colors"
               onSubmit={(e) => { e.preventDefault(); askNow(heroQ) }}
             >
               <Sparkles size={15} className="text-stone-400 shrink-0" />

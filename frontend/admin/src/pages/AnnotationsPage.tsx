@@ -91,7 +91,7 @@ export default function AnnotationsPage() {
   const picked = captured.find((e) => e.id === pickedId)
 
   return (
-    <div className="max-w-5xl mx-auto px-6 py-10">
+    <div className="w-full px-6 py-10">
       <PageHead
         title="Verified Answers"
         sub="Curate an answer once, and matching questions are served it verbatim — badged as verified. Annotations bind to the corpus: upload or remove a document and they pause as stale until re-created."

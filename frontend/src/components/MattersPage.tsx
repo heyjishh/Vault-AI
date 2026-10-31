@@ -71,7 +71,7 @@ export default function MattersPage({ open }: { open: (id: string) => void }) {
   })
 
   return (
-    <div className="max-w-5xl mx-auto px-6 py-8">
+    <div className="w-full px-6 py-8">
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="font-display text-[2rem] tracking-tight">Briefs</h1>

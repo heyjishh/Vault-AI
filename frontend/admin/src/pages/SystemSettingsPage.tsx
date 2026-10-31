@@ -166,7 +166,7 @@ export default function SystemSettingsPage() {
   const { data: workflows, isLoading } = useQuery({ queryKey: ['workflows'], queryFn: adminApi.workflows })
 
   return (
-    <div className="max-w-5xl mx-auto px-6 py-10">
+    <div className="w-full px-6 py-10">
       <PageHead title="Retrieval & Models" sub="How answers are produced in this workspace — providers, retrieval modes, reranking and caches." />
 
       <h2 className="font-display text-xl tracking-tight mt-8 mb-3">Semantic cache</h2>

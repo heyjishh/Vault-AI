@@ -86,7 +86,7 @@ export default function GoldenPage() {
   const captured = (insights.data?.recent_activity ?? []).filter((e) => e.kind === 'query')
 
   return (
-    <div className="max-w-5xl mx-auto px-6 py-10">
+    <div className="w-full px-6 py-10">
       <PageHead
         title="Golden Ruleset"
         sub="The evaluation set that keeps the RAG honest. Promote real user questions into rules with expected terms and sources, then run the set — a rule passes only if the live answer contains every expected term and cites every expected source."

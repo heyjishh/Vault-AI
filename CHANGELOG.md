@@ -14,6 +14,22 @@ live**, what is **built but unverified**, and what is **roadmap**.
 
 ## [Unreleased]
 
+### Changed
+- **Full-width pages everywhere (31 Oct 2026, Piece 32).** Every page
+  sat in a centred, max-width column (3xl–5xl), leaving large empty
+  margins on both sides on a wide screen — the Dashboard screenshot
+  made it obvious. All fourteen user-app page frames (Dashboard,
+  Briefs, Brief workspace, Ask, Interact, Draft, Research, Agents,
+  Vault, Search documents, Private Vault, Knowledge, Plans & Billing,
+  custom tabs) and all nine Command Center page frames now span the
+  full width of the content area (`w-full`, same 24px side padding —
+  no centred column, no auto margins). The Dashboard hero's
+  "Ask Clause" input stretches with its card too. Component-level
+  widths are unchanged (modals, form fields, table cells, the Ask
+  Sources panel at 350px, the sidebar at 256px). Frontend-only;
+  both bundles rebuilt and verified served on test, prod, and the
+  public site, with no old centred frame left in either bundle.
+
 ### Added
 - **Insight button on document sources (31 Oct 2026, Piece 31).**
   Every vault-document source now carries an **Insight** button that

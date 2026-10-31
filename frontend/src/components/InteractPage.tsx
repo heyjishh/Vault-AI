@@ -363,7 +363,7 @@ export default function InteractPage({ matterId, go }: { matterId?: string; go?:
 
   return (
     <div
-      className={`max-w-5xl mx-auto px-6 py-8 ${dragging ? 'outline-dashed outline-2 outline-stone-400 outline-offset-[-8px]' : ''}`}
+      className={`w-full px-6 py-8 ${dragging ? 'outline-dashed outline-2 outline-stone-400 outline-offset-[-8px]' : ''}`}
       onDragOver={(e) => { e.preventDefault(); setDragging(true) }}
       onDragLeave={() => setDragging(false)}
       onDrop={onDrop}

@@ -91,7 +91,7 @@ export default function PlansPage() {
   const exhausted = b.tokens_used >= b.token_quota
 
   return (
-    <div className="max-w-5xl mx-auto px-6 py-8">
+    <div className="w-full px-6 py-8">
       <h1 className="font-display text-[2rem] tracking-tight">Plans &amp; billing</h1>
       <p className="text-stone-500 mt-1.5 text-[15px]">
         Token-based plans. Every question, research run, workflow and document ingest draws from your monthly token pool.

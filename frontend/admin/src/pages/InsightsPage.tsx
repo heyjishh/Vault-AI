@@ -68,7 +68,7 @@ export default function InsightsPage() {
     d.recent_activity.find((e) => e.kind === 'query' && e.title.toLowerCase() === question.toLowerCase())?.id
 
   return (
-    <div className="max-w-5xl mx-auto px-6 py-10">
+    <div className="w-full px-6 py-10">
       <PageHead
         title="Insights"
         sub="Every user, every question, every token — the whole product in one place. Click a user to see their work; click a top question to promote it into the golden ruleset."

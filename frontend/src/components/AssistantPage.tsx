@@ -224,7 +224,7 @@ export default function AssistantPage({ matterId: fixedMatterId, go }: { matterI
   return (
     <div className="flex items-start">
       <div className="flex-1 min-w-0">
-        <div className="max-w-3xl mx-auto px-6 pb-16">
+        <div className="w-full px-6 pb-16">
       {scopeMatterId && (
         <div className="mt-6 flex items-center gap-2 rounded-lex border border-stone-200 bg-white px-3.5 py-2.5 text-[13px] shadow-lex">
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 flex-shrink-0" />

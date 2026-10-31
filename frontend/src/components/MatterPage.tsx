@@ -27,7 +27,7 @@ export default function MatterPage({ matterId, back, go }: { matterId: string; b
   const m = detail.data
 
   return (
-    <div className="max-w-5xl mx-auto px-6 py-8">
+    <div className="w-full px-6 py-8">
       <button onClick={back} className="flex items-center gap-1.5 text-[13px] text-stone-500 hover:text-ink">
         <ArrowLeft size={14} /> All briefs
       </button>

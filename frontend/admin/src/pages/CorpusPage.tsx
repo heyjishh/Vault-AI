@@ -32,7 +32,7 @@ export default function CorpusPage() {
   })
 
   return (
-    <div className="max-w-5xl mx-auto px-6 py-10">
+    <div className="w-full px-6 py-10">
       <PageHead title="Corpus & Vault" sub="Everything the assistant can cite. Manage indexed documents and run bucket ingestion." />
       {error && <div className="mt-5"><ErrorBanner message={error} /></div>}
       {note && (

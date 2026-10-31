@@ -52,7 +52,7 @@ export default function BillingPage() {
   const webhookUrl = `${window.location.origin}/api/v1/billing/webhook/youpi`
 
   return (
-    <div className="max-w-5xl mx-auto px-6 py-10">
+    <div className="w-full px-6 py-10">
       <PageHead
         title="Billing & Subscriptions"
         sub="Token plans, UPI payments via your own gateway, and per-user spend — money settles straight to the firm's bank."

@@ -94,8 +94,8 @@ export default function CustomizePage() {
     onError: (e) => setErr((e as Error).message),
   })
 
-  if (isLoading || !data || !form) return <div className="max-w-5xl mx-auto px-6 py-10"><Spinner label="Loading settings…" /></div>
-  if (error) return <div className="max-w-5xl mx-auto px-6 py-10"><ErrorBanner message={(error as Error).message} /></div>
+  if (isLoading || !data || !form) return <div className="w-full px-6 py-10"><Spinner label="Loading settings…" /></div>
+  if (error) return <div className="w-full px-6 py-10"><ErrorBanner message={(error as Error).message} /></div>
 
   const eff = data.effective
   const set = (patch: Partial<PanelSettings>) => setForm({ ...form, ...patch })
@@ -160,7 +160,7 @@ export default function CustomizePage() {
   }
 
   return (
-    <div className="max-w-5xl mx-auto px-6 py-10">
+    <div className="w-full px-6 py-10">
       <PageHead
         title="Customize"
         sub="Shape the user panel from here — branding, how it answers, which models it uses, and which tabs users see. Prompt editors are prefilled with the built-in default: edit the text to customize it."

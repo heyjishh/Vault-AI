@@ -182,7 +182,7 @@ export default function PrivateVaultPage() {
   const st = status.data
 
   return (
-    <div className="max-w-3xl mx-auto px-6 py-10">
+    <div className="w-full px-6 py-10">
       <div className="mb-8">
         <h1 className="font-display text-[2rem] tracking-tight">Confidential Vault</h1>
         <p className="text-stone-500 mt-1.5 text-[15px] max-w-xl">

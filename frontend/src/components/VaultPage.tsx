@@ -216,7 +216,7 @@ export default function VaultPage() {
   const busy = filesBusy || pasteBusy || ingest.isPending
 
   return (
-    <div className="max-w-4xl mx-auto px-6 py-10">
+    <div className="w-full px-6 py-10">
       <h1 className="font-display text-[2rem] tracking-tight">Vault</h1>
       <p className="text-stone-500 mt-1.5 text-[15px]">
         Documents are parsed (PDF text layer + OCR fallback), chunked, embedded and added to the knowledge graph.
