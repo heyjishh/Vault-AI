@@ -55,8 +55,8 @@ button, a, input, select, textarea, [role="button"], [role="switch"], label {
    white box: the element paints its surface via padding-box and the
    conic via border-box over a transparent 1px border, and the
    registered --rb-angle custom property rotates the conic smoothly.
-   Piece 48: on focus the plain green halo (looked odd) is gone —
-   the border goes full spectrum and pulses instead (below).
+   On focus it runs faster with a soft green halo (Piece 48's
+   full-spectrum focus was tried and reverted the same night).
    Browsers without @property show the border statically. */
 @property --rb-angle { syntax: '<angle>'; initial-value: 0deg; inherits: false; }
 @keyframes rbRun { to { --rb-angle: 360deg; } }
@@ -71,18 +71,9 @@ button, a, input, select, textarea, [role="button"], [role="switch"], label {
   transition: box-shadow .25s ease;
 }
 html.dark .running-border { --rb-surface: #0a1a12; }
-/* Piece 48: focus goes crazy — the border swaps to a full rainbow
-   spectrum spinning at 1.4s with a breathing multi-colour glow.
-   The content is untouched (only the border-box layer changes). */
-@keyframes rbGlow {
-  0%, 100% { box-shadow: 0 0 24px -4px rgba(33,192,99,.50), 0 0 48px -8px rgba(124,58,237,.35); }
-  50% { box-shadow: 0 0 34px -2px rgba(42,208,111,.65), 0 0 64px -6px rgba(0,194,255,.40); }
-}
 .running-border:focus-within {
-  background:
-    linear-gradient(var(--rb-surface), var(--rb-surface)) padding-box,
-    conic-gradient(from var(--rb-angle), #ff004c, #ff8a00, #ffee00, #21c063, #00c2ff, #7c3aed, #ff004c) border-box;
-  animation: rbRun 1.4s linear infinite, rbGlow 1.6s ease-in-out infinite;
+  animation-duration: 2.4s;
+  box-shadow: 0 0 0 3px rgba(33,192,99,.12), 0 14px 34px -14px rgba(33,192,99,.38);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -90,7 +81,7 @@ html.dark .running-border { --rb-surface: #0a1a12; }
   .skeleton { animation: none; }
   .card-hover { transition: none; }
   .card-hover:hover { transform: none; box-shadow: none; }
-  .running-border, .running-border:focus-within { animation: none; }
+  .running-border { animation: none; }
 }
 
 /* REA'd from harvey.ai — warm ivory paper, ink text, hairline borders */

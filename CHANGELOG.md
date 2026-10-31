@@ -25,15 +25,17 @@ live**, what is **built but unverified**, and what is **roadmap**.
   history entries, and sidebar recent-research clears. No delete
   can fire on a stray click anymore. Verified: build clean, the
   typed gate present in the shipped bundle, live on test + public.
-- **Composer focus goes full spectrum (1 Nov 2026, Piece 48).**
-  JISHAN: "remove the click green border highlight, it looks odd
-  in input box, show something crazy" — the Piece 46 focus halo is
-  gone; clicking into the Ask/Interact box now swaps its running
-  border to a full rainbow spectrum spinning at 1.4s with a
-  breathing multi-colour glow. Resting state unchanged (brand
-  green); reduced-motion stills the focus state too. Verified:
-  build clean, `rbGlow` in the shipped bundle, live on test +
-  public.
+- **Composer focus goes full spectrum (1 Nov 2026, Piece 48) —
+  REVERTED same night (Piece 49).** JISHAN: "remove the click
+  green border highlight, it looks odd in input box, show
+  something crazy" — clicking into the Ask/Interact box swapped
+  its running border to a full rainbow spectrum spinning at 1.4s
+  with a breathing multi-colour glow. JISHAN then asked to revert
+  it ("make it same what it is before"), so Piece 49 removes the
+  rainbow focus entirely: focus is back to Piece 46's behaviour —
+  the brand-green run speeds up (2.4s) with the soft green halo.
+  Verified for the revert: build clean, no `rbGlow` in the
+  shipped bundle, live on test + public.
 - **Running border on the chat composers (1 Nov 2026, Piece 46).**
   JISHAN: "want a running border in chat section of input box,
   that cover all white box" — the Ask and Interact composer boxes
@@ -41,8 +43,9 @@ live**, what is **built but unverified**, and what is **roadmap**.
   perimeter of the box (`.running-border`: registered `--rb-angle`
   rotating a border-box conic over the surface; one bright chase
   segment + one softer segment, 4.5s loop). While the box has
-  focus it runs faster (2.4s) with a soft green halo. (Focus
-  behaviour replaced by Piece 48.) Dark surface
+  focus it runs faster (2.4s) with a soft green halo. (Piece 48's
+  rainbow focus briefly replaced this, then Piece 49 reverted to
+  it.) Dark surface
   follows the theme; reduced-motion stills it; browsers without
   `@property` show it statically. Verified: build clean, keyframes
   + class in the shipped bundle, live on test and public.
