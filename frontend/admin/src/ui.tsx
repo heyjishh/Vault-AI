@@ -67,9 +67,60 @@ export function DualToneBackdrop({ fixed = false }: { fixed?: boolean }) {
   )
 }
 
+/**
+ * Piece 42: the jurisvault.ai auth scene, ported from the user app —
+ * the brand site's running sign-in background (deep-emerald base,
+ * 1px grid, two counter-rotating conic rings, a pulsing core glow,
+ * twinkling spark dots; recipes in index.css). Rendered only by the
+ * admin sign-in (AuthGate), whose root carries `dark auth-scene`,
+ * so the scene is always dark whatever the app theme. Purely
+ * decorative: every layer is pointer-events-none + aria-hidden.
+ * Spark tuples: [left %, top %, twinkle delay s, size px].
+ */
+const AUTH_SPARKS: ReadonlyArray<readonly [number, number, number, number]> = [
+  [8, 18, 0, 3], [16, 72, 0.6, 2], [24, 34, 1.4, 3], [33, 86, 0.3, 2],
+  [42, 12, 2.1, 2], [55, 64, 1.0, 3], [63, 26, 1.8, 2], [71, 80, 0.9, 3],
+  [78, 44, 2.6, 2], [86, 16, 0.2, 3], [91, 58, 1.2, 2], [95, 88, 2.2, 2],
+  [48, 44, 3.0, 2], [5, 52, 1.6, 2],
+]
+
+export function AuthScene() {
+  return (
+    <>
+      <div aria-hidden="true" className="auth-scene-base" />
+      <div aria-hidden="true" className="auth-grid" />
+      <div aria-hidden="true" className="auth-ring-wrap">
+        <div
+          className="auth-ring"
+          style={{ width: '34rem', height: '34rem', maxWidth: '90vmin', maxHeight: '90vmin' }}
+        />
+        <div
+          className="auth-ring auth-ring-rev"
+          style={{ width: '48rem', height: '48rem', maxWidth: '90vmin', maxHeight: '90vmin' }}
+        />
+      </div>
+      <div aria-hidden="true" className="auth-core" />
+      {AUTH_SPARKS.map(([left, top, delay, size], i) => (
+        <span
+          key={i}
+          aria-hidden="true"
+          className="auth-spark"
+          style={{
+            left: `${left}%`,
+            top: `${top}%`,
+            width: size,
+            height: size,
+            animationDelay: `${delay}s`,
+          }}
+        />
+      ))}
+    </>
+  )
+}
+
 export function StatCard({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
   return (
-    <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] px-5 py-4">
+    <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] px-5 py-4">
       <p className="text-meta text-stone-500 dark:text-stone-400 font-medium">{label}</p>
       <p className="font-display text-3xl mt-1.5 tracking-tight">{value}</p>
       {sub && <p className="text-meta text-stone-500 dark:text-stone-400 mt-1">{sub}</p>}

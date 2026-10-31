@@ -56,7 +56,7 @@ export default function Shell({ user, onLogout }: { user: Me; onLogout: () => vo
               onClick={() => setView(id)}
               className={`w-full flex items-center gap-3 rounded-lex px-3 py-2 text-[14px] transition-colors ${
                 view === id
-                  ? 'bg-stone-100 dark:bg-[#26281f] text-ink dark:text-[#f4f2ee] font-medium shadow-[inset_2px_0_0_var(--bronze)]'
+                  ? 'bg-stone-100 dark:bg-[#122419] text-ink dark:text-[#f4f2ee] font-medium shadow-[inset_2px_0_0_var(--bronze)]'
                   : 'text-stone-600 dark:text-stone-300 hover:bg-stone-100/70 dark:hover:bg-white/5 hover:text-ink'
               }`}
             >

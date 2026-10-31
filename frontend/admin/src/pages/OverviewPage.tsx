@@ -40,7 +40,7 @@ export default function OverviewPage() {
       ) : recent.length === 0 ? (
         <p className="text-[15px] text-stone-500 dark:text-stone-400">No documents yet. Ingest from Corpus &amp; Vault.</p>
       ) : (
-        <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] overflow-hidden">
+        <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] overflow-hidden">
           {recent.map((d, i) => (
             <div key={d.id} className={`flex items-center justify-between px-5 py-3 ${i > 0 ? 'border-t border-stone-200 dark:border-white/10' : ''}`}>
               <div className="min-w-0">

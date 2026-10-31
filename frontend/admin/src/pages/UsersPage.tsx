@@ -33,7 +33,7 @@ function PurgePanel({ user, onClose }: { user: AdminUser; onClose: () => void })
             {receipt.brief_filings_removed} brief filings) and <strong>{receipt.history_entries_removed}</strong> history
             entries. The account, feedback, Private Vault and payment data were not touched.
           </p>
-          <button onClick={onClose} className="mt-4 rounded-lex border border-stone-300 dark:border-white/10 bg-white dark:bg-[#1d1f19] px-3 py-1.5 text-[13px] font-medium">
+          <button onClick={onClose} className="mt-4 rounded-lex border border-stone-300 dark:border-white/10 bg-white dark:bg-[#0a1a12] px-3 py-1.5 text-[13px] font-medium">
             Close
           </button>
         </>
@@ -56,7 +56,7 @@ function PurgePanel({ user, onClose }: { user: AdminUser; onClose: () => void })
             <input
               value={typed}
               onChange={(e) => setTyped(e.target.value)}
-              className="mt-1.5 w-full max-w-md rounded-lex border border-stone-300 dark:border-white/10 bg-white dark:bg-[#1d1f19] px-3 py-2 text-[14px]"
+              className="mt-1.5 w-full max-w-md rounded-lex border border-stone-300 dark:border-white/10 bg-white dark:bg-[#0a1a12] px-3 py-2 text-[14px]"
               placeholder={user.email}
             />
           </label>
@@ -68,7 +68,7 @@ function PurgePanel({ user, onClose }: { user: AdminUser; onClose: () => void })
             >
               {purge.isPending ? 'Deleting…' : 'Permanently delete this data'}
             </button>
-            <button onClick={onClose} className="rounded-lex border border-stone-300 dark:border-white/10 bg-white dark:bg-[#1d1f19] px-3 py-2 text-[13px] font-medium">
+            <button onClick={onClose} className="rounded-lex border border-stone-300 dark:border-white/10 bg-white dark:bg-[#0a1a12] px-3 py-2 text-[13px] font-medium">
               Cancel
             </button>
           </div>
@@ -105,10 +105,10 @@ export default function UsersPage({ me }: { me: Me }) {
       {isLoading ? (
         <Spinner label="Loading users…" />
       ) : (
-        <div className="mt-6 rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] overflow-hidden">
+        <div className="mt-6 rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] overflow-hidden">
           <table className="w-full text-left">
             <thead>
-              <tr className="border-b border-stone-200 dark:border-white/10 bg-stone-100/60 dark:bg-[#26281f]/60 text-[12px] text-stone-500 dark:text-stone-400">
+              <tr className="border-b border-stone-200 dark:border-white/10 bg-stone-100/60 dark:bg-[#122419]/60 text-[12px] text-stone-500 dark:text-stone-400">
                 <th className="px-5 py-3 font-medium">User</th>
                 <th className="px-5 py-3 font-medium">Role</th>
                 <th className="px-5 py-3 font-medium">Joined</th>
@@ -120,7 +120,7 @@ export default function UsersPage({ me }: { me: Me }) {
                 <tr key={u.id} className="border-b border-stone-200 dark:border-white/10 last:border-0 hover:bg-stone-100/40 dark:hover:bg-white/5">
                   <td className="px-5 py-3.5">
                     <div className="flex items-center gap-3">
-                      <span className="w-8 h-8 rounded-full bg-stone-100 dark:bg-[#26281f] border border-stone-200 dark:border-white/10 flex items-center justify-center text-stone-500 dark:text-stone-400">
+                      <span className="w-8 h-8 rounded-full bg-stone-100 dark:bg-[#122419] border border-stone-200 dark:border-white/10 flex items-center justify-center text-stone-500 dark:text-stone-400">
                         {u.role === 'admin' ? <ShieldCheck size={15} /> : <UserIcon size={15} />}
                       </span>
                       <div>
@@ -131,7 +131,7 @@ export default function UsersPage({ me }: { me: Me }) {
                   </td>
                   <td className="px-5 py-3.5">
                     <span className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] font-semibold ${
-                      u.role === 'admin' ? 'bg-ink text-ivory border-ink' : 'bg-stone-100 dark:bg-[#26281f] text-stone-600 dark:text-stone-300 border-stone-200 dark:border-white/10'
+                      u.role === 'admin' ? 'bg-ink text-ivory border-ink' : 'bg-stone-100 dark:bg-[#122419] text-stone-600 dark:text-stone-300 border-stone-200 dark:border-white/10'
                     }`}>
                       {u.role}
                     </span>

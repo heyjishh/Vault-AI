@@ -193,7 +193,7 @@ export default function DashboardPage({ go, openMatter }: { go: (v: View) => voi
   return (
     <div className="w-full px-6 py-8">
       {/* ——— Clause hero ——— */}
-      <div className="relative overflow-hidden rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] px-6 py-6 sm:px-8">
+      <div className="relative overflow-hidden rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] px-6 py-6 sm:px-8">
         {/* Piece 36: no local glow here — AppShell's fixed layer glows
             behind the whole app, this card included. */}
         <div className="relative flex items-start gap-5">
@@ -211,7 +211,7 @@ export default function DashboardPage({ go, openMatter }: { go: (v: View) => voi
               Ask me anything across your briefs and vault — every answer cited to its source.
             </p>
             <form
-              className="mt-4 flex items-center gap-2 rounded-lex border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] pl-4 pr-1.5 py-1.5 focus-within:border-stone-400 transition-colors"
+              className="mt-4 flex items-center gap-2 rounded-lex border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] pl-4 pr-1.5 py-1.5 focus-within:border-stone-400 transition-colors"
               onSubmit={(e) => { e.preventDefault(); askNow(heroQ) }}
             >
               <Sparkles size={15} className="text-stone-400 dark:text-stone-500 shrink-0" />
@@ -247,7 +247,7 @@ export default function DashboardPage({ go, openMatter }: { go: (v: View) => voi
 
       {/* ——— Subscription & activity ——— */}
       <div className="grid lg:grid-cols-5 gap-4 mt-5">
-        <div className="lg:col-span-3 rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] px-6 py-5 flex items-center gap-6">
+        <div className="lg:col-span-3 rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] px-6 py-5 flex items-center gap-6">
           <UsageRing pct={pct} />
           <div className="min-w-0">
             <p className="flex items-center gap-2">
@@ -268,7 +268,7 @@ export default function DashboardPage({ go, openMatter }: { go: (v: View) => voi
             </button>
           </div>
         </div>
-        <div className="lg:col-span-2 rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] px-6 py-5">
+        <div className="lg:col-span-2 rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] px-6 py-5">
           <p className="text-[13px] text-stone-500 dark:text-stone-400 font-medium">This period with Clause</p>
           <div className="grid grid-cols-2 gap-x-4 gap-y-4 mt-4">
             {[
@@ -293,7 +293,7 @@ export default function DashboardPage({ go, openMatter }: { go: (v: View) => voi
           <button
             key={c.view}
             onClick={() => go(c.view)}
-            className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] px-5 py-4 text-left hover:border-ink transition-colors group"
+            className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] px-5 py-4 text-left hover:border-ink transition-colors group"
           >
             <span className="flex items-center justify-between">
               <c.icon size={18} className="text-stone-500 dark:text-stone-400 group-hover:text-ink transition-colors" />
@@ -318,7 +318,7 @@ export default function DashboardPage({ go, openMatter }: { go: (v: View) => voi
             <EmptyState title="Nothing in this period" hint="Try a wider date range — your older work is still here." />
           ) : (
             <>
-              <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] overflow-hidden">
+              <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] overflow-hidden">
                 {act.pageItems.map((e) => <ActivityRow key={e.id} e={e} go={go} />)}
               </div>
               <Pager page={act.page} pages={act.pages} from={act.from} to={act.to} total={act.total} onPage={act.setPage} />
@@ -335,7 +335,7 @@ export default function DashboardPage({ go, openMatter }: { go: (v: View) => voi
           {(matters.data ?? []).length === 0 ? (
             <EmptyState title="No briefs yet" hint="Briefs keep each matter's documents, memory, and history together." />
           ) : (
-            <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] overflow-hidden">
+            <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] overflow-hidden">
               {(matters.data ?? []).slice(0, 3).map((m) => (
                 <button
                   key={m.id}

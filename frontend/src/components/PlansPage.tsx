@@ -98,7 +98,7 @@ export default function PlansPage() {
       </p>
 
       {/* Current plan + usage */}
-      <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] px-6 py-5 mt-6">
+      <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] px-6 py-5 mt-6">
         <div className="flex flex-wrap items-baseline justify-between gap-3">
           <div>
             <p className="text-[13px] text-stone-500 dark:text-stone-400 font-medium">Current plan</p>
@@ -120,7 +120,7 @@ export default function PlansPage() {
             </span>
             <span className="text-stone-500 dark:text-stone-400">of {b.token_quota.toLocaleString('en-IN')} ({pct}%)</span>
           </div>
-          <div className="h-2.5 rounded-full bg-stone-100 dark:bg-[#26281f] mt-1.5 overflow-hidden">
+          <div className="h-2.5 rounded-full bg-stone-100 dark:bg-[#122419] mt-1.5 overflow-hidden">
             <div
               className={`h-full rounded-full ${exhausted ? 'bg-[#a02c2c]' : 'dual-tone-bar'}`}
               style={{ width: `${pct}%` }}
@@ -160,7 +160,7 @@ export default function PlansPage() {
       )}
 
       {waiting && (
-        <div className="rounded-lex border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] px-5 py-3.5 mt-5 flex items-center gap-3 text-[13.5px]">
+        <div className="rounded-lex border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] px-5 py-3.5 mt-5 flex items-center gap-3 text-[13.5px]">
           <Loader2 size={16} className="animate-spin" />
           Waiting for the UPI gateway to confirm your payment…
           <button className="ml-auto text-stone-500 dark:text-stone-400 underline" onClick={stopPolling}>Stop waiting</button>
@@ -174,7 +174,7 @@ export default function PlansPage() {
           return (
             <div
               key={plan.id}
-              className={`rounded-lex-lg border bg-white dark:bg-[#1d1f19] px-6 py-5 flex flex-col ${current ? 'border-ink' : 'border-stone-200 dark:border-white/10'}`}
+              className={`rounded-lex-lg border bg-white dark:bg-[#0a1a12] px-6 py-5 flex flex-col ${current ? 'border-ink' : 'border-stone-200 dark:border-white/10'}`}
             >
               <p className="font-display text-xl">{plan.name}</p>
               <p className="mt-2">
@@ -212,7 +212,7 @@ export default function PlansPage() {
       {b.payments.length === 0 ? (
         <EmptyState title="No payments yet" hint="Your subscription payments will appear here." />
       ) : (
-        <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] overflow-hidden">
+        <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] overflow-hidden">
           <table className="w-full text-[13.5px]">
             <thead>
               <tr className="text-left text-meta text-stone-500 dark:text-stone-400 border-b border-stone-200 dark:border-white/10">

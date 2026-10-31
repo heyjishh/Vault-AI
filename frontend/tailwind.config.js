@@ -35,14 +35,13 @@ export default {
         // the token-usage bars to the dual tone, so ledger is retained
         // only as a defined token — no longer the usage-bar fill.
         ledger: '#1d5fbf',
-        // Dual tone (user-directed brand layer, Pieces 35–36): values
-        // taken 1:1 from the taste-skill page — the page wash, the
-        // usage-bar gradient and one gradient wordmark. The live theme
-        // runs on the --accent-a/--accent-b CSS variables in index.css
-        // (they flip lighter in dark); these tokens hold the light
-        // values. See DESIGN.md.
-        terra: '#b4552d',
-        sage: '#5c7350',
+        // Dual tone (Pieces 35–36; Piece 42 re-based on the user's
+        // own jurisvault.ai): the live theme runs on the
+        // --accent-a/--accent-b CSS variables in index.css; these
+        // tokens hold the accent pair's values (#2ad06f / #21c063,
+        // the brand site's auth-button gradient). See DESIGN.md.
+        terra: '#2ad06f',
+        sage: '#21c063',
         'app-bg': '#fafaf9',
         'surface': '#FFFFFF',
         'surface-2': '#f2f1f0',
@@ -52,8 +51,10 @@ export default {
         'text-muted': '#8f8b85',
       },
       fontFamily: {
-        sans: ['-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Inter', 'system-ui', 'sans-serif'],
-        display: ['Georgia', '"Times New Roman"', 'serif'],
+        // Piece 42: jurisvault.ai's type system — Inter for UI,
+        // Archivo (700/800/900) for display.
+        sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'system-ui', 'sans-serif'],
+        display: ['Archivo', 'Inter', 'system-ui', 'sans-serif'],
         mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', 'monospace'],
       },
       borderRadius: {

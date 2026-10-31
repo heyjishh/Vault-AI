@@ -15,6 +15,35 @@ live**, what is **built but unverified**, and what is **roadmap**.
 ## [Unreleased]
 
 ### Added
+- **jurisvault.ai theme — brand green, Archivo/Inter, running
+  emerald auth scene, both apps (31 Oct 2026, Piece 42).** JISHAN:
+  "does it is a running background? of gradiant?
+  https://jurisvault.ai/ use this theme of mine" — the theme of
+  his own brand site is ported 1:1 into both apps, superseding
+  the taste-skill palette of Pieces 36–40. Accents are the site's
+  green pair `#2ad06f` → `#21c063` in both themes (its auth-button
+  gradient); `--bronze` now carries the brand green with the same
+  reserved uses, the favicon tile is re-greened, and the focus /
+  selection tints follow the green. Type: Archivo (700/800/900)
+  for display and Inter for UI, loaded from Google Fonts in both
+  apps — Georgia is retired from display and prose headings.
+  Light ground: `#ffffff → #f7f7f7 → #eef5f0` at 155° with a soft
+  green glow, still flowing on the Piece 40 `washRun` loop. Dark
+  ground: the site's auth emerald stack (`#04100b → #061a12 →
+  #04100b` under its two green radial fields); dark surfaces
+  swept mechanically to `#0a1a12` (card) / `#122419` (raised) in
+  both src trees. Both sign-in screens gain the site's RUNNING
+  auth scene — emerald base, masked 1px grid, two counter-rotating
+  rings (46s / 68s reverse), a pulsing core (5.5s) and 14
+  twinkling sparks — via a new `AuthScene` component in each
+  app's ui.tsx; the auth roots carry a local `dark` class, so the
+  scene is always dark while the app theme is untouched, and
+  ThemeToggle stays. Presentation only — no logic, copy or
+  behaviour changes (one clarity fix inside the treatment: the
+  Auth feature list gained its missing `dark:` text variant so it
+  reads on the scene). Both builds clean; the old palette hexes
+  verified zero in both dists, the scene keyframes and Archivo
+  verified present in both bundles.
 - **Lighter still, a running gradient, professional finish — both
   apps (31 Oct 2026, Piece 40).** JISHAN: "make more light and
   running gradiant, etc.. but do more light, make professional".

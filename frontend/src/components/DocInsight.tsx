@@ -92,7 +92,7 @@ export function DocInsightModal({ documentId, title, onClose }: {
       onClick={(e) => { e.stopPropagation(); onClose() }}
     >
       <div
-        className="flex max-h-[86vh] w-full max-w-3xl flex-col rounded-lex-lg bg-white dark:bg-[#1d1f19] shadow-lex-md"
+        className="flex max-h-[86vh] w-full max-w-3xl flex-col rounded-lex-lg bg-white dark:bg-[#0a1a12] shadow-lex-md"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start gap-3 border-b border-stone-200 dark:border-white/10 px-6 py-4">
@@ -122,7 +122,7 @@ export function DocInsightModal({ documentId, title, onClose }: {
               className={`rounded-lex px-3 py-1.5 text-[12.5px] font-medium transition-colors ${
                 action === v.action
                   ? 'bg-ink text-ivory'
-                  : 'border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] text-stone-600 dark:text-stone-300 hover:text-ink hover:border-stone-300'
+                  : 'border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] text-stone-600 dark:text-stone-300 hover:text-ink hover:border-stone-300'
               }`}
             >
               {v.label}
@@ -164,7 +164,7 @@ export function DocInsightModal({ documentId, title, onClose }: {
                   navigator.clipboard.writeText(output).catch(() => {})
                   toast('success', 'Insight copied')
                 }}
-                className="flex items-center gap-1.5 rounded-lex border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] px-2.5 py-1.5 text-[12px] font-medium text-stone-600 dark:text-stone-300 hover:text-ink hover:border-stone-300 transition-colors"
+                className="flex items-center gap-1.5 rounded-lex border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] px-2.5 py-1.5 text-[12px] font-medium text-stone-600 dark:text-stone-300 hover:text-ink hover:border-stone-300 transition-colors"
               >
                 <Copy size={13} /> Copy
               </button>

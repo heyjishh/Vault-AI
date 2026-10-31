@@ -375,7 +375,7 @@ export default function InteractPage({ matterId, go }: { matterId?: string; go?:
       </p>
 
       {/* ---- Piece 16: source selector ---- */}
-      <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] px-6 py-5 mt-6">
+      <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] px-6 py-5 mt-6">
         <span className="text-[13px] text-stone-500 dark:text-stone-400 font-medium">Sources</span>
         <div className="grid sm:grid-cols-3 gap-2.5 mt-3">
           {SOURCES.map((s) => (
@@ -420,7 +420,7 @@ export default function InteractPage({ matterId, go }: { matterId?: string; go?:
       </div>
 
       {source !== 'private' && (
-      <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] px-6 py-5 mt-5">
+      <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] px-6 py-5 mt-5">
         <div className="flex items-baseline justify-between gap-3 flex-wrap">
           <span className="text-[13px] text-stone-500 dark:text-stone-400 font-medium">
             Documents — {selectedIds.length} selected (max {MAX_INTERACT_DOCS})
@@ -580,7 +580,7 @@ export default function InteractPage({ matterId, go }: { matterId?: string; go?:
               key={a.id}
               disabled={run.isPending || !hasSelection}
               onClick={() => startTurn(a.id, null, source, [...selectedIds])}
-              className="rounded-lex border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] px-3.5 py-3 text-left hover:border-ink disabled:opacity-40 transition-colors"
+              className="rounded-lex border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] px-3.5 py-3 text-left hover:border-ink disabled:opacity-40 transition-colors"
             >
               <a.icon size={16} className="text-stone-500 dark:text-stone-400" />
               <p className="text-[13.5px] font-medium mt-1.5">{a.label}</p>
@@ -591,7 +591,7 @@ export default function InteractPage({ matterId, go }: { matterId?: string; go?:
       )}
 
       {/* ---- Composer (Ask-style) ---- */}
-      <div className="mt-5 rounded-lex-lg border border-stone-300 dark:border-white/10 bg-white dark:bg-[#1d1f19]">
+      <div className="mt-5 rounded-lex-lg border border-stone-300 dark:border-white/10 bg-white dark:bg-[#0a1a12]">
         <textarea
           value={question}
           onChange={(e) => setQuestion(e.target.value)}
@@ -691,7 +691,7 @@ function TurnView({ turn, onRetry, onCite, retryDisabled }: {
           {turn.documents.length > 0 && (
             <div className="flex gap-1.5 flex-wrap mt-3">
               {turn.documents.map((d) => (
-                <span key={d.document_id} className="inline-flex items-center gap-1.5 rounded-lex bg-stone-100 dark:bg-[#26281f] px-2.5 py-1 text-[12px] text-stone-600 dark:text-stone-300">
+                <span key={d.document_id} className="inline-flex items-center gap-1.5 rounded-lex bg-stone-100 dark:bg-[#122419] px-2.5 py-1 text-[12px] text-stone-600 dark:text-stone-300">
                   {d.document_title}
                   {d.truncated && <span className="text-stone-400 dark:text-stone-500">(partial)</span>}
                   {d.treatment && d.treatment.status !== 'unknown' && (
@@ -723,7 +723,7 @@ function TurnView({ turn, onRetry, onCite, retryDisabled }: {
                     key={c.chunk_id + c.doc_id}
                     onClick={() => onCite(c)}
                     title="View source"
-                    className="text-left rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] px-4 py-3 hover:border-stone-400 transition-colors"
+                    className="text-left rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] px-4 py-3 hover:border-stone-400 transition-colors"
                   >
                     <span className="flex items-center gap-2">
                       <span className="rounded bg-ink text-ivory px-1.5 py-0.5 text-[11px] font-mono font-semibold">{c.doc_id}</span>
@@ -742,7 +742,7 @@ function TurnView({ turn, onRetry, onCite, retryDisabled }: {
           <div className="mt-4 flex items-center gap-2">
             <button
               onClick={() => { navigator.clipboard.writeText(turn.output).catch(() => {}); toast('success', 'Answer copied') }}
-              className="flex items-center gap-1.5 rounded-lex border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] px-2.5 py-1.5 text-[12px] font-medium text-stone-600 dark:text-stone-300 hover:text-ink hover:border-stone-300 transition-colors"
+              className="flex items-center gap-1.5 rounded-lex border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] px-2.5 py-1.5 text-[12px] font-medium text-stone-600 dark:text-stone-300 hover:text-ink hover:border-stone-300 transition-colors"
             >
               <Copy size={13} /> Copy
             </button>

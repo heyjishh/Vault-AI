@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Scale, ShieldCheck, BookOpen, Zap } from 'lucide-react'
 import { useAuth } from '../stores/auth'
-import { BrandMark, DualToneBackdrop, ThemeToggle } from './ui'
+import { AuthScene, BrandMark, ThemeToggle } from './ui'
 
 export default function AuthPage() {
   const login = useAuth((s) => s.login)
@@ -21,9 +21,11 @@ export default function AuthPage() {
   }
 
   return (
-    <div className="min-h-screen app-wash flex relative overflow-hidden">
-      {/* The moving glow layer over the page wash + theme toggle */}
-      <DualToneBackdrop />
+    <div className="min-h-screen dark auth-scene bg-[#04100b] flex relative overflow-hidden">
+      {/* Piece 42: the jurisvault.ai auth scene runs behind the
+          sign-in — always dark (local `dark` class), whatever the
+          app theme — plus the theme toggle for the app beyond it */}
+      <AuthScene />
       <div className="absolute top-4 right-4 z-20">
         <ThemeToggle />
       </div>
@@ -49,7 +51,7 @@ export default function AuthPage() {
               { icon: ShieldCheck, text: 'Grounded answers — no uncited claims' },
               { icon: Zap, text: 'Agentic workflows for reviews, diligence and memos' },
             ].map(({ icon: Icon, text }) => (
-              <div key={text} className="flex items-center gap-3 text-stone-700">
+              <div key={text} className="flex items-center gap-3 text-stone-700 dark:text-stone-300">
                 <Icon className="w-4.5 h-4.5 text-bronze" size={18} />
                 <span className="text-[15px]">{text}</span>
               </div>
@@ -84,7 +86,7 @@ export default function AuthPage() {
               <input
                 type="email" required value={email} onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@firm.com" autoComplete="email"
-                className="w-full rounded-lex border border-stone-300 dark:border-white/10 bg-white dark:bg-[#1d1f19] px-3.5 py-2.5 text-[15px] outline-none focus:border-ink focus:ring-1 focus:ring-ink placeholder:text-stone-400"
+                className="w-full rounded-lex border border-stone-300 dark:border-white/10 bg-white dark:bg-[#0a1a12] px-3.5 py-2.5 text-[15px] outline-none focus:border-ink focus:ring-1 focus:ring-ink placeholder:text-stone-400"
               />
             </div>
             <div>
@@ -92,7 +94,7 @@ export default function AuthPage() {
               <input
                 type="password" required value={password} onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••" autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
-                className="w-full rounded-lex border border-stone-300 dark:border-white/10 bg-white dark:bg-[#1d1f19] px-3.5 py-2.5 text-[15px] outline-none focus:border-ink focus:ring-1 focus:ring-ink placeholder:text-stone-400"
+                className="w-full rounded-lex border border-stone-300 dark:border-white/10 bg-white dark:bg-[#0a1a12] px-3.5 py-2.5 text-[15px] outline-none focus:border-ink focus:ring-1 focus:ring-ink placeholder:text-stone-400"
               />
             </div>
             {error && (
@@ -111,7 +113,7 @@ export default function AuthPage() {
           <div className="mt-5 text-center">
             <a
               href="/api/v1/auth/oidc/login"
-              className="inline-block w-full rounded-lex border border-stone-300 dark:border-white/10 bg-white dark:bg-[#1d1f19] py-2.5 text-[15px] font-medium text-ink dark:text-[#f4f2ee] hover:bg-stone-100 dark:hover:bg-white/10 transition-colors"
+              className="inline-block w-full rounded-lex border border-stone-300 dark:border-white/10 bg-white dark:bg-[#0a1a12] py-2.5 text-[15px] font-medium text-ink dark:text-[#f4f2ee] hover:bg-stone-100 dark:hover:bg-white/10 transition-colors"
             >
               Continue with SSO
             </a>

@@ -38,8 +38,10 @@ export default {
         'text-muted': '#8f8b85',
       },
       fontFamily: {
-        sans: ['-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Inter', 'system-ui', 'sans-serif'],
-        display: ['Georgia', '"Times New Roman"', 'serif'],
+        // Piece 42: jurisvault.ai's type system — Inter for UI,
+        // Archivo (700/800/900) for display.
+        sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'system-ui', 'sans-serif'],
+        display: ['Archivo', 'Inter', 'system-ui', 'sans-serif'],
         mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', 'monospace'],
       },
       borderRadius: {

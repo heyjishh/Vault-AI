@@ -238,7 +238,7 @@ export default function VaultPage() {
         onDrop={handleDrop}
         animate={dragging ? { scale: 1.01 } : { scale: 1 }}
         className={`mt-6 rounded-lex-lg border-2 border-dashed transition-colors p-8 text-center cursor-pointer ${
-          dragging ? 'border-ink bg-stone-100 dark:bg-[#26281f]' : 'border-stone-300 dark:border-white/10 bg-white/60 hover:border-stone-400'
+          dragging ? 'border-ink bg-stone-100 dark:bg-[#122419]' : 'border-stone-300 dark:border-white/10 bg-white/60 hover:border-stone-400'
         }`}
         onClick={() => fileRef.current?.click()}
       >
@@ -275,7 +275,7 @@ export default function VaultPage() {
           </div>
         )}
         <p className="text-[13px] text-stone-500 dark:text-stone-400 mt-1 flex items-center justify-center gap-1.5 flex-wrap">
-          {UPLOAD_FORMATS_HINT} <span className="inline-flex items-center gap-1 rounded-lex bg-stone-100 dark:bg-[#26281f] border border-stone-200 dark:border-white/10 px-2 py-0.5 text-[11px]"><ScanText size={11} /> scanned pages & photos auto-OCR'd</span>
+          {UPLOAD_FORMATS_HINT} <span className="inline-flex items-center gap-1 rounded-lex bg-stone-100 dark:bg-[#122419] border border-stone-200 dark:border-white/10 px-2 py-0.5 text-[11px]"><ScanText size={11} /> scanned pages & photos auto-OCR'd</span>
         </p>
         <input
           ref={fileRef} type="file" multiple className="hidden"
@@ -325,7 +325,7 @@ export default function VaultPage() {
       )}
 
       <div className="grid md:grid-cols-2 gap-4 mt-4">
-        <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] p-5">
+        <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] p-5">
           <h3 className="font-medium text-[15px]">Paste text</h3>
           <input
             value={title} onChange={(e) => setTitle(e.target.value)}
@@ -351,7 +351,7 @@ export default function VaultPage() {
             />
           )}
         </div>
-        <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] p-5">
+        <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] p-5">
           <h3 className="font-medium text-[15px]">Ingest from S3 / R2</h3>
           <p className="text-[13px] text-stone-500 dark:text-stone-400 mt-2 leading-relaxed">
             Pulls every supported file under a prefix from the bucket configured on the server
@@ -379,7 +379,7 @@ export default function VaultPage() {
             value={docQuery}
             onChange={(e) => setDocQuery(e.target.value)}
             placeholder="Search documents…"
-            className="rounded-lex border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] px-3.5 py-1.5 text-[13px] outline-none focus:border-stone-400 w-56"
+            className="rounded-lex border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] px-3.5 py-1.5 text-[13px] outline-none focus:border-stone-400 w-56"
           />
         )}
       </div>
@@ -391,7 +391,7 @@ export default function VaultPage() {
         <EmptyState title="No documents match" hint="Try a different search term." />
       ) : (
         <>
-        <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] overflow-hidden">
+        <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] overflow-hidden">
           {pagedDocs.pageItems.map((d, i) => (
             <div key={d.id} className={i > 0 ? 'border-t border-stone-200 dark:border-white/10' : ''}>
             <div className="flex items-center gap-4 px-5 py-3.5">
@@ -434,7 +434,7 @@ export default function VaultPage() {
               <button
                 onClick={() => setIndexDocId(indexDocId === d.id ? null : d.id)}
                 title="Indexing — keywords, generated questions and statute hyperedges per chunk"
-                className={`p-2 rounded-lex transition-colors ${indexDocId === d.id ? 'text-ink dark:text-[#f4f2ee] bg-stone-100 dark:bg-[#26281f]' : 'text-stone-400 dark:text-stone-500 hover:text-ink hover:bg-stone-100 dark:hover:bg-white/10'}`}
+                className={`p-2 rounded-lex transition-colors ${indexDocId === d.id ? 'text-ink dark:text-[#f4f2ee] bg-stone-100 dark:bg-[#122419]' : 'text-stone-400 dark:text-stone-500 hover:text-ink hover:bg-stone-100 dark:hover:bg-white/10'}`}
               >
                 <ScanText size={15} />
               </button>
@@ -465,10 +465,10 @@ export default function VaultPage() {
                 ) : (
                   <div className="mt-3 space-y-3">
                     {(indexChunks ?? []).map((c) => (
-                      <div key={c.id} className="rounded-lex border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] px-4 py-3">
+                      <div key={c.id} className="rounded-lex border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] px-4 py-3">
                         <p className="text-[13px] text-stone-600 dark:text-stone-300 leading-relaxed">{c.text_preview}…</p>
                         {c.hyper_id && (
-                          <span className="mt-2 inline-block rounded-lex bg-white dark:bg-[#1d1f19] border border-stone-200 dark:border-white/10 text-stone-600 dark:text-stone-300 px-2 py-px text-[11px] font-medium">
+                          <span className="mt-2 inline-block rounded-lex bg-white dark:bg-[#0a1a12] border border-stone-200 dark:border-white/10 text-stone-600 dark:text-stone-300 px-2 py-px text-[11px] font-medium">
                             Hyperedge: {c.hyper_id.split('#').pop()}
                           </span>
                         )}
@@ -533,7 +533,7 @@ function MetaEditor(props: {
   const [from, setFrom] = useState(doc.meta?.effective_from ?? '')
   const [to, setTo] = useState(doc.meta?.effective_to ?? '')
   const [supersededBy, setSupersededBy] = useState(doc.meta?.superseded_by ?? '')
-  const field = 'w-full rounded-lex border border-stone-200 dark:border-white/10 px-2.5 py-1.5 text-[13px] outline-none focus:border-stone-400 placeholder:text-stone-400 bg-white dark:bg-[#1d1f19]'
+  const field = 'w-full rounded-lex border border-stone-200 dark:border-white/10 px-2.5 py-1.5 text-[13px] outline-none focus:border-stone-400 placeholder:text-stone-400 bg-white dark:bg-[#0a1a12]'
   const label = 'block text-[12px] font-medium text-stone-500 dark:text-stone-400 mb-1'
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-ink/30 p-4" onClick={onClose}>

@@ -21,7 +21,7 @@ const STAGE_LABELS: Record<string, string> = {
 
 function OnOff({ on }: { on: boolean }) {
   return (
-    <span className={`rounded-full px-2 py-px text-[11px] font-semibold ${on ? 'bg-[#e7f4e4] text-[#2f6b2f]' : 'bg-stone-100 dark:bg-[#26281f] text-stone-400 dark:text-stone-500'}`}>
+    <span className={`rounded-full px-2 py-px text-[11px] font-semibold ${on ? 'bg-[#e7f4e4] text-[#2f6b2f]' : 'bg-stone-100 dark:bg-[#122419] text-stone-400 dark:text-stone-500'}`}>
       {on ? 'ON' : 'OFF'}
     </span>
   )
@@ -57,7 +57,7 @@ function StackCard() {
         <StatCard label="Keyword engine" value={s.bm25_engine} sub={s.bm25_enabled ? 'BM25 leg active in fusion' : 'BM25 leg disabled'} />
         <StatCard label="Late interaction" value={s.late_interaction ? 'ColBERT on' : 'off'} sub="MaxSim blend after reranking" />
       </div>
-      <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] divide-y divide-stone-200 dark:divide-white/10 mt-3">
+      <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] divide-y divide-stone-200 dark:divide-white/10 mt-3">
         {features.map(([k, on, v]) => (
           <div key={k} className="flex items-center gap-4 px-5 py-3">
             <span className="w-52 flex-shrink-0 text-[13px] font-medium">{k}</span>
@@ -68,13 +68,13 @@ function StackCard() {
       </div>
 
       <h2 className="font-display text-xl tracking-tight mt-10 mb-3">MCP server</h2>
-      <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] p-5">
+      <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] p-5">
         <div className="flex items-center gap-3 flex-wrap">
           <p className="text-[14px] font-medium">Model Context Protocol — external clients connect as a user, with that user's access and quota.</p>
           <OnOff on={mcp?.enabled ?? s.mcp_enabled} />
         </div>
         <p className="text-[13px] text-stone-500 dark:text-stone-400 mt-1.5">
-          Endpoint <code className="bg-stone-100 dark:bg-[#26281f] rounded px-1.5 py-0.5 text-[12.5px]">POST {mcp?.endpoint ?? '/mcp'}</code> ·
+          Endpoint <code className="bg-stone-100 dark:bg-[#122419] rounded px-1.5 py-0.5 text-[12.5px]">POST {mcp?.endpoint ?? '/mcp'}</code> ·
           transport {mcp?.transport ?? 'streamable-http'} · protocol {mcp?.protocol_version ?? '2024-11-05'}
         </p>
         <div className="flex flex-wrap gap-1.5 mt-3">
@@ -106,7 +106,7 @@ function HitTestCard() {
     onSuccess: setReport,
   })
   return (
-    <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] p-5">
+    <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] p-5">
       <h3 className="font-display text-lg tracking-tight flex items-center gap-2">
         <Crosshair size={17} /> Hit testing
       </h3>
@@ -147,7 +147,7 @@ function HitTestCard() {
                     <p className="text-[12px] text-stone-500 dark:text-stone-400">
                       <span className="font-semibold text-ink dark:text-[#f4f2ee]">#{i + 1}</span>{' '}
                       {h.score.toFixed(stage.name === 'bm25' ? 1 : 3)} · {h.doc_title ?? h.doc_id}
-                      {h.is_child && <span className="ml-1 rounded bg-stone-100 dark:bg-[#26281f] px-1 py-px text-[10.5px]">child</span>}
+                      {h.is_child && <span className="ml-1 rounded bg-stone-100 dark:bg-[#122419] px-1 py-px text-[10.5px]">child</span>}
                     </p>
                     <p className="text-[12.5px] text-stone-600 dark:text-stone-300 leading-snug mt-0.5 line-clamp-3">{h.snippet}</p>
                   </li>
@@ -186,7 +186,7 @@ export default function SystemSettingsPage() {
       <HitTestCard />
 
       <h2 className="font-display text-xl tracking-tight mt-10 mb-3">Pipeline</h2>
-      <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] divide-y divide-stone-200 dark:divide-white/10">
+      <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] divide-y divide-stone-200 dark:divide-white/10">
         {[
           ['LLM provider', 'Cloudflare Workers AI — llama-3.3-70b-instruct (OpenAI-compatible endpoint)'],
           ['Embeddings', 'Cloudflare Workers AI — bge-m3 (1024-dim, multilingual)'],
@@ -211,7 +211,7 @@ export default function SystemSettingsPage() {
       ) : (
         <div className="grid md:grid-cols-3 gap-3">
           {(workflows ?? []).map((w) => (
-            <div key={w.id} className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] p-5">
+            <div key={w.id} className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] p-5">
               <p className="font-display text-lg tracking-tight">{w.name}</p>
               <p className="text-[13px] text-stone-500 dark:text-stone-400 mt-1.5 leading-relaxed">{w.description}</p>
               <p className="text-[12px] text-stone-400 dark:text-stone-500 mt-3">{w.steps.length} steps: {w.steps.map((s) => s.name).join(' → ')}</p>

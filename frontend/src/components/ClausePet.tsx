@@ -612,7 +612,7 @@ export default function ClausePet({ view, go, askQuestion, startNewChat }: Claus
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 4, scale: 0.97 }}
             transition={{ duration: 0.18 }}
-            className={`absolute z-10 w-[268px] rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] shadow-lex-md px-3.5 py-2.5 ${bubbleBelow ? 'top-[calc(100%+8px)]' : 'bottom-[calc(100%+8px)]'} ${bubbleLeft ? 'left-0' : 'right-0'}`}
+            className={`absolute z-10 w-[268px] rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] shadow-lex-md px-3.5 py-2.5 ${bubbleBelow ? 'top-[calc(100%+8px)]' : 'bottom-[calc(100%+8px)]'} ${bubbleLeft ? 'left-0' : 'right-0'}`}
           >
             <p className="text-[10px] font-semibold uppercase tracking-wider text-stone-400 dark:text-stone-500">
               Clause · {page.name}
@@ -668,7 +668,7 @@ export default function ClausePet({ view, go, askQuestion, startNewChat }: Claus
                 </button>
               </div>
             )}
-            <span className={`absolute w-2.5 h-2.5 rotate-45 bg-white dark:bg-[#1d1f19] border-stone-200 dark:border-white/10 ${bubbleBelow ? '-top-[5px] border-t border-l' : '-bottom-[5px] border-b border-r'} ${bubbleLeft ? 'left-8' : 'right-8'}`} />
+            <span className={`absolute w-2.5 h-2.5 rotate-45 bg-white dark:bg-[#0a1a12] border-stone-200 dark:border-white/10 ${bubbleBelow ? '-top-[5px] border-t border-l' : '-bottom-[5px] border-b border-r'} ${bubbleLeft ? 'left-8' : 'right-8'}`} />
           </motion.div>
         )}
       </AnimatePresence>

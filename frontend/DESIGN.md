@@ -8,6 +8,10 @@ kept from the Harvey REA below. The admin Command Center kept its own
 look through Pieces 34–38; Piece 39 brought it onto this same system
 (see "Admin parity" below), and Piece 40 (lighter still, the running
 gradient, the professional finish) applies to both apps identically.
+**Piece 42 supersedes the palette and the display face**: the theme
+is now the user's own jurisvault.ai brand theme — see "Brand
+re-base" below; the taste-skill token table under "Brand layer" is
+kept as history.
 
 ## The move
 
@@ -138,6 +142,68 @@ kept inside the three soft placements above. Every other Piece 34
 rule — flat surfaces, no resting shadows, sentence-case labels,
 tabular figures, ink primaries, dot-and-word status — still applies
 in both themes.
+
+## Brand re-base — the jurisvault.ai theme (Piece 42)
+
+JISHAN: "does it is a running background? of gradiant?
+https://jurisvault.ai/ use this theme of mine". The product now
+wears the theme of his own brand site, in both apps, tokens taken
+1:1 from the site's CSS. This supersedes the taste-skill palette
+of Pieces 36–40 (their token table above is history) and the
+Georgia display face.
+
+- **Accent: the brand green.** `--accent-a` `#2ad06f` →
+  `--accent-b` `#21c063` in BOTH themes — the site's auth-button
+  gradient pair (the site runs it at 180deg; the app's dual-tone
+  recipe keeps its 120deg form). `.dual-tone-bar` / `.dual-tone-text`
+  — the usage bars, the Dashboard ring, the one gradient wordmark —
+  now run green.
+- **Bronze carries the brand green.** `--bronze` is `#21c063` on
+  light and `#2ad06f` on dark. The variable keeps its name and its
+  reserved uses (Piece 37): the brand mark, brand rules and the
+  active-nav indicator — plus the Piece 40 focus ring and the
+  selection tint, now green (`rgba(33,192,99,.16)` light /
+  `rgba(42,208,111,.28)` dark). The favicon tile is brand green
+  with an ivory "J".
+- **Type: Archivo + Inter (user-directed — his brand fonts).**
+  Display is Archivo (700/800/900) wherever the display face is
+  used — wordmark, headings, the Dashboard greeting, prose
+  headings — replacing Georgia outright; the UI sans is Inter
+  first. Both families load from Google Fonts in each app's
+  `index.html`. The serif→Archivo change is deliberate: the brand
+  site's voice is a heavy grotesque, not a serif.
+- **Light ground.** `--grad-page` is `linear-gradient(155deg,
+  #ffffff 0%,#f7f7f7 55%,#eef5f0 100%)` — the site's light app
+  whites (#fff / soft #f7f7f7, borders #e5e5e5) melting into pale
+  green — under a soft green glow (`rgba(33,192,99,.10)` +
+  `rgba(42,208,111,.08)`). It still RUNS: the Piece 40 `washRun`
+  architecture is unchanged, so the wash flows as before. The
+  `.app-wash` / body fallback is the end stop `#eef5f0`.
+- **Dark ground = the site's auth emerald.** `--grad-page` is the
+  auth base `linear-gradient(155deg,#04100b 0%,#061a12 55%,
+  #04100b 100%)` and `--grad-glow` is the site's two radial fields
+  (`rgba(33,192,99,.15)` at 22% 48%, `rgba(33,192,99,.09)` at
+  88% 8%). Dark surfaces follow the site's auth card: card
+  `#0a1a12`, raised `#122419` — the solid equivalents of its
+  translucent card/panel tones — swept mechanically through both
+  src trees. The dark overscroll fallback is `#04100b`.
+- **The running auth scene.** Both sign-in screens (user Auth,
+  admin gate) run the site's login background, alive: the emerald
+  base stack, a 1px grid (`rgba(255,255,255,.08)`, 44px cells)
+  under the site's centre mask, two counter-rotating conic rings
+  (`authSpin` 46s, and 68s reverse, masked to a 2px ring), a
+  pulsing core glow (`authPulse` 5.5s: opacity .55→1, scale
+  1→1.07) and 14 twinkling spark dots (`authTwinkle` 4s). It is
+  rendered by `AuthScene` (ui.tsx in both apps; recipes in
+  index.css) inside a root carrying `dark auth-scene
+  bg-[#04100b]`: the `dark` class is LOCAL to the auth root, so
+  the scene is always dark whatever the app theme — the pre-paint
+  html theme and everything beyond sign-in are untouched, and
+  ThemeToggle stays on the page, still setting the app-wide
+  preference. `.auth-scene` sets the site's auth text colour
+  `#e9f3ed` so unclassed copy inherits light-on-emerald. All
+  scene motion stops under `prefers-reduced-motion`. The shells
+  keep the running wash backdrop — the scene is auth-only.
 
 ## Legal identity (Piece 37)
 

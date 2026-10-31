@@ -169,7 +169,7 @@ export default function AppShell() {
             <select
               value={effectiveMatterId ?? ''}
               onChange={(e) => setCurrentMatter(e.target.value)}
-              className="mt-1.5 w-full rounded-lex border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] px-2.5 py-2 text-[13px] outline-none focus:border-stone-400"
+              className="mt-1.5 w-full rounded-lex border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] px-2.5 py-2 text-[13px] outline-none focus:border-stone-400"
             >
               {(mattersList ?? []).map((m) => (
                 <option key={m.id} value={m.id}>{m.title}</option>
@@ -193,7 +193,7 @@ export default function AppShell() {
               onClick={() => { setActiveTabId(null); setView(id) }}
               className={`w-full flex items-center gap-3 rounded-lex px-3 py-2 text-[14px] transition-colors ${
                 view === id || (id === 'matters' && view === 'matter')
-                  ? 'bg-stone-100 dark:bg-[#26281f] text-ink dark:text-[#f4f2ee] font-medium shadow-[inset_2px_0_0_var(--bronze)]'
+                  ? 'bg-stone-100 dark:bg-[#122419] text-ink dark:text-[#f4f2ee] font-medium shadow-[inset_2px_0_0_var(--bronze)]'
                   : 'text-stone-600 dark:text-stone-300 hover:bg-stone-100/70 dark:hover:bg-white/5 hover:text-ink'
               }`}
             >
@@ -231,7 +231,7 @@ export default function AppShell() {
                 onClick={() => { setActiveTabId(t.id); setView('tab') }}
                 className={`w-full flex items-center gap-3 rounded-lex px-3 py-2 text-[14px] transition-colors ${
                   view === 'tab' && activeTabId === t.id
-                    ? 'bg-stone-100 dark:bg-[#26281f] text-ink dark:text-[#f4f2ee] font-medium shadow-[inset_2px_0_0_var(--bronze)]'
+                    ? 'bg-stone-100 dark:bg-[#122419] text-ink dark:text-[#f4f2ee] font-medium shadow-[inset_2px_0_0_var(--bronze)]'
                     : 'text-stone-600 dark:text-stone-300 hover:bg-stone-100/70 dark:hover:bg-white/5 hover:text-ink'
                 }`}
               >
@@ -302,7 +302,7 @@ export default function AppShell() {
                 {Math.max(0, dash.token_quota - dash.tokens_used).toLocaleString('en-IN')}
                 <span className="text-[12.5px] text-stone-500 dark:text-stone-400 font-normal"> tokens left</span>
               </span>
-              <span className="block h-1.5 rounded-full bg-stone-100 dark:bg-[#26281f] mt-2 overflow-hidden">
+              <span className="block h-1.5 rounded-full bg-stone-100 dark:bg-[#122419] mt-2 overflow-hidden">
                 <span
                   className={`block h-full rounded-full ${Math.round((dash.tokens_used / Math.max(1, dash.token_quota)) * 100) >= 90 ? 'bg-[#a02c2c]' : 'dual-tone-bar'}`}
                   style={{ width: `${Math.min(100, Math.round((dash.tokens_used / Math.max(1, dash.token_quota)) * 100))}%` }}

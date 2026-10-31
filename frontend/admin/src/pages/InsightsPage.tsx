@@ -82,15 +82,15 @@ export default function InsightsPage() {
       </div>
 
       <div className="grid xl:grid-cols-3 gap-4 mt-5">
-        <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] px-5 py-4">
+        <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] px-5 py-4">
           <p className="text-meta text-stone-500 dark:text-stone-400 font-medium">Activity — last 14 days</p>
           <div className="mt-3"><BarChart data={eventBars} /></div>
         </div>
-        <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] px-5 py-4">
+        <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] px-5 py-4">
           <p className="text-meta text-stone-500 dark:text-stone-400 font-medium">Tokens — last 14 days</p>
           <div className="mt-3"><BarChart data={tokenBars} /></div>
         </div>
-        <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] px-5 py-4">
+        <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] px-5 py-4">
           <p className="text-meta text-stone-500 dark:text-stone-400 font-medium">Plan mix</p>
           <div className="mt-3">
             <Donut data={d.plan_distribution.map((p) => ({ label: p.plan, value: p.users }))} />
@@ -101,7 +101,7 @@ export default function InsightsPage() {
       <div className="grid xl:grid-cols-5 gap-6 mt-8">
         <div className="xl:col-span-3">
           <h2 className="font-display text-xl mb-3">Users — click to drill down</h2>
-          <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] overflow-hidden">
+          <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] overflow-hidden">
             <table className="w-full text-[13.5px]">
               <thead>
                 <tr className="text-left text-meta text-stone-500 dark:text-stone-400 border-b border-stone-200 dark:border-white/10">
@@ -135,7 +135,7 @@ export default function InsightsPage() {
           </div>
 
           <h2 className="font-display text-xl mt-8 mb-3">Top questions</h2>
-          <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] overflow-hidden">
+          <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] overflow-hidden">
             {d.top_queries.length === 0 && <p className="px-5 py-4 text-stone-500 dark:text-stone-400 text-[13.5px]">No questions captured yet.</p>}
             {d.top_queries.map((q) => {
               const actId = activityIdFor(q.question)
@@ -164,7 +164,7 @@ export default function InsightsPage() {
 
         <div className="xl:col-span-2">
           {selected ? (
-            <div className="rounded-lex-lg border border-ink bg-white dark:bg-[#1d1f19] overflow-hidden sticky top-4">
+            <div className="rounded-lex-lg border border-ink bg-white dark:bg-[#0a1a12] overflow-hidden sticky top-4">
               <div className="px-5 py-4 border-b border-stone-200 dark:border-white/10 flex items-start justify-between">
                 <div>
                   <h2 className="font-display text-lg leading-tight">{selected.email}</h2>
@@ -185,7 +185,7 @@ export default function InsightsPage() {
           ) : (
             <>
               <h2 className="font-display text-xl mb-3">Live activity</h2>
-              <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] overflow-hidden">
+              <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] overflow-hidden">
                 {d.recent_activity.length === 0 && (
                   <p className="px-5 py-4 text-stone-500 dark:text-stone-400 text-[13.5px]">Nothing yet — user questions will stream in here.</p>
                 )}

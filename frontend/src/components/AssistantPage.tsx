@@ -226,7 +226,7 @@ export default function AssistantPage({ matterId: fixedMatterId, go }: { matterI
       <div className="flex-1 min-w-0">
         <div className="w-full px-6 pb-16">
       {scopeMatterId && (
-        <div className="mt-6 flex items-center gap-2 rounded-lex border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] px-3.5 py-2.5 text-[13px]">
+        <div className="mt-6 flex items-center gap-2 rounded-lex border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] px-3.5 py-2.5 text-[13px]">
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 flex-shrink-0" />
           {briefVault ? (
             <span className="text-stone-600 dark:text-stone-300">
@@ -280,7 +280,7 @@ export default function AssistantPage({ matterId: fixedMatterId, go }: { matterI
                 initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.15 + i * 0.07, duration: 0.4 }}
                 onClick={() => ask(ex.q)}
-                className="text-left rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] px-4 py-3.5 hover:border-stone-300 transition-all group"
+                className="text-left rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] px-4 py-3.5 hover:border-stone-300 transition-all group"
               >
                 <span className="text-[11px] font-medium text-stone-400 dark:text-stone-500">{ex.tag}</span>
                 <p className="font-display text-[17px] mt-1 group-hover:text-ink">{ex.title}</p>
@@ -295,7 +295,7 @@ export default function AssistantPage({ matterId: fixedMatterId, go }: { matterI
             <div className="flex justify-end mb-1">
               <button
                 onClick={() => setSourcesOpen((v) => !v)}
-                className="inline-flex items-center gap-1.5 rounded-lex border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] px-3 py-1.5 text-[12.5px] font-medium text-stone-600 dark:text-stone-300 hover:text-ink hover:border-stone-300 transition-colors"
+                className="inline-flex items-center gap-1.5 rounded-lex border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] px-3 py-1.5 text-[12.5px] font-medium text-stone-600 dark:text-stone-300 hover:text-ink hover:border-stone-300 transition-colors"
               >
                 <PanelRight size={14} /> Sources panel {sourcesOpen ? 'on' : 'off'}
               </button>
@@ -480,7 +480,7 @@ function SourcesSidebar({ turn, selectedChunkId, onClose, go, onOpenSource }: {
               ref={(el) => { cardRefs.current[c.chunk_id] = el }}
               onClick={() => onOpenSource(c)}
               title="View the full document"
-              className={`rounded-lex-lg border bg-white dark:bg-[#1d1f19] px-4 py-3.5 transition-colors cursor-pointer hover:border-stone-400 ${selected ? 'border-ink' : 'border-stone-200 dark:border-white/10'}`}
+              className={`rounded-lex-lg border bg-white dark:bg-[#0a1a12] px-4 py-3.5 transition-colors cursor-pointer hover:border-stone-400 ${selected ? 'border-ink' : 'border-stone-200 dark:border-white/10'}`}
             >
               <div className="flex items-center gap-2">
                 <span className="rounded bg-ink text-ivory px-1.5 py-0.5 text-[11px] font-mono font-semibold">{c.doc_id}</span>
@@ -698,7 +698,7 @@ function TurnView({ turn, onCopy, onRegenerate, onFollowUp, onCite, onShowSource
               </p>
               <div className="mt-1.5 flex flex-wrap gap-1.5">
                 {turn.expansions.map((x, i) => (
-                  <span key={i} className="inline-block max-w-full truncate rounded-lex border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] px-2.5 py-1 text-[12px] text-stone-600 dark:text-stone-300" title={x}>
+                  <span key={i} className="inline-block max-w-full truncate rounded-lex border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] px-2.5 py-1 text-[12px] text-stone-600 dark:text-stone-300" title={x}>
                     {x}
                   </span>
                 ))}
@@ -720,7 +720,7 @@ function TurnView({ turn, onCopy, onRegenerate, onFollowUp, onCite, onShowSource
           {turn.done && (
             <div className="mt-5">
               <div className="flex items-center gap-2">
-                <button onClick={onCopy} className="flex items-center gap-1.5 rounded-lex border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] px-2.5 py-1.5 text-[12px] font-medium text-stone-600 dark:text-stone-300 hover:text-ink hover:border-stone-300 transition-colors">
+                <button onClick={onCopy} className="flex items-center gap-1.5 rounded-lex border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] px-2.5 py-1.5 text-[12px] font-medium text-stone-600 dark:text-stone-300 hover:text-ink hover:border-stone-300 transition-colors">
                   <Copy size={13} /> Copy
                 </button>
                 <ResponseDownload
@@ -728,14 +728,14 @@ function TurnView({ turn, onCopy, onRegenerate, onFollowUp, onCite, onShowSource
                   answerMarkdown={turn.answer}
                   citations={exportCitations(turn.citations)}
                 />
-                <button onClick={onRegenerate} className="flex items-center gap-1.5 rounded-lex border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] px-2.5 py-1.5 text-[12px] font-medium text-stone-600 dark:text-stone-300 hover:text-ink hover:border-stone-300 transition-colors">
+                <button onClick={onRegenerate} className="flex items-center gap-1.5 rounded-lex border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] px-2.5 py-1.5 text-[12px] font-medium text-stone-600 dark:text-stone-300 hover:text-ink hover:border-stone-300 transition-colors">
                   <RotateCcw size={13} /> Regenerate
                 </button>
                 <button
                   onClick={() => void castVote('up')}
                   disabled={voting}
                   title="This answer was helpful"
-                  className={`flex items-center gap-1.5 rounded-lex border px-2.5 py-1.5 text-[12px] font-medium transition-colors disabled:opacity-40 ${vote === 'up' ? 'bg-ink text-ivory border-ink' : 'border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] text-stone-600 dark:text-stone-300 hover:text-ink hover:border-stone-300'}`}
+                  className={`flex items-center gap-1.5 rounded-lex border px-2.5 py-1.5 text-[12px] font-medium transition-colors disabled:opacity-40 ${vote === 'up' ? 'bg-ink text-ivory border-ink' : 'border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] text-stone-600 dark:text-stone-300 hover:text-ink hover:border-stone-300'}`}
                 >
                   <ThumbsUp size={13} /> Helpful
                 </button>
@@ -743,7 +743,7 @@ function TurnView({ turn, onCopy, onRegenerate, onFollowUp, onCite, onShowSource
                   onClick={() => void castVote('down')}
                   disabled={voting}
                   title="This answer was not helpful"
-                  className={`flex items-center gap-1.5 rounded-lex border px-2.5 py-1.5 text-[12px] font-medium transition-colors disabled:opacity-40 ${vote === 'down' ? 'bg-ink text-ivory border-ink' : 'border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] text-stone-600 dark:text-stone-300 hover:text-ink hover:border-stone-300'}`}
+                  className={`flex items-center gap-1.5 rounded-lex border px-2.5 py-1.5 text-[12px] font-medium transition-colors disabled:opacity-40 ${vote === 'down' ? 'bg-ink text-ivory border-ink' : 'border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] text-stone-600 dark:text-stone-300 hover:text-ink hover:border-stone-300'}`}
                 >
                   <ThumbsDown size={13} /> Not helpful
                 </button>
@@ -755,7 +755,7 @@ function TurnView({ turn, onCopy, onRegenerate, onFollowUp, onCite, onShowSource
                   <button
                     key={f}
                     onClick={() => onFollowUp(f)}
-                    className="rounded-lex border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] px-3 py-1.5 text-[13px] text-stone-600 dark:text-stone-300 hover:border-stone-300 hover:text-ink transition-colors"
+                    className="rounded-lex border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] px-3 py-1.5 text-[13px] text-stone-600 dark:text-stone-300 hover:border-stone-300 hover:text-ink transition-colors"
                   >
                     {f}
                   </button>
@@ -785,7 +785,7 @@ function Composer(props: {
   const [lawOpen, setLawOpen] = useState(false)
   const lawActive = !!(asOf || jurisdiction.trim())
   return (
-    <div className="mt-8 rounded-lex-lg border border-stone-300 dark:border-white/10 bg-white dark:bg-[#1d1f19]">
+    <div className="mt-8 rounded-lex-lg border border-stone-300 dark:border-white/10 bg-white dark:bg-[#0a1a12]">
       <textarea
         value={input}
         onChange={(e) => setInput(e.target.value)}
@@ -841,7 +841,7 @@ function Composer(props: {
               As of{lawActive ? `: ${asOf || jurisdiction}` : ''} <ChevronDown size={12} />
             </button>
             {lawOpen && (
-              <div className="absolute bottom-full mb-1.5 left-0 rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] shadow-lex-md p-3 z-10 w-60 space-y-2.5">
+              <div className="absolute bottom-full mb-1.5 left-0 rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] shadow-lex-md p-3 z-10 w-60 space-y-2.5">
                 <label className="block">
                   <span className="text-[12px] font-medium text-stone-500 dark:text-stone-400">In force on</span>
                   <input
@@ -889,7 +889,7 @@ function Composer(props: {
               Sources: {sources} <ChevronDown size={12} />
             </button>
             {srcOpen && (
-              <div className="absolute bottom-full mb-1.5 left-0 rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] shadow-lex-md py-1 z-10 w-36">
+              <div className="absolute bottom-full mb-1.5 left-0 rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] shadow-lex-md py-1 z-10 w-36">
                 {[3, 5, 10, 20].map((n) => (
                   <button
                     key={n}

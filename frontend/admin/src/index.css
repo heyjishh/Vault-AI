@@ -4,28 +4,28 @@
 
 /* REA'd from harvey.ai — warm ivory paper, ink text, hairline borders.
    Piece 39: the token layer is ported 1:1 from the user app
-   (frontend/src/index.css) — the dual-tone page wash in both themes,
-   the reference glow, theme-flipping accents, and bronze. The light
-   wash/glow carry Pieces 38+40's user-directed lightenings and the
-   Piece 40 running-gradient architecture; the dark values are
-   unchanged from the taste-skill reference. */
+   (frontend/src/index.css) and stays identical to it.
+   Piece 42: the palette is the user's own jurisvault.ai theme —
+   brand-green accents #2ad06f → #21c063, a white → soft-grey →
+   pale-green light ground, and a dark ground that IS the site's
+   deep-emerald auth base. --bronze carries the brand green. */
 :root {
   --paper: #fafaf9;
   --ink: #0f0e0d;
   --hairline: #e5e5e3;
-  --accent-a: #b4552d;
-  --accent-b: #5c7350;
-  --bronze: #593d3a;
-  --grad-page: linear-gradient(155deg,#fefcf8 0%,#fcfaf6 34%,#f9faf3 68%,#f4f7ec 100%);
-  --grad-glow: radial-gradient(58% 46% at 12% 0%,rgba(240,190,120,.26),transparent 70%),radial-gradient(52% 50% at 92% 8%,rgba(146,168,120,.24),transparent 70%);
+  --accent-a: #2ad06f;
+  --accent-b: #21c063;
+  --bronze: #21c063;
+  --grad-page: linear-gradient(155deg,#ffffff 0%,#f7f7f7 55%,#eef5f0 100%);
+  --grad-glow: radial-gradient(58% 46% at 12% 0%,rgba(33,192,99,.10),transparent 70%),radial-gradient(52% 50% at 92% 8%,rgba(42,208,111,.08),transparent 70%);
 }
 
 html.dark {
-  --accent-a: #e08a5f;
-  --accent-b: #9db488;
-  --bronze: #c8b184;
-  --grad-page: linear-gradient(155deg,#221a12 0%,#191a13 38%,#12150d 70%,#0d120a 100%);
-  --grad-glow: radial-gradient(58% 46% at 12% 0%,rgba(214,130,70,.28),transparent 70%),radial-gradient(52% 50% at 92% 8%,rgba(120,150,95,.26),transparent 70%);
+  --accent-a: #2ad06f;
+  --accent-b: #21c063;
+  --bronze: #2ad06f;
+  --grad-page: linear-gradient(155deg,#04100b 0%,#061a12 55%,#04100b 100%);
+  --grad-glow: radial-gradient(60rem 42rem at 22% 48%,rgba(33,192,99,.15) 0%,transparent 62%),radial-gradient(46rem 34rem at 88% 8%,rgba(33,192,99,.09) 0%,transparent 60%);
 }
 
 /* Piece 40 — the running-gradient architecture, ported: the
@@ -33,10 +33,10 @@ html.dark {
    (below). Roots that carry .app-wash paint ONLY the solid
    end-stop fallback; body carries the same fallback. */
 .app-wash {
-  background: #f4f7ec;
+  background: #eef5f0;
 }
 html.dark .app-wash {
-  background: #0d120a;
+  background: #04100b;
 }
 
 html, body, #root {
@@ -44,16 +44,16 @@ html, body, #root {
 }
 
 body {
-  background: #f4f7ec;
+  background: #eef5f0;
   color: var(--ink);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, system-ui, sans-serif;
+  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
 
 /* Piece 40: branded selection tint + one consistent bronze focus
    ring, ported from the user app. */
-::selection { background: rgba(89,61,58,.16); }
+::selection { background: rgba(33,192,99,.16); }
 :focus-visible { outline: 2px solid var(--bronze); outline-offset: 2px; border-radius: 4px; }
 
 /* thin scrollbars */
@@ -61,7 +61,8 @@ body {
 *::-webkit-scrollbar { width: 8px; height: 8px; }
 *::-webkit-scrollbar-thumb { background: #cccac6; border-radius: 4px; }
 
-/* ——— Dual-tone brand layer (terracotta → sage), ported ——— */
+/* ——— Dual-tone brand layer (brand green → brand green), ported ———
+   Piece 42: jurisvault.ai's auth-button pair, via --accent-a/-b. */
 .dual-tone-bar { background: linear-gradient(120deg, var(--accent-a), var(--accent-b)); }
 .dual-tone-text {
   background: linear-gradient(120deg, var(--accent-a), var(--accent-b));
@@ -97,16 +98,77 @@ body {
   .dual-tone-backdrop { animation: none; }
 }
 
+/* ——— Piece 42: the jurisvault.ai auth scene, ported ———
+   The admin sign-in (AuthGate) runs the brand site's living
+   background, exactly as the user app's AuthPage: the deep-emerald
+   base stack, a 1px grid under a centre mask, two counter-rotating
+   conic rings, a pulsing core glow and twinkling spark dots —
+   recipes taken 1:1 from jurisvault.ai. The scene is always dark
+   (the auth root carries the `dark` class locally), whatever the
+   app theme. .auth-scene also sets the site's auth text colour
+   (#e9f3ed) so unclassed copy inside the scene inherits
+   light-on-emerald. All layers are pointer-events-none. */
+.auth-scene { color: #e9f3ed; isolation: isolate; }
+.auth-scene-base {
+  position: absolute; inset: 0; pointer-events: none;
+  background:
+    radial-gradient(60rem 42rem at 22% 48%, rgba(33,192,99,.15) 0%, transparent 62%),
+    radial-gradient(46rem 34rem at 88% 8%, rgba(33,192,99,.09) 0%, transparent 60%),
+    linear-gradient(155deg,#04100b 0%,#061a12 55%,#04100b 100%);
+}
+.auth-grid {
+  position: absolute; inset: 0; pointer-events: none;
+  background-image: linear-gradient(rgba(255,255,255,.08) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.08) 1px, transparent 1px);
+  background-size: 44px 44px;
+  -webkit-mask-image: radial-gradient(70% 60% at 50% 45%, #000 0%, transparent 78%);
+  mask-image: radial-gradient(70% 60% at 50% 45%, #000 0%, transparent 78%);
+}
+.auth-ring-wrap {
+  position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none;
+}
+.auth-ring-wrap > * { grid-area: 1 / 1; place-self: center; }
+.auth-ring {
+  border-radius: 9999px; pointer-events: none;
+  background: conic-gradient(from 0deg, transparent 0deg, rgba(33,192,99,.30) 40deg, transparent 95deg, rgba(33,192,99,.15) 205deg, transparent 265deg);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 2px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 2px));
+  animation: authSpin 46s linear infinite;
+}
+.auth-ring-rev {
+  background: conic-gradient(from 0deg, transparent 0deg, rgba(33,192,99,.18) 40deg, transparent 95deg, rgba(33,192,99,.08) 205deg, transparent 265deg);
+  animation: authSpin 68s linear infinite reverse;
+}
+.auth-core {
+  position: absolute; top: 50%; left: 50%; pointer-events: none;
+  width: 34rem; height: 34rem; max-width: 90vmin; max-height: 90vmin;
+  border-radius: 9999px;
+  background: radial-gradient(circle, rgba(33,192,99,.35), rgba(33,192,99,.08) 42%, transparent 70%);
+  animation: authPulse 5.5s ease-in-out infinite;
+}
+.auth-spark {
+  position: absolute; border-radius: 9999px; background: #21c063; pointer-events: none;
+  animation: authTwinkle 4s ease-in-out infinite;
+}
+@keyframes authSpin { to { transform: rotate(360deg); } }
+@keyframes authPulse {
+  0%, 100% { opacity: .55; transform: translate(-50%,-50%) scale(1); }
+  50% { opacity: 1; transform: translate(-50%,-50%) scale(1.07); }
+}
+@keyframes authTwinkle { 0%, 100% { opacity: .15; } 50% { opacity: .9; } }
+@media (prefers-reduced-motion: reduce) {
+  .auth-ring, .auth-ring-rev, .auth-core, .auth-spark { animation: none; }
+}
+
 /* ——— Dark mode overrides for the plain-CSS surfaces, ported ——— */
-.dark body { background-color: #0d120a; color: #f4f2ee; }
-.dark ::selection { background: rgba(200,177,132,.28); }
+.dark body { background-color: #04100b; color: #f4f2ee; }
+.dark ::selection { background: rgba(42,208,111,.28); }
 .dark * { scrollbar-color: #4a463f transparent; }
 .dark *::-webkit-scrollbar-thumb { background: #4a463f; }
 
 /* rendered assistant markdown */
 .prose-lex { font-size: 15px; line-height: 1.75; color: #1f1d1a; }
 .prose-lex p { margin: 0.75em 0; }
-.prose-lex h1, .prose-lex h2, .prose-lex h3 { font-family: Georgia, "Times New Roman", serif; font-weight: 400; margin: 1.1em 0 0.5em; }
+.prose-lex h1, .prose-lex h2, .prose-lex h3 { font-family: Archivo, Inter, system-ui, sans-serif; font-weight: 700; margin: 1.1em 0 0.5em; }
 .prose-lex h1 { font-size: 1.5rem; } .prose-lex h2 { font-size: 1.25rem; } .prose-lex h3 { font-size: 1.1rem; }
 .prose-lex ul, .prose-lex ol { margin: 0.75em 0; padding-left: 1.5em; }
 .prose-lex li { margin: 0.3em 0; }

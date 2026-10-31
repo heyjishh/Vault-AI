@@ -125,7 +125,7 @@ export default function CustomizePage() {
           {custom ? (
             <span className="text-[10.5px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full px-2 py-0.5">Customized</span>
           ) : (
-            <span className="text-[10.5px] font-semibold bg-stone-100 dark:bg-[#26281f] text-stone-500 dark:text-stone-400 border border-stone-200 dark:border-white/10 rounded-full px-2 py-0.5">{isText ? 'Built-in default' : 'No standing instructions'}</span>
+            <span className="text-[10.5px] font-semibold bg-stone-100 dark:bg-[#122419] text-stone-500 dark:text-stone-400 border border-stone-200 dark:border-white/10 rounded-full px-2 py-0.5">{isText ? 'Built-in default' : 'No standing instructions'}</span>
           )}
           <button
             type="button"
@@ -169,14 +169,14 @@ export default function CustomizePage() {
 
       <div className="mt-8 flex gap-6 items-start">
         {/* Section tree */}
-        <nav className="w-56 flex-shrink-0 rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] p-2 space-y-1 sticky top-6">
+        <nav className="w-56 flex-shrink-0 rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] p-2 space-y-1 sticky top-6">
           {SECTIONS.map(({ id, label, icon: Icon, blurb }) => (
             <button
               key={id}
               onClick={() => setSection(id)}
               className={`w-full text-left rounded-lex px-3 py-2.5 transition-colors ${
                 section === id
-                  ? 'bg-stone-100 dark:bg-[#26281f] shadow-[inset_0_0_0_1px_#e5e5e3] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.10)]'
+                  ? 'bg-stone-100 dark:bg-[#122419] shadow-[inset_0_0_0_1px_#e5e5e3] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.10)]'
                   : 'hover:bg-stone-100/70 dark:hover:bg-white/5'
               }`}
             >
@@ -202,7 +202,7 @@ export default function CustomizePage() {
         </nav>
 
         {/* Active section panel */}
-        <div className="flex-1 min-w-0 rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] p-6">
+        <div className="flex-1 min-w-0 rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] p-6">
           {section === 'branding' && (
             <>
               <h2 className="font-display text-lg">Branding</h2>

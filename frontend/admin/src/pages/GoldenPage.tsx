@@ -6,7 +6,7 @@ import { ErrorBanner, PageHead, Spinner, StatCard } from '../ui'
 
 function ResultBadge({ rule }: { rule: GoldenRule }) {
   const r = rule.last_result
-  if (!r) return <span className="rounded-full bg-stone-100 dark:bg-[#26281f] text-stone-500 dark:text-stone-400 px-2 py-0.5 text-[12px]">not run yet</span>
+  if (!r) return <span className="rounded-full bg-stone-100 dark:bg-[#122419] text-stone-500 dark:text-stone-400 px-2 py-0.5 text-[12px]">not run yet</span>
   return r.passed ? (
     <span className="rounded-full bg-[#e7f4e4] text-[#2f6b2f] px-2 py-0.5 text-[12px]">passing</span>
   ) : (
@@ -96,7 +96,7 @@ export default function GoldenPage() {
         <StatCard label="Rules" value={list.length} sub={`${list.filter((r) => r.source === 'captured').length} promoted from real queries`} />
         <StatCard label="Passing" value={last_run ? `${passing} / ${list.length}` : '—'} sub={last_run ? `last run ${new Date(last_run.ran_at).toLocaleString('en-IN')}` : 'run the set to score it'} />
         <StatCard label="Pass rate" value={last_run && last_run.total > 0 ? `${Math.round((last_run.passed / last_run.total) * 100)}%` : '—'} sub="of the last full run" />
-        <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] px-5 py-4 flex flex-col justify-center">
+        <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] px-5 py-4 flex flex-col justify-center">
           <button
             onClick={() => run.mutate()}
             disabled={run.isPending || list.length === 0}
@@ -111,7 +111,7 @@ export default function GoldenPage() {
       {add.isError && <div className="mt-4"><ErrorBanner message={(add.error as Error).message} /></div>}
       {update.isError && <div className="mt-4"><ErrorBanner message={(update.error as Error).message} /></div>}
       {editing && (
-        <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] px-6 py-5 grid gap-3.5 mt-9">
+        <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] px-6 py-5 grid gap-3.5 mt-9">
           <h2 className="font-display text-xl">Edit rule</h2>
           <label className="block">
             <span className="text-meta text-stone-500 dark:text-stone-400 font-medium">Question</span>
@@ -153,7 +153,7 @@ export default function GoldenPage() {
       {list.length === 0 ? (
         <p className="text-stone-500 dark:text-stone-400 text-[13.5px]">No rules yet — add one below, or promote a captured question.</p>
       ) : (
-        <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] overflow-hidden">
+        <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] overflow-hidden">
           <table className="w-full text-[13.5px]">
             <thead>
               <tr className="text-left text-meta text-stone-500 dark:text-stone-400 border-b border-stone-200 dark:border-white/10">
@@ -208,7 +208,7 @@ export default function GoldenPage() {
         {/* Add rule */}
         <div>
           <h2 className="font-display text-xl mb-3">Add a rule</h2>
-          <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] px-6 py-5 grid gap-3.5">
+          <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] px-6 py-5 grid gap-3.5">
             <label className="block">
               <span className="text-meta text-stone-500 dark:text-stone-400 font-medium">Question</span>
               <input value={question} onChange={(e) => setQuestion(e.target.value)} className="mt-1.5 w-full rounded-lex border border-stone-300 dark:border-white/10 px-3 py-2 text-[14px]" placeholder="What does Section 86 of the IT Act deal with?" />
@@ -238,7 +238,7 @@ export default function GoldenPage() {
         {/* Promote captured queries */}
         <div>
           <h2 className="font-display text-xl mb-3">Promote a captured query</h2>
-          <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] overflow-hidden">
+          <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] overflow-hidden">
             {captured.length === 0 && (
               <p className="px-5 py-4 text-stone-500 dark:text-stone-400 text-[13.5px]">No captured questions yet — they appear as users ask.</p>
             )}

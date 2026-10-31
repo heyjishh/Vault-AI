@@ -67,7 +67,7 @@ export default function BillingPage() {
 
       {/* Per-user spend */}
       <h2 className="font-display text-xl mt-9 mb-3">Users &amp; spend</h2>
-      <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] overflow-hidden">
+      <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] overflow-hidden">
         <table className="w-full text-[13.5px]">
           <thead>
             <tr className="text-left text-meta text-stone-500 dark:text-stone-400 border-b border-stone-200 dark:border-white/10">
@@ -88,13 +88,13 @@ export default function BillingPage() {
                     {u.role === 'admin' && <span className="ml-2 rounded-full bg-ink text-ivory px-2 py-0.5 text-[11px]">admin</span>}
                   </td>
                   <td className="px-5 py-3">
-                    <span className={`rounded-full px-2 py-0.5 text-[12px] ${u.plan_id === 'premium' ? 'bg-[#efe6fb] text-[#5b3a8e]' : u.plan_id === 'basic' ? 'bg-[#e3ecfb] text-[#2b4a7f]' : 'bg-stone-100 dark:bg-[#26281f] text-stone-600 dark:text-stone-300'}`}>
+                    <span className={`rounded-full px-2 py-0.5 text-[12px] ${u.plan_id === 'premium' ? 'bg-[#efe6fb] text-[#5b3a8e]' : u.plan_id === 'basic' ? 'bg-[#e3ecfb] text-[#2b4a7f]' : 'bg-stone-100 dark:bg-[#122419] text-stone-600 dark:text-stone-300'}`}>
                       {u.plan_name}
                     </span>
                   </td>
                   <td className="px-5 py-3">
                     <div className="flex items-center gap-2">
-                      <div className="h-2 flex-1 rounded-full bg-stone-100 dark:bg-[#26281f] overflow-hidden">
+                      <div className="h-2 flex-1 rounded-full bg-stone-100 dark:bg-[#122419] overflow-hidden">
                         <div className={`h-full ${pct >= 100 ? 'bg-[#c2410c]' : 'bg-ink'}`} style={{ width: `${pct}%` }} />
                       </div>
                       <span className="text-stone-500 dark:text-stone-400 whitespace-nowrap">
@@ -116,7 +116,7 @@ export default function BillingPage() {
       {o.recent_payments.length === 0 ? (
         <p className="text-stone-500 dark:text-stone-400 text-[13.5px]">No payments yet. They appear here the moment a user subscribes.</p>
       ) : (
-        <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] overflow-hidden">
+        <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] overflow-hidden">
           <table className="w-full text-[13.5px]">
             <thead>
               <tr className="text-left text-meta text-stone-500 dark:text-stone-400 border-b border-stone-200 dark:border-white/10">
@@ -152,7 +152,7 @@ export default function BillingPage() {
 
       {/* Payment gateway settings */}
       <h2 className="font-display text-xl mt-9 mb-3">Payment gateway — connect your bank</h2>
-      <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] px-6 py-5 max-w-3xl">
+      <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] px-6 py-5 max-w-3xl">
         <p className="text-[13.5px] text-stone-600 dark:text-stone-300">
           Subscriptions are collected through <strong>YouPI-PG</strong>, a self-hosted UPI gateway you run yourself:
           users pay by UPI and the money settles <strong>directly into the bank account linked to your UPI ID</strong> —
@@ -164,7 +164,7 @@ export default function BillingPage() {
             <select
               value={provider}
               onChange={(e) => setProvider(e.target.value)}
-              className="mt-1.5 w-full rounded-lex border border-stone-300 dark:border-white/10 px-3 py-2 text-[14px] bg-white dark:bg-[#1d1f19]"
+              className="mt-1.5 w-full rounded-lex border border-stone-300 dark:border-white/10 px-3 py-2 text-[14px] bg-white dark:bg-[#0a1a12]"
             >
               <option value="mock">Test mode (simulated payments)</option>
               <option value="youpi">YouPI-PG — live UPI gateway</option>
@@ -202,7 +202,7 @@ export default function BillingPage() {
           </label>
           <div className="rounded-lex bg-ivory dark:bg-[#14120f] border border-stone-200 dark:border-white/10 px-4 py-3 text-[13px] text-stone-600 dark:text-stone-300">
             In YouPI-PG, set the merchant webhook URL to:
-            <code className="block mt-1 text-[12.5px] bg-white dark:bg-[#1d1f19] border border-stone-200 dark:border-white/10 rounded px-2 py-1.5 break-all">{webhookUrl}</code>
+            <code className="block mt-1 text-[12.5px] bg-white dark:bg-[#0a1a12] border border-stone-200 dark:border-white/10 rounded px-2 py-1.5 break-all">{webhookUrl}</code>
             Payment confirmations arrive there (HMAC-signed) and activate subscriptions instantly; this app also polls the gateway as a fallback.
           </div>
           {save.isError && <ErrorBanner message={(save.error as Error).message} />}

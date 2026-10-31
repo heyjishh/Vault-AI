@@ -94,7 +94,7 @@ function StatusSelect({ matterId, status }: { matterId: string; status: string }
     <select
       value={status}
       onChange={(e) => update.mutate(e.target.value)}
-      className="rounded-lex border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] px-2.5 py-1.5 text-[13px] outline-none focus:border-stone-400"
+      className="rounded-lex border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] px-2.5 py-1.5 text-[13px] outline-none focus:border-stone-400"
       title="Brief status"
     >
       {['Active', 'On hold', 'Closed'].map((s) => <option key={s}>{s}</option>)}
@@ -109,7 +109,7 @@ function Overview({ matterId, notes }: { matterId: string; notes: string }) {
   return (
     <div>
       {/* Piece 34: the KPIs sit in ONE hairline-divided strip, not tiles. */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 sm:divide-x divide-stone-200 dark:divide-white/10 rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] [&>*]:min-w-0">
+      <div className="grid grid-cols-2 sm:grid-cols-4 sm:divide-x divide-stone-200 dark:divide-white/10 rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] [&>*]:min-w-0">
         <StatCard label="Documents" value={d?.document_count ?? '—'} />
         <StatCard label="Chunks indexed" value={d?.chunk_count ?? '—'} />
         <StatCard label="Activities" value={d?.activity_count ?? '—'} />
@@ -120,7 +120,7 @@ function Overview({ matterId, notes }: { matterId: string; notes: string }) {
       </div>
 
       {notes && (
-        <div className="mt-5 rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] px-5 py-4">
+        <div className="mt-5 rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] px-5 py-4">
           <p className="text-[12.5px] text-stone-400 dark:text-stone-500 font-medium">Notes</p>
           <p className="text-[14px] mt-1.5 whitespace-pre-wrap">{notes}</p>
         </div>
@@ -137,7 +137,7 @@ function Overview({ matterId, notes }: { matterId: string; notes: string }) {
         ) : (
           <div className="mt-3 flex flex-wrap gap-2">
             {d.entities.map((e) => (
-              <span key={e.name} className="rounded-lex border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] px-3 py-1.5 text-[13px]" title={`${e.kind} · mentioned in ${e.mentions} chunks`}>
+              <span key={e.name} className="rounded-lex border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] px-3 py-1.5 text-[13px]" title={`${e.kind} · mentioned in ${e.mentions} chunks`}>
                 {e.name}
                 <span className="text-stone-400 dark:text-stone-500 ml-1.5 text-[11px]">{e.kind} · {e.mentions}</span>
               </span>
@@ -189,7 +189,7 @@ function TimelineList({ items, loading, matterId }: { items: import('../api/type
       {items.map((t, i) => {
         const mine = !!t.id && !!myEmail && t.user_email === myEmail
         return (
-          <div key={t.id ?? i} className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] px-4 py-3 flex gap-3">
+          <div key={t.id ?? i} className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] px-4 py-3 flex gap-3">
             <div className="min-w-0 flex-1">
               <p className="text-[14px] font-medium truncate">{t.title}</p>
               {t.excerpt && <p className="text-[13px] text-stone-500 dark:text-stone-400 mt-0.5 line-clamp-2">{t.excerpt}</p>}
@@ -357,7 +357,7 @@ function Documents({ matterId }: { matterId: string }) {
       ) : (
         <div className="space-y-2">
           {docs.map((d) => (
-            <div key={d.id} className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] px-4 py-3 flex items-center gap-3">
+            <div key={d.id} className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] px-4 py-3 flex items-center gap-3">
               <FileText size={16} className="text-stone-400 dark:text-stone-500 flex-shrink-0" />
               <div className="min-w-0 flex-1">
                 <p className="text-[14px] font-medium truncate">{d.title}</p>
@@ -378,7 +378,7 @@ function Documents({ matterId }: { matterId: string }) {
         </div>
       )}
 
-      <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] px-5 py-4 mt-5">
+      <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] px-5 py-4 mt-5">
         <p className="text-[12.5px] text-stone-400 dark:text-stone-500 font-medium">Add documents</p>
         <div className="mt-3 flex flex-wrap items-center gap-3">
           <label className="rounded-lex bg-ink text-ivory px-3.5 py-2 text-[13px] font-medium cursor-pointer hover:bg-ink-900 transition-colors">
@@ -414,7 +414,7 @@ function Documents({ matterId }: { matterId: string }) {
             <div className="flex items-center gap-2">
               <select
                 value={attachId} onChange={(e) => setAttachId(e.target.value)}
-                className="rounded-lex border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] px-2.5 py-2 text-[13px] outline-none max-w-[240px]"
+                className="rounded-lex border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] px-2.5 py-2 text-[13px] outline-none max-w-[240px]"
               >
                 <option value="">File an existing Vault document…</option>
                 {unfiled.map((d) => <option key={d.id} value={d.id}>{d.title}</option>)}
@@ -490,7 +490,7 @@ function Notes({ matterId, initial }: { matterId: string; initial: string }) {
         value={notes} onChange={(e) => setNotes(e.target.value)}
         rows={10}
         placeholder="What should anyone opening this brief know?"
-        className="mt-3 w-full rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] px-4 py-3 text-[14px] outline-none focus:border-stone-400"
+        className="mt-3 w-full rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] px-4 py-3 text-[14px] outline-none focus:border-stone-400"
       />
       <button
         onClick={() => save.mutate()} disabled={save.isPending}

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { adminApi, errMsg, type Me } from './api'
-import { BrandMark, DualToneBackdrop, ThemeToggle } from './ui'
+import { AuthScene, BrandMark, ThemeToggle } from './ui'
 
 export default function AuthGate({ onAuthed }: { onAuthed: (u: Me) => void }) {
   const [email, setEmail] = useState('')
@@ -23,9 +23,11 @@ export default function AuthGate({ onAuthed }: { onAuthed: (u: Me) => void }) {
   }
 
   return (
-    <div className="min-h-screen app-wash relative overflow-hidden flex items-center justify-center p-6">
-      {/* The moving glow layer over the page wash + theme toggle */}
-      <DualToneBackdrop />
+    <div className="min-h-screen dark auth-scene bg-[#04100b] relative overflow-hidden flex items-center justify-center p-6">
+      {/* Piece 42: the jurisvault.ai auth scene runs behind the
+          admin sign-in — always dark (local `dark` class), whatever
+          the app theme — plus the theme toggle */}
+      <AuthScene />
       <div className="absolute top-4 right-4 z-20">
         <ThemeToggle />
       </div>
@@ -44,7 +46,7 @@ export default function AuthGate({ onAuthed }: { onAuthed: (u: Me) => void }) {
             <input
               type="email" required value={email} onChange={(e) => setEmail(e.target.value)}
               autoComplete="email" placeholder="admin@firm.com"
-              className="w-full rounded-lex border border-stone-300 dark:border-white/10 bg-white dark:bg-[#1d1f19] px-3.5 py-2.5 text-[15px] outline-none focus:border-ink focus:ring-1 focus:ring-ink placeholder:text-stone-400"
+              className="w-full rounded-lex border border-stone-300 dark:border-white/10 bg-white dark:bg-[#0a1a12] px-3.5 py-2.5 text-[15px] outline-none focus:border-ink focus:ring-1 focus:ring-ink placeholder:text-stone-400"
             />
           </div>
           <div>
@@ -52,7 +54,7 @@ export default function AuthGate({ onAuthed }: { onAuthed: (u: Me) => void }) {
             <input
               type="password" required value={password} onChange={(e) => setPassword(e.target.value)}
               autoComplete="current-password" placeholder="••••••••"
-              className="w-full rounded-lex border border-stone-300 dark:border-white/10 bg-white dark:bg-[#1d1f19] px-3.5 py-2.5 text-[15px] outline-none focus:border-ink focus:ring-1 focus:ring-ink placeholder:text-stone-400"
+              className="w-full rounded-lex border border-stone-300 dark:border-white/10 bg-white dark:bg-[#0a1a12] px-3.5 py-2.5 text-[15px] outline-none focus:border-ink focus:ring-1 focus:ring-ink placeholder:text-stone-400"
             />
           </div>
           {error && (

@@ -45,14 +45,14 @@ export default function CorpusPage() {
           ['Chunks', stats?.chunks],
           ['Entities', stats?.entities],
         ].map(([k, v]) => (
-          <div key={k as string} className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] px-5 py-4">
+          <div key={k as string} className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] px-5 py-4">
             <p className="text-[12px] text-stone-500 dark:text-stone-400 font-medium">{k}</p>
             <p className="font-display text-3xl mt-1 tracking-tight">{v ?? '—'}</p>
           </div>
         ))}
       </div>
 
-      <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] p-5 mt-4">
+      <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] p-5 mt-4">
         <h3 className="flex items-center gap-2 font-medium text-[15px]"><Database size={16} /> S3 / R2 bucket ingest</h3>
         <p className="text-[13px] text-stone-500 dark:text-stone-400 mt-2 leading-relaxed">
           Pulls every supported file under the prefix from the server-configured bucket
@@ -79,7 +79,7 @@ export default function CorpusPage() {
       ) : !docs || docs.length === 0 ? (
         <p className="text-[15px] text-stone-500 dark:text-stone-400">No documents indexed yet.</p>
       ) : (
-        <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] overflow-hidden">
+        <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] overflow-hidden">
           {docs.map((d, i) => (
             <div key={d.id} className={`flex items-center gap-4 px-5 py-3.5 ${i > 0 ? 'border-t border-stone-200 dark:border-white/10' : ''}`}>
               <FileText size={17} className="text-stone-400 dark:text-stone-500 flex-shrink-0" />

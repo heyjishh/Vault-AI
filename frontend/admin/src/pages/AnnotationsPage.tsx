@@ -14,7 +14,7 @@ function AnnotationRow({ a, currentFp }: { a: AnnotationRecord; currentFp: strin
   })
   const stale = a.corpus_fp !== currentFp
   return (
-    <div className="rounded-lex border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] p-4">
+    <div className="rounded-lex border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] p-4">
       <div className="flex items-start justify-between gap-3">
         <p className="font-medium text-[15px] leading-snug">{a.question}</p>
         <div className="flex items-center gap-1.5 flex-shrink-0">
@@ -23,9 +23,9 @@ function AnnotationRow({ a, currentFp }: { a: AnnotationRecord; currentFp: strin
           ) : a.enabled ? (
             <span className="rounded-full bg-[#e7f4e4] text-[#2f6b2f] px-2 py-0.5 text-[12px]">serving</span>
           ) : (
-            <span className="rounded-full bg-stone-100 dark:bg-[#26281f] text-stone-500 dark:text-stone-400 px-2 py-0.5 text-[12px]">paused</span>
+            <span className="rounded-full bg-stone-100 dark:bg-[#122419] text-stone-500 dark:text-stone-400 px-2 py-0.5 text-[12px]">paused</span>
           )}
-          <span className="rounded-full bg-stone-100 dark:bg-[#26281f] text-stone-500 dark:text-stone-400 px-2 py-0.5 text-[12px]">
+          <span className="rounded-full bg-stone-100 dark:bg-[#122419] text-stone-500 dark:text-stone-400 px-2 py-0.5 text-[12px]">
             {a.scope_doc_ids ? `brief · ${a.scope_doc_ids.length} docs` : 'all unscoped'}
           </span>
         </div>
@@ -101,7 +101,7 @@ export default function AnnotationsPage() {
       {data.isError && <ErrorBanner message={(data.error as Error).message} />}
 
       {/* Promote a captured question */}
-      <div className="rounded-lex border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] p-5 mt-2">
+      <div className="rounded-lex border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] p-5 mt-2">
         <h2 className="font-display text-lg tracking-tight flex items-center gap-2">
           <BadgeCheck size={17} className="text-[#2f6b2f]" /> Verify a captured answer
         </h2>
@@ -164,7 +164,7 @@ export default function AnnotationsPage() {
       </div>
 
       {/* Manual annotation */}
-      <div className="rounded-lex border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] p-5 mt-4">
+      <div className="rounded-lex border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] p-5 mt-4">
         <h2 className="font-display text-lg tracking-tight flex items-center gap-2">
           <Plus size={17} /> Write a verified answer
         </h2>
