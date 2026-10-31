@@ -15,6 +15,22 @@ live**, what is **built but unverified**, and what is **roadmap**.
 ## [Unreleased]
 
 ### Added
+- **Dark-mode hover + selection repair (1 Nov 2026, Piece 55).**
+  JISHAN: "in darkmode the hover text is not visible and
+  highlitted text also" — `hover:text-ink` (64 uses in the user
+  app, 9 in admin) has no dark counterpart anywhere in the
+  codebase, and ink is near-black, so hovered text vanished on
+  dark surfaces; `group-hover:text-ink` (Dashboard cards) same.
+  Light hover backgrounds (stone-100/ivory family) also flashed
+  near-white under light text where no `dark:hover:` pair was
+  written. Fixed centrally in CSS, both apps: in dark mode
+  `hover:text-ink` / `group-hover:text-ink` resolve to the light
+  ink `#f4f2ee`, the light hover backgrounds resolve to a white
+  8% tint (visually identical to the `dark:hover:bg-white/10`
+  pairs where they exist), and text selection gets a stronger
+  brand-green background with white text. Verified: builds
+  clean, overrides present in both shipped bundles, live on
+  test + public incl. /admin/.
 - **Running border everywhere (1 Nov 2026, Piece 54).** JISHAN:
   the green inline border was still on the Dashboard and the
   running border wasn't there — "do same everywhere". The

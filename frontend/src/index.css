@@ -120,6 +120,27 @@ html.dark .sidebar-raise {
   box-shadow: 12px 0 26px -12px rgba(0,0,0,.50);
 }
 
+/* Piece 55: dark-mode hover + selection repair. JISHAN: in dark
+   mode hover text is not visible, and highlighted text also.
+   Root cause: hover:text-ink (64 uses) has NO dark counterpart
+   anywhere — ink is near-black, so hovered text vanishes on dark
+   surfaces; group-hover:text-ink (Dashboard cards) same. And the
+   light hover backgrounds (stone-100 / ivory family) flash a
+   near-white bg under light text where no dark:hover pair was
+   written. These unlayered overrides sit above the Tailwind
+   utilities in the cascade; where a dark:hover:bg-white/10 pair
+   DOES exist the result is visually the same (.08 vs .10 white).
+   Selection gets a stronger green + white text so highlighted
+   text reads in dark mode. */
+html.dark .hover\:text-ink:hover { color: #f4f2ee; }
+html.dark .group:hover .group-hover\:text-ink { color: #f4f2ee; }
+html.dark .hover\:bg-stone-100:hover,
+html.dark .hover\:bg-stone-100\/70:hover,
+html.dark .hover\:bg-stone-50:hover,
+html.dark .hover\:bg-ivory:hover,
+html.dark .hover\:bg-ivory\/15:hover { background-color: rgba(255,255,255,.08); }
+html.dark ::selection { background: rgba(42,208,111,.48); color: #ffffff; }
+
 @media (prefers-reduced-motion: reduce) {
   .view-enter, .dialog-pop, .menu-pop, .toast-in { animation: none; }
   .skeleton { animation: none; }
