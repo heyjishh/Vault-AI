@@ -170,7 +170,7 @@ export function UploadProgressList({
   ).length
   const ready = items.filter((u) => u.status === 'ready').length
   return (
-    <div className={`rounded-lex border border-stone-200 px-3 py-2.5 ${className ?? 'mt-3'}`}>
+    <div className={`rounded-lex border border-stone-200 dark:border-white/10 px-3 py-2.5 ${className ?? 'mt-3'}`}>
       {headerLabel != null && (
         <>
           <div className="flex items-baseline justify-between gap-3">
@@ -178,7 +178,7 @@ export function UploadProgressList({
             {onClear && (
               <button
                 onClick={onClear}
-                className="text-[12px] text-stone-400 hover:text-stone-600"
+                className="text-[12px] text-stone-400 dark:text-stone-500 hover:text-stone-600"
               >
                 Clear list
               </button>
@@ -186,10 +186,10 @@ export function UploadProgressList({
           </div>
           <div className="mt-2">
             <div className="flex items-baseline justify-between gap-3">
-              <span className="text-[12px] text-stone-500">
+              <span className="text-[12px] text-stone-500 dark:text-stone-400">
                 {finished} of {items.length} files done · {ready} ready
               </span>
-              <span className="text-[12px] text-stone-400">
+              <span className="text-[12px] text-stone-400 dark:text-stone-500">
                 {Math.round((finished / items.length) * 100)}%
               </span>
             </div>
@@ -213,14 +213,14 @@ export function UploadProgressList({
             <li key={u.key} className="text-[13px]">
               <div className="flex items-center gap-2">
                 <span className="flex-1 truncate">{u.name}</span>
-                {u.status === 'queued' && <span className="text-stone-400">Queued{elapsed}</span>}
+                {u.status === 'queued' && <span className="text-stone-400 dark:text-stone-500">Queued{elapsed}</span>}
                 {u.status === 'uploading' && (
-                  <span className="text-stone-500">
+                  <span className="text-stone-500 dark:text-stone-400">
                     Uploading…{u.progress != null ? ` ${Math.round(u.progress * 100)}%` : ''}{elapsed}
                   </span>
                 )}
-                {u.status === 'indexing' && <span className="text-stone-500">Indexing…{elapsed}</span>}
-                {u.status === 'sealing' && <span className="text-stone-500">Sealing…{elapsed}</span>}
+                {u.status === 'indexing' && <span className="text-stone-500 dark:text-stone-400">Indexing…{elapsed}</span>}
+                {u.status === 'sealing' && <span className="text-stone-500 dark:text-stone-400">Sealing…{elapsed}</span>}
                 {u.status === 'ready' && (
                   <span className="text-emerald-700">Ready{u.note ? ` · ${u.note}` : ''}</span>
                 )}
@@ -233,7 +233,7 @@ export function UploadProgressList({
                 {u.status === 'failed' && onRetry && (
                   <button
                     onClick={() => onRetry(u.key)}
-                    className="flex items-center gap-1 text-[12px] font-medium text-stone-500 hover:text-ink"
+                    className="flex items-center gap-1 text-[12px] font-medium text-stone-500 dark:text-stone-400 hover:text-ink"
                     title="Retry this upload"
                   >
                     <RotateCcw size={12} /> Retry
@@ -242,7 +242,7 @@ export function UploadProgressList({
                 {terminal && onDismiss && (
                   <button
                     onClick={() => onDismiss(u.key)}
-                    className="text-stone-400 hover:text-ink p-0.5"
+                    className="text-stone-400 dark:text-stone-500 hover:text-ink p-0.5"
                     title="Dismiss"
                   >
                     <X size={13} />

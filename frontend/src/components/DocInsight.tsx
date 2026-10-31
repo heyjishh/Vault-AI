@@ -92,29 +92,29 @@ export function DocInsightModal({ documentId, title, onClose }: {
       onClick={(e) => { e.stopPropagation(); onClose() }}
     >
       <div
-        className="flex max-h-[86vh] w-full max-w-3xl flex-col rounded-lex-lg bg-white shadow-lex-md"
+        className="flex max-h-[86vh] w-full max-w-3xl flex-col rounded-lex-lg bg-white dark:bg-[#1e1c19] shadow-lex-md"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-start gap-3 border-b border-stone-200 px-6 py-4">
+        <div className="flex items-start gap-3 border-b border-stone-200 dark:border-white/10 px-6 py-4">
           <span className="mt-0.5 inline-flex items-center gap-1 rounded bg-ink px-1.5 py-0.5 text-[11px] font-semibold text-ivory">
             <Sparkles size={11} /> Insight
           </span>
           <div className="min-w-0 flex-1">
             <p className="truncate text-[15px] font-semibold leading-snug">{title}</p>
-            <p className="mt-0.5 text-[12.5px] text-stone-500">
+            <p className="mt-0.5 text-[12.5px] text-stone-500 dark:text-stone-400">
               AI insight from the document's full text — generated once, then kept for this session.
             </p>
           </div>
           <button
             onClick={onClose}
-            className="rounded-lex p-1.5 text-stone-500 transition-colors hover:bg-stone-100 hover:text-ink"
+            className="rounded-lex p-1.5 text-stone-500 dark:text-stone-400 transition-colors hover:bg-stone-100 dark:hover:bg-white/10 hover:text-ink"
             title="Close"
           >
             <X size={17} />
           </button>
         </div>
 
-        <div className="flex items-center gap-1.5 border-b border-stone-100 px-6 py-2.5">
+        <div className="flex items-center gap-1.5 border-b border-stone-100 dark:border-white/10 px-6 py-2.5">
           {VIEWS.map((v) => (
             <button
               key={v.action}
@@ -122,7 +122,7 @@ export function DocInsightModal({ documentId, title, onClose }: {
               className={`rounded-lex px-3 py-1.5 text-[12.5px] font-medium transition-colors ${
                 action === v.action
                   ? 'bg-ink text-ivory'
-                  : 'border border-stone-200 bg-white text-stone-600 hover:text-ink hover:border-stone-300'
+                  : 'border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1e1c19] text-stone-600 dark:text-stone-300 hover:text-ink hover:border-stone-300'
               }`}
             >
               {v.label}
@@ -132,13 +132,13 @@ export function DocInsightModal({ documentId, title, onClose }: {
 
         <div className="overflow-y-auto px-6 py-5">
           {busy ? (
-            <div className="flex items-center gap-2.5 py-8 text-[13.5px] text-stone-500">
+            <div className="flex items-center gap-2.5 py-8 text-[13.5px] text-stone-500 dark:text-stone-400">
               <Loader2 size={16} className="animate-spin" />
               {view.busy} Long documents can take a few seconds.
             </div>
           ) : error ? (
             <div>
-              <p className="text-[13.5px] text-stone-600">Couldn’t generate this insight: {error}</p>
+              <p className="text-[13.5px] text-stone-600 dark:text-stone-300">Couldn’t generate this insight: {error}</p>
               <button
                 onClick={() => setNonce((n) => n + 1)}
                 className="mt-3 rounded-lex bg-ink px-3.5 py-2 text-[12.5px] font-medium text-ivory hover:bg-ink-900"
@@ -153,8 +153,8 @@ export function DocInsightModal({ documentId, title, onClose }: {
           ) : null}
         </div>
 
-        <div className="flex items-center justify-between gap-3 border-t border-stone-200 px-6 py-3">
-          <span className="text-[12px] text-stone-500">
+        <div className="flex items-center justify-between gap-3 border-t border-stone-200 dark:border-white/10 px-6 py-3">
+          <span className="text-[12px] text-stone-500 dark:text-stone-400">
             Check against the original document before relying on this for a filing.
           </span>
           {output && (
@@ -164,7 +164,7 @@ export function DocInsightModal({ documentId, title, onClose }: {
                   navigator.clipboard.writeText(output).catch(() => {})
                   toast('success', 'Insight copied')
                 }}
-                className="flex items-center gap-1.5 rounded-lex border border-stone-200 bg-white px-2.5 py-1.5 text-[12px] font-medium text-stone-600 hover:text-ink hover:border-stone-300 transition-colors"
+                className="flex items-center gap-1.5 rounded-lex border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1e1c19] px-2.5 py-1.5 text-[12px] font-medium text-stone-600 dark:text-stone-300 hover:text-ink hover:border-stone-300 transition-colors"
               >
                 <Copy size={13} /> Copy
               </button>
@@ -238,7 +238,7 @@ export function DocInsightButton({ citation, documentId, title, className, label
         onClick={(e) => { void onClick(e) }}
         disabled={resolving}
         title="Summarise this document"
-        className={className ?? 'flex items-center gap-1.5 text-[12.5px] font-medium text-ink hover:underline underline-offset-2 disabled:opacity-50'}
+        className={className ?? 'flex items-center gap-1.5 text-[12.5px] font-medium text-ink dark:text-[#f4f2ee] hover:underline underline-offset-2 disabled:opacity-50'}
       >
         {resolving ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
         {label ?? 'Insight — summarise this document'}

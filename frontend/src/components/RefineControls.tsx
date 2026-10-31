@@ -93,13 +93,13 @@ export function RefineControls({ ctl, disabled }: { ctl: RefineCtl; disabled?: b
           onClick={ctl.refine}
           disabled={disabled || ctl.busy}
           title="Rewrite your prompt so the system understands it better, and add retrieval terms. You review the rewrite before sending — nothing is sent automatically."
-          className="flex items-center gap-1.5 rounded-lex border border-stone-200 px-2.5 py-1 text-[12px] text-stone-500 transition-colors hover:border-stone-300 hover:text-ink disabled:opacity-40"
+          className="flex items-center gap-1.5 rounded-lex border border-stone-200 dark:border-white/10 px-2.5 py-1 text-[12px] text-stone-500 dark:text-stone-400 transition-colors hover:border-stone-300 hover:text-ink disabled:opacity-40"
         >
           <Sparkles size={12} /> {ctl.busy ? 'Refining…' : 'Refine'}
         </button>
       )}
       {ctl.terms.length > 0 && (
-        <span className="text-[11px] text-stone-400">
+        <span className="text-[11px] text-stone-400 dark:text-stone-500">
           Searching also for: {ctl.terms.join(' · ')}
         </span>
       )}

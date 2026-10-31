@@ -6,6 +6,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Juris Vault AI — Legal Research, With Memory</title>
     <meta name="description" content="Production-grade agentic legal RAG — grounded answers with citations." />
+    <script>
+      // Piece 35: set the theme class before first paint (no flash).
+      // Stored choice wins; otherwise follow the system preference.
+      (function () {
+        try {
+          var t = localStorage.getItem('jurisvault.theme');
+          if (t === 'dark' || (!t && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.classList.add('dark');
+          }
+        } catch (e) { /* storage unavailable — stay light */ }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

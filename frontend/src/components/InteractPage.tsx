@@ -369,34 +369,34 @@ export default function InteractPage({ matterId, go }: { matterId?: string; go?:
       onDrop={onDrop}
     >
       <h1 className="font-display text-[2rem] tracking-tight">Interact</h1>
-      <p className="text-stone-500 mt-1.5 text-[15px]">
+      <p className="text-stone-500 dark:text-stone-400 mt-1.5 text-[15px]">
         Chat with your documents the way Ask chats with the vault — but Interact reads only what you point it at:
         this brief's documents, your Confidential Vault, or both. Never the web, never system data.
       </p>
 
       {/* ---- Piece 16: source selector ---- */}
-      <div className="rounded-lex-lg border border-stone-200 bg-white px-6 py-5 mt-6">
-        <span className="text-[13px] text-stone-500 font-medium">Sources</span>
+      <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1e1c19] px-6 py-5 mt-6">
+        <span className="text-[13px] text-stone-500 dark:text-stone-400 font-medium">Sources</span>
         <div className="grid sm:grid-cols-3 gap-2.5 mt-3">
           {SOURCES.map((s) => (
             <button
               key={s.id}
               onClick={() => setSource(s.id)}
               className={`rounded-lex border px-3.5 py-3 text-left transition-colors ${
-                source === s.id ? 'border-ink bg-stone-50' : 'border-stone-200 hover:border-stone-300'
+                source === s.id ? 'border-ink bg-stone-50 dark:bg-white/5' : 'border-stone-200 dark:border-white/10 hover:border-stone-300'
               }`}
             >
               <span className="flex items-center gap-1.5 text-[13.5px] font-medium">
                 {s.id === 'private' ? <Lock size={14} /> : s.id === 'both' ? <Briefcase size={14} /> : <FileSearch size={14} />}
                 {s.label}
-                {source === s.id && <span className="ml-auto text-[11px] font-medium text-stone-400">Active</span>}
+                {source === s.id && <span className="ml-auto text-[11px] font-medium text-stone-400 dark:text-stone-500">Active</span>}
               </span>
-              <span className="block text-[11.5px] text-stone-400 leading-snug mt-1">{s.hint}</span>
+              <span className="block text-[11.5px] text-stone-400 dark:text-stone-500 leading-snug mt-1">{s.hint}</span>
             </button>
           ))}
         </div>
         {source === 'private' && (
-          <p className="text-[12.5px] text-stone-500 mt-3">
+          <p className="text-[12.5px] text-stone-500 dark:text-stone-400 mt-3">
             Private mode reads only your Confidential Vault — this brief's documents are not used, and the
             answer is never cached or written into history.
           </p>
@@ -420,15 +420,15 @@ export default function InteractPage({ matterId, go }: { matterId?: string; go?:
       </div>
 
       {source !== 'private' && (
-      <div className="rounded-lex-lg border border-stone-200 bg-white px-6 py-5 mt-5">
+      <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1e1c19] px-6 py-5 mt-5">
         <div className="flex items-baseline justify-between gap-3 flex-wrap">
-          <span className="text-[13px] text-stone-500 font-medium">
+          <span className="text-[13px] text-stone-500 dark:text-stone-400 font-medium">
             Documents — {selectedIds.length} selected (max {MAX_INTERACT_DOCS})
             {effectiveMatterId && briefWide ? ' · all of this brief' : ''}
           </span>
         </div>
         {effectiveMatterId && docs.data && (
-          <div className="mt-3 rounded-lex border border-stone-200 bg-stone-50 px-3 py-2.5">
+          <div className="mt-3 rounded-lex border border-stone-200 dark:border-white/10 bg-stone-50 dark:bg-white/5 px-3 py-2.5">
             <label className="flex items-start gap-2.5 cursor-pointer">
               <input
                 type="checkbox"
@@ -450,7 +450,7 @@ export default function InteractPage({ matterId, go }: { matterId?: string; go?:
                     {docs.data.length - MAX_INTERACT_DOCS === 1 ? ' is' : 's are'} not covered.
                   </span>
                 )}
-                <span className="block text-[12px] text-stone-400 mt-0.5">
+                <span className="block text-[12px] text-stone-400 dark:text-stone-500 mt-0.5">
                   {briefWide
                     ? 'Interact works across the whole brief. Untick any document below to narrow the set manually.'
                     : 'Manual selection — tick this to return to the whole brief.'}
@@ -462,17 +462,17 @@ export default function InteractPage({ matterId, go }: { matterId?: string; go?:
         <div className="flex items-center gap-2 mt-4 flex-wrap">
           <button
             onClick={() => fileInputRef.current?.click()}
-            className="inline-flex items-center gap-1.5 rounded-lex border border-stone-300 px-3 py-1.5 text-[13px] font-medium hover:bg-stone-100"
+            className="inline-flex items-center gap-1.5 rounded-lex border border-stone-300 dark:border-white/10 px-3 py-1.5 text-[13px] font-medium hover:bg-stone-100 dark:hover:bg-white/10"
           >
             <Upload size={14} /> Upload files
           </button>
           <button
             onClick={() => folderInputRef.current?.click()}
-            className="inline-flex items-center gap-1.5 rounded-lex border border-stone-300 px-3 py-1.5 text-[13px] font-medium hover:bg-stone-100"
+            className="inline-flex items-center gap-1.5 rounded-lex border border-stone-300 dark:border-white/10 px-3 py-1.5 text-[13px] font-medium hover:bg-stone-100 dark:hover:bg-white/10"
           >
             <FolderUp size={14} /> Upload folder
           </button>
-          <span className="text-[12.5px] text-stone-400">
+          <span className="text-[12.5px] text-stone-400 dark:text-stone-500">
             or drop files/folders anywhere here — up to {MAX_BATCH_FILES} files and {MAX_BATCH_FOLDERS} folders per batch; uploads file into this brief and are selected automatically · {UPLOAD_FORMATS_HINT}
           </span>
           <input
@@ -523,7 +523,7 @@ export default function InteractPage({ matterId, go }: { matterId?: string; go?:
             onDismiss={(key) => setUploads(uploadsRef.current.filter((u) => u.key !== key))}
           />
         )}
-        <div className="mt-2.5 max-h-64 overflow-y-auto rounded-lex border border-stone-200 divide-y divide-stone-100">
+        <div className="mt-2.5 max-h-64 overflow-y-auto rounded-lex border border-stone-200 dark:border-white/10 divide-y divide-stone-100 dark:divide-white/10">
           {(docs.data ?? []).map((d) => (
             <label key={d.id} className="flex items-center gap-3 px-3 py-2.5 cursor-pointer hover:bg-stone-50">
               <input
@@ -533,17 +533,17 @@ export default function InteractPage({ matterId, go }: { matterId?: string; go?:
                 className="accent-stone-800"
               />
               <span className="text-[14px] flex-1">{d.title}</span>
-              <span className="text-[12px] text-stone-400">{d.chunks} chunks</span>
+              <span className="text-[12px] text-stone-400 dark:text-stone-500">{d.chunks} chunks</span>
             </label>
           ))}
           {!effectiveMatterId && (
-            <p className="px-3 py-2.5 text-[13.5px] text-stone-500">
+            <p className="px-3 py-2.5 text-[13.5px] text-stone-500 dark:text-stone-400">
               No brief is active yet — pick one in the “Working in” switcher.
             </p>
           )}
-          {effectiveMatterId && docs.isPending && <p className="px-3 py-2.5 text-[13.5px] text-stone-400">Loading documents…</p>}
+          {effectiveMatterId && docs.isPending && <p className="px-3 py-2.5 text-[13.5px] text-stone-400 dark:text-stone-500">Loading documents…</p>}
           {docs.data && docs.data.length === 0 && (
-            <p className="px-3 py-2.5 text-[13.5px] text-stone-500">
+            <p className="px-3 py-2.5 text-[13.5px] text-stone-500 dark:text-stone-400">
               No documents are filed in this brief yet — upload above, or file documents from the brief page.
             </p>
           )}
@@ -569,7 +569,7 @@ export default function InteractPage({ matterId, go }: { matterId?: string; go?:
 
       {/* ---- Document actions ---- */}
       {source === 'private' ? (
-        <p className="text-[13px] text-stone-500 rounded-lex border border-stone-200 bg-stone-50 px-4 py-3">
+        <p className="text-[13px] text-stone-500 dark:text-stone-400 rounded-lex border border-stone-200 dark:border-white/10 bg-stone-50 dark:bg-white/5 px-4 py-3">
           Actions need Vault documents — switch source to Vault or Both to summarise, build a chronology,
           map clauses or run a risk review. In Both, actions apply to the vault documents only.
         </p>
@@ -580,18 +580,18 @@ export default function InteractPage({ matterId, go }: { matterId?: string; go?:
               key={a.id}
               disabled={run.isPending || !hasSelection}
               onClick={() => startTurn(a.id, null, source, [...selectedIds])}
-              className="rounded-lex border border-stone-200 bg-white px-3.5 py-3 text-left hover:border-ink disabled:opacity-40 transition-colors"
+              className="rounded-lex border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1e1c19] px-3.5 py-3 text-left hover:border-ink disabled:opacity-40 transition-colors"
             >
-              <a.icon size={16} className="text-stone-500" />
+              <a.icon size={16} className="text-stone-500 dark:text-stone-400" />
               <p className="text-[13.5px] font-medium mt-1.5">{a.label}</p>
-              <p className="text-[11.5px] text-stone-400 leading-snug">{a.hint}</p>
+              <p className="text-[11.5px] text-stone-400 dark:text-stone-500 leading-snug">{a.hint}</p>
             </button>
           ))}
         </div>
       )}
 
       {/* ---- Composer (Ask-style) ---- */}
-      <div className="mt-5 rounded-lex-lg border border-stone-300 bg-white">
+      <div className="mt-5 rounded-lex-lg border border-stone-300 dark:border-white/10 bg-white dark:bg-[#1e1c19]">
         <textarea
           value={question}
           onChange={(e) => setQuestion(e.target.value)}
@@ -621,15 +621,15 @@ export default function InteractPage({ matterId, go }: { matterId?: string; go?:
             <ArrowUp size={16} />
           </button>
         </div>
-        <div className="border-t border-stone-200 bg-stone-100/60 px-3 py-2 flex rounded-b-lex-lg">
-          <span className="text-[11px] text-stone-400 self-center">
+        <div className="border-t border-stone-200 dark:border-white/10 bg-stone-100/60 px-3 py-2 flex rounded-b-lex-lg">
+          <span className="text-[11px] text-stone-400 dark:text-stone-500 self-center">
             {source === 'private'
               ? 'Private answers are never cached or saved to history'
               : source === 'both'
                 ? 'Citations are labelled [doc:N] for documents and [private:N] for your Confidential Vault'
                 : 'Answers cite the selected documents as [doc:N]'}
           </span>
-          <span className="ml-auto hidden sm:block text-[11px] text-stone-400 self-center">Enter to ask · Shift+Enter for a new line</span>
+          <span className="ml-auto hidden sm:block text-[11px] text-stone-400 dark:text-stone-500 self-center">Enter to ask · Shift+Enter for a new line</span>
         </div>
       </div>
 
@@ -670,9 +670,9 @@ function TurnView({ turn, onRetry, onCite, retryDisabled }: {
       <h2 className="font-display text-[1.6rem] leading-snug tracking-tight">{heading}</h2>
 
       {turn.status === 'pending' && (
-        <div className="mt-3 flex items-center gap-2.5 text-stone-500 text-[13px]">
+        <div className="mt-3 flex items-center gap-2.5 text-stone-500 dark:text-stone-400 text-[13px]">
           <AssistantAvatar size={22} playing float={false} />
-          <span className="font-medium text-ink">Clause</span>
+          <span className="font-medium text-ink dark:text-[#f4f2ee]">Clause</span>
           {turn.source === 'private' ? 'Reading your Confidential Vault…' : 'Reading the documents…'}
           <span className="text-stone-300">·</span>
           <span className="tabular-nums">{secs}s</span>
@@ -691,18 +691,18 @@ function TurnView({ turn, onRetry, onCite, retryDisabled }: {
           {turn.documents.length > 0 && (
             <div className="flex gap-1.5 flex-wrap mt-3">
               {turn.documents.map((d) => (
-                <span key={d.document_id} className="inline-flex items-center gap-1.5 rounded-lex bg-stone-100 px-2.5 py-1 text-[12px] text-stone-600">
+                <span key={d.document_id} className="inline-flex items-center gap-1.5 rounded-lex bg-stone-100 dark:bg-white/5 px-2.5 py-1 text-[12px] text-stone-600 dark:text-stone-300">
                   {d.document_title}
-                  {d.truncated && <span className="text-stone-400">(partial)</span>}
+                  {d.truncated && <span className="text-stone-400 dark:text-stone-500">(partial)</span>}
                   {d.treatment && d.treatment.status !== 'unknown' && (
-                    <span className="inline-flex items-center gap-1.5 text-[11px] text-stone-600" title={d.treatment.evidence_passage ?? undefined}>
+                    <span className="inline-flex items-center gap-1.5 text-[11px] text-stone-600 dark:text-stone-300" title={d.treatment.evidence_passage ?? undefined}>
                       <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: treatmentDot(d.treatment.status) }} />
                       {d.treatment.status.replace('_', ' ')}
                     </span>
                   )}
                 </span>
               ))}
-              {turn.truncated && <span className="text-[12px] text-stone-400 self-center">Long document set — analysed within the shared budget</span>}
+              {turn.truncated && <span className="text-[12px] text-stone-400 dark:text-stone-500 self-center">Long document set — analysed within the shared budget</span>}
             </div>
           )}
           <div className="prose-lex mt-3 text-[14.5px] leading-relaxed">
@@ -723,16 +723,16 @@ function TurnView({ turn, onRetry, onCite, retryDisabled }: {
                     key={c.chunk_id + c.doc_id}
                     onClick={() => onCite(c)}
                     title="View source"
-                    className="text-left rounded-lex-lg border border-stone-200 bg-white px-4 py-3 hover:border-stone-400 transition-colors"
+                    className="text-left rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1e1c19] px-4 py-3 hover:border-stone-400 transition-colors"
                   >
                     <span className="flex items-center gap-2">
                       <span className="rounded bg-ink text-ivory px-1.5 py-0.5 text-[11px] font-mono font-semibold">{c.doc_id}</span>
                       {isPrivate && (
-                        <span className="text-[11px] text-stone-500">Private</span>
+                        <span className="text-[11px] text-stone-500 dark:text-stone-400">Private</span>
                       )}
                       <span className="text-[13px] font-medium truncate">{c.doc_title ?? c.doc_id}</span>
                     </span>
-                    <span className="block text-[12.5px] text-stone-500 leading-relaxed mt-1.5 line-clamp-3">{c.snippet}</span>
+                    <span className="block text-[12.5px] text-stone-500 dark:text-stone-400 leading-relaxed mt-1.5 line-clamp-3">{c.snippet}</span>
                   </button>
                 )
               })}
@@ -742,7 +742,7 @@ function TurnView({ turn, onRetry, onCite, retryDisabled }: {
           <div className="mt-4 flex items-center gap-2">
             <button
               onClick={() => { navigator.clipboard.writeText(turn.output).catch(() => {}); toast('success', 'Answer copied') }}
-              className="flex items-center gap-1.5 rounded-lex border border-stone-200 bg-white px-2.5 py-1.5 text-[12px] font-medium text-stone-600 hover:text-ink hover:border-stone-300 transition-colors"
+              className="flex items-center gap-1.5 rounded-lex border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1e1c19] px-2.5 py-1.5 text-[12px] font-medium text-stone-600 dark:text-stone-300 hover:text-ink hover:border-stone-300 transition-colors"
             >
               <Copy size={13} /> Copy
             </button>
@@ -756,7 +756,7 @@ function TurnView({ turn, onRetry, onCite, retryDisabled }: {
               citations={exportCitations(turn.citations)}
             />
             {turn.elapsedMs != null && (
-              <span className="text-[12px] text-stone-400">answered in {(turn.elapsedMs / 1000).toFixed(1)}s</span>
+              <span className="text-[12px] text-stone-400 dark:text-stone-500">answered in {(turn.elapsedMs / 1000).toFixed(1)}s</span>
             )}
           </div>
         </>

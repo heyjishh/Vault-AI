@@ -12,10 +12,13 @@ look and was not part of this pass.
 - **No colour in the chrome at all.** The primary action is a near-black
   ink fill (`#0f0e0d`); the secondary is a grey pill (`#e5e5e5` borders /
   stone fills). Everything else is ink and grey.
-- **One hue, on data only.** `#1d5fbf` (Tailwind token `ledger`) appears
-  only on the main data element — the token-usage bars (sidebar plan
-  block, Dashboard usage ring, Plans usage bar). Nowhere else: not on
-  buttons, links, nav, badges or charts' chrome.
+- **One hue, on data only.** The main data element — the token-usage
+  bars (sidebar plan block, Dashboard usage ring, Plans usage bar) —
+  carried the single ledger hue `#1d5fbf` under Piece 34. **Piece 35
+  supersedes this:** the usage element now wears the dual tone (see
+  the brand layer below). The `ledger` token stays defined but is no
+  longer the usage fill. Colour still appears nowhere else in the
+  chrome: not on buttons, links, nav, badges or charts' chrome.
 - **Status is a word, not a fill.** Meaning survives as a small coloured
   dot beside a sentence-case word (supported/refuted/inconclusive,
   Superseded, treatment states, payment status) in the signal colours
@@ -36,6 +39,50 @@ look and was not part of this pass.
   `#fafaf9` with white cards. The product's signature element is its
   own: verdict-first answers with citation chips — kept, and quieter
   (borderless stone-100 chips that invert to ink on hover).
+
+## Brand layer (user-directed, Piece 35)
+
+Added 31 Oct 2026 at the user's own direction, on top of the ledger
+system above. These are the user's brand choices, carried over from
+the taste-skill page he had built the same day.
+
+- **The dual tone: terracotta `#c4664a` → sage `#8fa382`** (Tailwind
+  tokens `terra` / `sage`). It appears in exactly three places, always
+  soft — tints and washes, never saturated blocks:
+  1. the token-usage data element (`.dual-tone-bar` fills in the
+     sidebar plan block and Plans; an SVG gradient on the Dashboard
+     usage ring). The ≥90%/exhausted state still turns the fill
+     `#a02c2c` — the data signal beats the brand;
+  2. the moving backdrop (below);
+  3. one gradient wordmark (`.dual-tone-text`) — the product name on
+     the Auth page. Gradient text is allowed nowhere else.
+- **Moving background.** `DualToneBackdrop` (ui.tsx): two large
+  blurred radial fields — terracotta top-left, sage bottom-right —
+  drifting on a 26s ease-in-out alternate loop (`dualDrift` in
+  index.css), at ~0.16 alpha in light mode and ~0.22 in dark.
+  Placed only twice: full-screen behind the Auth card, and clipped
+  inside the Dashboard greeting hero. It is pointer-events-none and
+  decoration only; `prefers-reduced-motion` stills it.
+- **Dark mode.** Class strategy (`darkMode: 'class'`): a pre-paint
+  inline script in `index.html` adds `.dark` to `<html>` from the
+  stored choice (`localStorage` key `jurisvault.theme` =
+  `'dark' | 'light'`) or, with no stored choice, the system
+  `prefers-color-scheme`. `ThemeToggle` (sidebar footer, Auth
+  top-right) flips the class and persists the choice. The mapping is
+  fixed: ivory ground → `#14120f`; white surface → `#1e1c19`;
+  stone-100/50 fills and hovers → `white/5`–`white/10`; stone borders
+  and dividers → `white/10`; ink text → `#f4f2ee` (ink-800/900 →
+  `#e8e5e0`); stone-600/500/400 text → stone-300/400/500. `bg-ink`
+  fills stay ink in both themes. The plain-CSS surfaces (prose,
+  citation chips, scrollbars) have `.dark` overrides in index.css.
+
+**Recorded exception.** The taste skill's house style bans gradients
+outright. That ban is **overridden here by the user's own brand
+decision**: the dual tone is his chosen identity for the product,
+kept inside the three soft placements above. Every other Piece 34
+rule — flat surfaces, no resting shadows, sentence-case labels,
+tabular figures, ink primaries, dot-and-word status — still applies
+in both themes.
 
 ## Shell — recorded deviation
 
@@ -64,7 +111,9 @@ is the serif product name alone, with no icon tile.
 | `--color-green` | `#16a34a` | Success signal (dot/word only) |
 | `--color-red` | `#a02c2c` | Negative signal (dot/word; delete action) |
 | `--color-amber` | `#b7791f` | Notice signal (dot/word only) |
-| `--color-ledger` | `#1d5fbf` | **The one data hue — token-usage bars only** |
+| `--color-ledger` | `#1d5fbf` | Piece 34's data hue — retained as a token; usage bars moved to the dual tone in Piece 35 |
+| `--color-terra` | `#c4664a` | Dual tone, warm end (Piece 35 — washes, usage gradient, Auth wordmark only) |
+| `--color-sage` | `#8fa382` | Dual tone, cool end (Piece 35 — same restricted placements) |
 | `--color-dark-bronze` | `#593d3a` | Rare accent |
 
 (The old `#f6f202` highlighter is retired: text selection is now the

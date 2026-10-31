@@ -15,6 +15,32 @@ live**, what is **built but unverified**, and what is **roadmap**.
 ## [Unreleased]
 
 ### Added
+- **Dual-tone brand layer, moving backdrop, and dark mode (31 Oct 2026,
+  Piece 35).** At JISHAN's direction, the brand treatment he chose for
+  the taste-skill page now sits on top of Piece 34's achromatic-ledger
+  system in the user app. (1) **Dual tone** — terracotta `#c4664a` →
+  sage `#8fa382`, kept soft: it fills the token-usage bars (sidebar
+  plan block, Plans page) and the Dashboard usage ring as a gradient,
+  and sets the product name on the Auth page as the app's one gradient
+  wordmark; the ≥90%/quota-exhausted state still turns usage fills red
+  — the data signal beats the brand. (2) **Moving background** — two
+  large blurred radial fields in the dual tone drift slowly (26s loop,
+  stilled by `prefers-reduced-motion`) behind the Auth card and inside
+  the Dashboard greeting hero; nowhere else. (3) **Dark mode** — a real
+  class-based theme: a pre-paint script in `index.html` applies the
+  stored choice (`jurisvault.theme`) or the system preference before
+  first paint, and a sun/moon toggle in the sidebar footer and on the
+  Auth page flips and persists it. Dark surfaces are a warm ink
+  (`#14120f` ground, `#1e1c19` cards, white/10 hairlines) under one
+  fixed class mapping applied across every screen, with the prose and
+  citation-chip CSS carrying matching `.dark` overrides. This
+  deliberately overrides the taste skill's no-gradients house rule as
+  a recorded brand exception (see `frontend/DESIGN.md`); every other
+  Piece 34 rule — flat, shadowless, sentence-case, tabular — holds in
+  both themes. Frontend-only; no behaviour, text, or API change.
+  Verified by a clean production build and bundle checks (dual-tone
+  values, the drift keyframes, and the theme key all present in the
+  shipped assets).
 - **Delete on history, with consent (31 Oct 2026, Piece 33).** Every
   history surface now has a per-entry delete: the Dashboard's "Pick up
   where you left off", a brief's History timeline (own entries only),

@@ -126,14 +126,14 @@ export function SourceModal({ citation: c, onClose, go }: {
       onClick={(e) => { e.stopPropagation(); onClose() }}
     >
       <div
-        className="flex max-h-[86vh] w-full max-w-3xl flex-col rounded-lex-lg bg-white shadow-lex-md"
+        className="flex max-h-[86vh] w-full max-w-3xl flex-col rounded-lex-lg bg-white dark:bg-[#1e1c19] shadow-lex-md"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-start gap-3 border-b border-stone-200 px-6 py-4">
+        <div className="flex items-start gap-3 border-b border-stone-200 dark:border-white/10 px-6 py-4">
           <span className="mt-0.5 rounded bg-ink px-1.5 py-0.5 font-mono text-[11px] font-semibold text-ivory">{c.doc_id}</span>
           <div className="min-w-0 flex-1">
             <p className="truncate text-[15px] font-semibold leading-snug">{doc?.title ?? c.doc_title ?? c.doc_id}</p>
-            <p className="mt-0.5 text-[12.5px] text-stone-500">
+            <p className="mt-0.5 text-[12.5px] text-stone-500 dark:text-stone-400">
               {isWeb && <>{domain}{c.source_date && <> · {c.source_date}</>} · full document</>}
               {isDoc && <>Vault document · full text</>}
               {isPrivate && <>Confidential vault</>}
@@ -141,7 +141,7 @@ export function SourceModal({ citation: c, onClose, go }: {
           </div>
           <button
             onClick={onClose}
-            className="rounded-lex p-1.5 text-stone-500 transition-colors hover:bg-stone-100 hover:text-ink"
+            className="rounded-lex p-1.5 text-stone-500 dark:text-stone-400 transition-colors hover:bg-stone-100 dark:hover:bg-white/10 hover:text-ink"
             title="Close"
           >
             <X size={17} />
@@ -151,17 +151,17 @@ export function SourceModal({ citation: c, onClose, go }: {
         <div className="overflow-y-auto px-6 py-5">
           {isPrivate ? (
             <div>
-              <p className="text-[13.5px] leading-relaxed text-stone-600">
+              <p className="text-[13.5px] leading-relaxed text-stone-600 dark:text-stone-300">
                 This source lives in your Confidential Vault. Its full text is only shown inside the vault, never in the Ask view.
               </p>
-              <div className="mt-4 rounded-lex border border-stone-200 bg-[#fafaf9] px-4 py-3 text-[13px] leading-relaxed text-stone-600">
-                <span className="font-medium text-ink">Cited passage — </span>
+              <div className="mt-4 rounded-lex border border-stone-200 dark:border-white/10 bg-[#fafaf9] px-4 py-3 text-[13px] leading-relaxed text-stone-600 dark:text-stone-300">
+                <span className="font-medium text-ink dark:text-[#f4f2ee]">Cited passage — </span>
                 {pinpoint}
               </div>
               {go && (
                 <button
                   onClick={() => go('private')}
-                  className="mt-4 inline-flex items-center gap-1.5 text-[13px] font-medium text-ink underline underline-offset-2"
+                  className="mt-4 inline-flex items-center gap-1.5 text-[13px] font-medium text-ink dark:text-[#f4f2ee] underline underline-offset-2"
                 >
                   <Lock size={13} /> Open in Private Vault
                 </button>
@@ -169,20 +169,20 @@ export function SourceModal({ citation: c, onClose, go }: {
             </div>
           ) : error ? (
             <div>
-              <p className="text-[13.5px] text-stone-600">Couldn’t fetch the full document: {error}</p>
+              <p className="text-[13.5px] text-stone-600 dark:text-stone-300">Couldn’t fetch the full document: {error}</p>
               {isWeb && c.source_url && (
                 <a
                   href={c.source_url}
                   target="_blank"
                   rel="noreferrer"
-                  className="mt-3 inline-flex items-center gap-1.5 text-[13px] font-medium text-ink underline underline-offset-2"
+                  className="mt-3 inline-flex items-center gap-1.5 text-[13px] font-medium text-ink dark:text-[#f4f2ee] underline underline-offset-2"
                 >
                   <ExternalLink size={13} /> Open the original instead
                 </a>
               )}
             </div>
           ) : !doc ? (
-            <div className="flex items-center gap-2.5 py-8 text-[13.5px] text-stone-500">
+            <div className="flex items-center gap-2.5 py-8 text-[13.5px] text-stone-500 dark:text-stone-400">
               <Loader2 size={16} className="animate-spin" />
               Fetching the full document…{isWeb ? ' Large judgments can take a few seconds.' : ''}
             </div>
@@ -197,7 +197,7 @@ export function SourceModal({ citation: c, onClose, go }: {
                 {range ? (
                   <>
                     {doc.text.slice(0, range[0])}
-                    <mark ref={markRef} className="rounded bg-[#fdf3d7] px-0.5 text-ink">
+                    <mark ref={markRef} className="rounded bg-[#fdf3d7] px-0.5 text-ink dark:text-[#f4f2ee]">
                       {doc.text.slice(range[0], range[1])}
                     </mark>
                     {doc.text.slice(range[1])}
@@ -211,14 +211,14 @@ export function SourceModal({ citation: c, onClose, go }: {
         </div>
 
         {originalMissing && (
-          <div className="border-t border-stone-200 bg-[#fdf6e3] px-6 py-2.5 text-[12.5px] text-[#7a5b12]">
+          <div className="border-t border-stone-200 dark:border-white/10 bg-[#fdf6e3] px-6 py-2.5 text-[12.5px] text-[#7a5b12]">
             The original file wasn't retained for this document — it was uploaded before originals were
             kept. The full extracted text above is what exists.
           </div>
         )}
 
-        <div className="flex items-center justify-between border-t border-stone-200 px-6 py-3">
-          <span className="inline-flex items-center gap-1.5 text-[12px] text-stone-500">
+        <div className="flex items-center justify-between border-t border-stone-200 dark:border-white/10 px-6 py-3">
+          <span className="inline-flex items-center gap-1.5 text-[12px] text-stone-500 dark:text-stone-400">
             <span className="inline-block h-3 w-4 rounded-sm bg-[#fdf3d7]" /> Cited passage
           </span>
           {isWeb && c.source_url ? (
@@ -226,7 +226,7 @@ export function SourceModal({ citation: c, onClose, go }: {
               href={c.source_url}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center gap-1.5 text-[12.5px] font-medium text-ink hover:underline underline-offset-2"
+              className="inline-flex items-center gap-1.5 text-[12.5px] font-medium text-ink dark:text-[#f4f2ee] hover:underline underline-offset-2"
             >
               <ExternalLink size={12} /> Open original{domain && <> · {domain}</>}
             </a>
@@ -237,13 +237,13 @@ export function SourceModal({ citation: c, onClose, go }: {
                   documentId={doc.document_id}
                   title={doc.title ?? c.doc_title ?? doc.document_id}
                   label="Insight"
-                  className="inline-flex items-center gap-1.5 text-[12.5px] font-medium text-ink hover:underline underline-offset-2 disabled:opacity-40"
+                  className="inline-flex items-center gap-1.5 text-[12.5px] font-medium text-ink dark:text-[#f4f2ee] hover:underline underline-offset-2 disabled:opacity-40"
                 />
               )}
               <button
                 onClick={() => void openOriginal()}
                 disabled={!doc?.document_id}
-                className="inline-flex items-center gap-1.5 text-[12.5px] font-medium text-ink hover:underline underline-offset-2 disabled:opacity-40"
+                className="inline-flex items-center gap-1.5 text-[12.5px] font-medium text-ink dark:text-[#f4f2ee] hover:underline underline-offset-2 disabled:opacity-40"
               >
                 <ExternalLink size={12} /> Open original document
               </button>
@@ -257,7 +257,7 @@ export function SourceModal({ citation: c, onClose, go }: {
                     } catch { /* ignore */ }
                     go('interact')
                   }}
-                  className="inline-flex items-center gap-1.5 text-[12.5px] font-medium text-ink hover:underline underline-offset-2"
+                  className="inline-flex items-center gap-1.5 text-[12.5px] font-medium text-ink dark:text-[#f4f2ee] hover:underline underline-offset-2"
                 >
                   <PanelRight size={12} /> Open in Interact
                 </button>

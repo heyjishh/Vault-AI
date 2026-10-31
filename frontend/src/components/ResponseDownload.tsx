@@ -63,49 +63,49 @@ export function ResponseDownload({ question, title, answerMarkdown, citations }:
       <button
         onClick={() => setOpen((v) => !v)}
         title="Download this response as a document"
-        className="flex items-center gap-1.5 rounded-lex border border-stone-200 bg-white px-2.5 py-1.5 text-[12px] font-medium text-stone-600 hover:text-ink hover:border-stone-300 transition-colors"
+        className="flex items-center gap-1.5 rounded-lex border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1e1c19] px-2.5 py-1.5 text-[12px] font-medium text-stone-600 dark:text-stone-300 hover:text-ink hover:border-stone-300 transition-colors"
       >
         <Download size={13} /> Download <ChevronDown size={12} />
       </button>
       {open && (
-        <div className="absolute left-0 top-full z-20 mt-1.5 w-60 overflow-hidden rounded-lex-lg border border-stone-200 bg-white py-1 shadow-lex-md">
-          <p className="px-3 pt-2 pb-1 text-[12px] font-medium text-stone-400">
+        <div className="absolute left-0 top-full z-20 mt-1.5 w-60 overflow-hidden rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1e1c19] py-1 shadow-lex-md">
+          <p className="px-3 pt-2 pb-1 text-[12px] font-medium text-stone-400 dark:text-stone-500">
             With citations
           </p>
           <button
             onClick={() => save('pdf', true)}
-            className="block w-full px-3 py-2 text-left text-[13px] hover:bg-stone-100"
+            className="block w-full px-3 py-2 text-left text-[13px] hover:bg-stone-100 dark:hover:bg-white/10"
           >
             Download PDF
-            <span className="block text-[11px] text-stone-400">Citations in the text + Sources list</span>
+            <span className="block text-[11px] text-stone-400 dark:text-stone-500">Citations in the text + Sources list</span>
           </button>
           <button
             onClick={() => save('rtf', true)}
-            className="block w-full px-3 py-2 text-left text-[13px] hover:bg-stone-100"
+            className="block w-full px-3 py-2 text-left text-[13px] hover:bg-stone-100 dark:hover:bg-white/10"
           >
             Download RTF
-            <span className="block text-[11px] text-stone-400">Citations in the text + Sources list</span>
+            <span className="block text-[11px] text-stone-400 dark:text-stone-500">Citations in the text + Sources list</span>
           </button>
-          <div className="my-1 border-t border-stone-100" />
-          <p className="px-3 pt-1 pb-1 text-[12px] font-medium text-stone-400">
+          <div className="my-1 border-t border-stone-100 dark:border-white/10" />
+          <p className="px-3 pt-1 pb-1 text-[12px] font-medium text-stone-400 dark:text-stone-500">
             Without citations
           </p>
           <button
             onClick={() => save('pdf', false)}
-            className="block w-full px-3 py-2 text-left text-[13px] hover:bg-stone-100"
+            className="block w-full px-3 py-2 text-left text-[13px] hover:bg-stone-100 dark:hover:bg-white/10"
           >
             Download PDF
-            <span className="block text-[11px] text-stone-400">Clean copy — no citation markers, no Sources list</span>
+            <span className="block text-[11px] text-stone-400 dark:text-stone-500">Clean copy — no citation markers, no Sources list</span>
           </button>
           <button
             onClick={() => save('rtf', false)}
-            className="block w-full px-3 py-2 text-left text-[13px] hover:bg-stone-100"
+            className="block w-full px-3 py-2 text-left text-[13px] hover:bg-stone-100 dark:hover:bg-white/10"
           >
             Download RTF
-            <span className="block text-[11px] text-stone-400">Clean copy — no citation markers, no Sources list</span>
+            <span className="block text-[11px] text-stone-400 dark:text-stone-500">Clean copy — no citation markers, no Sources list</span>
           </button>
           {!hasCitations && (
-            <p className="px-3 py-2 text-[11px] text-stone-400 border-t border-stone-100 mt-1">
+            <p className="px-3 py-2 text-[11px] text-stone-400 dark:text-stone-500 border-t border-stone-100 dark:border-white/10 mt-1">
               This response has no citations, so both versions are the same content.
             </p>
           )}

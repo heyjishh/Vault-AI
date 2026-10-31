@@ -68,17 +68,17 @@ export default function DraftPage({ matterId: fixedMatterId, go }: { matterId?: 
   return (
     <div className="w-full px-6 py-8">
       <h1 className="font-display text-[2rem] tracking-tight">Draft</h1>
-      <p className="text-stone-500 mt-1.5 text-[15px]">
+      <p className="text-stone-500 dark:text-stone-400 mt-1.5 text-[15px]">
         Generate a structured first draft. Facts you don't supply become [BRACKETED PLACEHOLDERS] — the drafter never invents citations.
       </p>
 
-      <div className="rounded-lex-lg border border-stone-200 bg-white px-6 py-5 mt-6">
+      <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1e1c19] px-6 py-5 mt-6">
         <div className="flex flex-wrap gap-2">
           {KINDS.map((k) => (
             <button
               key={k.id}
               onClick={() => setKind(k.id)}
-              className={`rounded-lex px-3.5 py-1.5 text-[13px] border transition-colors ${kind === k.id ? 'bg-ink text-ivory border-ink' : 'border-stone-300 text-stone-600 hover:border-ink'}`}
+              className={`rounded-lex px-3.5 py-1.5 text-[13px] border transition-colors ${kind === k.id ? 'bg-ink text-ivory border-ink' : 'border-stone-300 dark:border-white/10 text-stone-600 dark:text-stone-300 hover:border-ink'}`}
               title={k.hint}
             >
               {k.label}
@@ -90,11 +90,11 @@ export default function DraftPage({ matterId: fixedMatterId, go }: { matterId?: 
           onChange={(e) => setInstructions(e.target.value)}
           rows={5}
           placeholder={'Describe what you need. E.g. "Notice to a tenant at 14 MG Road, Bengaluru for 3 months’ unpaid rent of ₹45,000/month, demanding payment within 15 days and vacation on default."'}
-          className="mt-4 w-full rounded-lex border border-stone-300 px-3.5 py-3 text-[14.5px] leading-relaxed"
+          className="mt-4 w-full rounded-lex border border-stone-300 dark:border-white/10 px-3.5 py-3 text-[14.5px] leading-relaxed"
         />
         <div className="flex items-center justify-between mt-3 flex-wrap gap-3">
           <div className="flex items-center gap-3 flex-wrap">
-            <label className="flex items-center gap-2 text-[13.5px] text-stone-600">
+            <label className="flex items-center gap-2 text-[13.5px] text-stone-600 dark:text-stone-300">
               <input type="checkbox" checked={useCorpus} onChange={(e) => setUseCorpus(e.target.checked)} className="accent-[#0f0e0d]" />
               Ground in the vault (search sources first, cite them in the draft)
             </label>
@@ -113,19 +113,19 @@ export default function DraftPage({ matterId: fixedMatterId, go }: { matterId?: 
       {run.isPending && <Spinner label="Drafting…" />}
       {!run.isPending && result && (
         <div className="mt-5">
-          <div className="rounded-lex-lg border border-stone-200 bg-white px-6 py-5">
+          <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1e1c19] px-6 py-5">
             <div className="flex items-center justify-between gap-3 flex-wrap">
               <h2 className="font-display text-xl">{KINDS.find((k) => k.id === result.kind)?.label} — draft</h2>
               <div className="flex gap-2">
                 <button
                   onClick={() => { navigator.clipboard.writeText(result.draft); toast('success', 'Draft copied.') }}
-                  className="rounded-lex border border-stone-300 px-3 py-1.5 text-[12.5px] inline-flex items-center gap-1.5"
+                  className="rounded-lex border border-stone-300 dark:border-white/10 px-3 py-1.5 text-[12.5px] inline-flex items-center gap-1.5"
                 >
                   <Copy size={13} /> Copy
                 </button>
                 <button
                   onClick={download}
-                  className="rounded-lex border border-stone-300 px-3 py-1.5 text-[12.5px] inline-flex items-center gap-1.5"
+                  className="rounded-lex border border-stone-300 dark:border-white/10 px-3 py-1.5 text-[12.5px] inline-flex items-center gap-1.5"
                 >
                   <Download size={13} /> Download .md
                 </button>
@@ -142,13 +142,13 @@ export default function DraftPage({ matterId: fixedMatterId, go }: { matterId?: 
           </div>
           {result.citations.length > 0 && (
             <div className="mt-4">
-              <p className="text-[13px] text-stone-500 font-medium mb-2">Sources used</p>
+              <p className="text-[13px] text-stone-500 dark:text-stone-400 font-medium mb-2">Sources used</p>
               <div className="grid md:grid-cols-2 gap-2.5">
                 {result.citations.map((c, i) => <CitationCard key={c.chunk_id + i} citation={c} go={go} />)}
               </div>
             </div>
           )}
-          <p className="text-meta text-stone-400 mt-4">
+          <p className="text-meta text-stone-400 dark:text-stone-500 mt-4">
             AI-generated first draft — a qualified advocate must review it before it is sent, filed, or relied on.
           </p>
         </div>

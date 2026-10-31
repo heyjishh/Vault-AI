@@ -61,7 +61,7 @@ export default function GraphPage() {
   return (
     <div className="w-full px-6 py-10">
       <h1 className="font-display text-[2rem] tracking-tight">Knowledge Graph</h1>
-      <p className="text-stone-500 mt-1.5 text-[15px]">
+      <p className="text-stone-500 dark:text-stone-400 mt-1.5 text-[15px]">
         Entities and relations extracted from your corpus. Click a node to inspect it.
       </p>
 
@@ -71,7 +71,7 @@ export default function GraphPage() {
             key={k}
             onClick={() => setKindFilter(k)}
             className={`rounded-lex px-3 py-1 text-meta font-medium border transition-colors ${
-              kindFilter === k ? 'bg-ink text-ivory border-ink' : 'border-stone-200 bg-white text-stone-500 hover:text-ink'
+              kindFilter === k ? 'bg-ink text-ivory border-ink' : 'border-stone-200 dark:border-white/10 bg-white dark:bg-[#1e1c19] text-stone-500 dark:text-stone-400 hover:text-ink'
             }`}
           >
             {k}
@@ -85,7 +85,7 @@ export default function GraphPage() {
         <div className="mt-6"><EmptyState title="Graph is empty" hint="Ingest documents in the Vault to extract entities and relations." /></div>
       ) : (
         <div className="mt-4 grid lg:grid-cols-[1fr_300px] gap-4">
-          <div className="rounded-lex-lg border border-stone-200 bg-white overflow-hidden">
+          <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1e1c19] overflow-hidden">
             <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto block">
               {rels.map((r, i) => {
                 const a = positions.get(r.from), b = positions.get(r.to)
@@ -108,30 +108,30 @@ export default function GraphPage() {
             </svg>
           </div>
 
-          <div className="rounded-lex-lg border border-stone-200 bg-white p-5 h-fit">
+          <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1e1c19] p-5 h-fit">
             {selected ? (
               <>
                 <p className="text-[13px] font-medium" style={{ color: colorFor(selected.kind) }}>{selected.kind}</p>
                 <h3 className="font-display text-xl mt-1 tracking-tight">{selected.name}</h3>
-                <p className="text-meta2 text-stone-600 leading-relaxed mt-2">{selected.description || 'No description.'}</p>
-                <p className="text-meta text-stone-400 mt-3">Appears in {selected.chunk_ids.length} chunk(s)</p>
-                <div className="mt-4 border-t border-stone-200 pt-3">
-                  <p className="text-[13px] text-stone-400 font-medium mb-2">Relations</p>
+                <p className="text-meta2 text-stone-600 dark:text-stone-300 leading-relaxed mt-2">{selected.description || 'No description.'}</p>
+                <p className="text-meta text-stone-400 dark:text-stone-500 mt-3">Appears in {selected.chunk_ids.length} chunk(s)</p>
+                <div className="mt-4 border-t border-stone-200 dark:border-white/10 pt-3">
+                  <p className="text-[13px] text-stone-400 dark:text-stone-500 font-medium mb-2">Relations</p>
                   <div className="space-y-1.5">
                     {(data?.relations ?? [])
                       .filter((r) => r.from === selected.name || r.to === selected.name)
                       .slice(0, 8)
                       .map((r, i) => (
-                        <p key={i} className="text-meta2 text-stone-600">
-                          <span className="font-medium text-ink">{r.from}</span> → <span className="font-medium text-ink">{r.to}</span>
-                          {r.description ? <span className="block text-stone-500 text-meta mt-0.5">{r.description}</span> : null}
+                        <p key={i} className="text-meta2 text-stone-600 dark:text-stone-300">
+                          <span className="font-medium text-ink dark:text-[#f4f2ee]">{r.from}</span> → <span className="font-medium text-ink dark:text-[#f4f2ee]">{r.to}</span>
+                          {r.description ? <span className="block text-stone-500 dark:text-stone-400 text-meta mt-0.5">{r.description}</span> : null}
                         </p>
                       ))}
                   </div>
                 </div>
               </>
             ) : (
-              <p className="text-meta2 text-stone-500">Select a node to see its description and relations.</p>
+              <p className="text-meta2 text-stone-500 dark:text-stone-400">Select a node to see its description and relations.</p>
             )}
           </div>
         </div>

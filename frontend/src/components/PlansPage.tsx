@@ -93,40 +93,40 @@ export default function PlansPage() {
   return (
     <div className="w-full px-6 py-8">
       <h1 className="font-display text-[2rem] tracking-tight">Plans &amp; billing</h1>
-      <p className="text-stone-500 mt-1.5 text-[15px]">
+      <p className="text-stone-500 dark:text-stone-400 mt-1.5 text-[15px]">
         Token-based plans. Every question, research run, workflow and document ingest draws from your monthly token pool.
       </p>
 
       {/* Current plan + usage */}
-      <div className="rounded-lex-lg border border-stone-200 bg-white px-6 py-5 mt-6">
+      <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1e1c19] px-6 py-5 mt-6">
         <div className="flex flex-wrap items-baseline justify-between gap-3">
           <div>
-            <p className="text-[13px] text-stone-500 font-medium">Current plan</p>
+            <p className="text-[13px] text-stone-500 dark:text-stone-400 font-medium">Current plan</p>
             <p className="font-display text-2xl mt-1">
               {b.plan.name}
-              <span className="text-stone-400 text-base ml-2">
+              <span className="text-stone-400 dark:text-stone-500 text-base ml-2">
                 {b.plan.price_inr === 0 ? 'free forever' : `${inr(b.plan.price_inr)} / month`}
               </span>
             </p>
           </div>
-          <p className="text-[13px] text-stone-500">
+          <p className="text-[13px] text-stone-500 dark:text-stone-400">
             Period ends {fmtDate(b.subscription.period_end)}
           </p>
         </div>
         <div className="mt-4">
           <div className="flex justify-between text-[13px]">
-            <span className={exhausted ? 'text-[#a02c2c] font-medium' : 'text-stone-600'}>
+            <span className={exhausted ? 'text-[#a02c2c] font-medium' : 'text-stone-600 dark:text-stone-300'}>
               {b.tokens_used.toLocaleString('en-IN')} tokens used
             </span>
-            <span className="text-stone-500">of {b.token_quota.toLocaleString('en-IN')} ({pct}%)</span>
+            <span className="text-stone-500 dark:text-stone-400">of {b.token_quota.toLocaleString('en-IN')} ({pct}%)</span>
           </div>
-          <div className="h-2.5 rounded-full bg-stone-100 mt-1.5 overflow-hidden">
+          <div className="h-2.5 rounded-full bg-stone-100 dark:bg-white/5 mt-1.5 overflow-hidden">
             <div
-              className={`h-full rounded-full ${exhausted ? 'bg-[#a02c2c]' : 'bg-ledger'}`}
+              className={`h-full rounded-full ${exhausted ? 'bg-[#a02c2c]' : 'dual-tone-bar'}`}
               style={{ width: `${pct}%` }}
             />
           </div>
-          <p className="text-meta text-stone-400 mt-2">
+          <p className="text-meta text-stone-400 dark:text-stone-500 mt-2">
             LLM in {b.llm_prompt_tokens.toLocaleString('en-IN')} · LLM out {b.llm_completion_tokens.toLocaleString('en-IN')} · Embeddings {b.embedding_tokens.toLocaleString('en-IN')}
             {exhausted && ' · Quota exhausted — upgrade to keep asking questions.'}
           </p>
@@ -135,12 +135,12 @@ export default function PlansPage() {
 
       {/* Test-payment confirmation (mock provider) */}
       {pendingMock && (
-        <div className="rounded-lex-lg border border-ink bg-ivory px-6 py-5 mt-5 flex flex-wrap items-center gap-4 justify-between">
+        <div className="rounded-lex-lg border border-ink bg-ivory dark:bg-[#14120f] px-6 py-5 mt-5 flex flex-wrap items-center gap-4 justify-between">
           <div>
             <p className="font-medium flex items-center gap-2">
               <CreditCard size={16} /> Test payment — {pendingMock.plan.name} plan
             </p>
-            <p className="text-[13px] text-stone-500 mt-0.5">
+            <p className="text-[13px] text-stone-500 dark:text-stone-400 mt-0.5">
               The gateway is in test mode. Confirm to simulate paying {inr(pendingMock.plan.price_inr)} and activate the plan.
             </p>
           </div>
@@ -152,7 +152,7 @@ export default function PlansPage() {
             >
               {confirmMock.isPending ? 'Processing…' : `Pay ${inr(pendingMock.plan.price_inr)} (test)`}
             </button>
-            <button className="rounded-lex border border-stone-300 px-4 py-2 text-[13px]" onClick={() => setPendingMock(null)}>
+            <button className="rounded-lex border border-stone-300 dark:border-white/10 px-4 py-2 text-[13px]" onClick={() => setPendingMock(null)}>
               Cancel
             </button>
           </div>
@@ -160,10 +160,10 @@ export default function PlansPage() {
       )}
 
       {waiting && (
-        <div className="rounded-lex border border-stone-200 bg-white px-5 py-3.5 mt-5 flex items-center gap-3 text-[13.5px]">
+        <div className="rounded-lex border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1e1c19] px-5 py-3.5 mt-5 flex items-center gap-3 text-[13.5px]">
           <Loader2 size={16} className="animate-spin" />
           Waiting for the UPI gateway to confirm your payment…
-          <button className="ml-auto text-stone-500 underline" onClick={stopPolling}>Stop waiting</button>
+          <button className="ml-auto text-stone-500 dark:text-stone-400 underline" onClick={stopPolling}>Stop waiting</button>
         </div>
       )}
 
@@ -174,21 +174,21 @@ export default function PlansPage() {
           return (
             <div
               key={plan.id}
-              className={`rounded-lex-lg border bg-white px-6 py-5 flex flex-col ${current ? 'border-ink' : 'border-stone-200'}`}
+              className={`rounded-lex-lg border bg-white dark:bg-[#1e1c19] px-6 py-5 flex flex-col ${current ? 'border-ink' : 'border-stone-200 dark:border-white/10'}`}
             >
               <p className="font-display text-xl">{plan.name}</p>
               <p className="mt-2">
                 <span className="font-display text-3xl">{plan.price_inr === 0 ? '₹0' : inr(plan.price_inr)}</span>
-                <span className="text-stone-500 text-[13px]"> / month</span>
+                <span className="text-stone-500 dark:text-stone-400 text-[13px]"> / month</span>
               </p>
-              <p className="text-[13px] text-stone-500 mt-1 flex items-center gap-1.5">
-                <BadgeIndianRupee size={14} className="text-stone-400" />
+              <p className="text-[13px] text-stone-500 dark:text-stone-400 mt-1 flex items-center gap-1.5">
+                <BadgeIndianRupee size={14} className="text-stone-400 dark:text-stone-500" />
                 {fmtTokens(plan.monthly_tokens)} tokens included
               </p>
               <ul className="mt-4 space-y-2 text-[13.5px] flex-1">
                 {plan.features.map((f) => (
                   <li key={f} className="flex gap-2">
-                    <Check size={15} className="text-stone-400 mt-0.5 shrink-0" />
+                    <Check size={15} className="text-stone-400 dark:text-stone-500 mt-0.5 shrink-0" />
                     <span>{f}</span>
                   </li>
                 ))}
@@ -212,10 +212,10 @@ export default function PlansPage() {
       {b.payments.length === 0 ? (
         <EmptyState title="No payments yet" hint="Your subscription payments will appear here." />
       ) : (
-        <div className="rounded-lex-lg border border-stone-200 bg-white overflow-hidden">
+        <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1e1c19] overflow-hidden">
           <table className="w-full text-[13.5px]">
             <thead>
-              <tr className="text-left text-meta text-stone-500 border-b border-stone-200">
+              <tr className="text-left text-meta text-stone-500 dark:text-stone-400 border-b border-stone-200 dark:border-white/10">
                 <th className="px-5 py-3 font-medium">Date</th>
                 <th className="px-5 py-3 font-medium">Plan</th>
                 <th className="px-5 py-3 font-medium">Amount</th>
@@ -226,7 +226,7 @@ export default function PlansPage() {
             </thead>
             <tbody>
               {pagedPayments.pageItems.map((p) => (
-                <tr key={p.id} className="border-b border-stone-100 last:border-0">
+                <tr key={p.id} className="border-b border-stone-100 dark:border-white/10 last:border-0">
                   <td className="px-5 py-3">{fmtDate(p.created_at)}</td>
                   <td className="px-5 py-3 capitalize">{p.plan_id}</td>
                   <td className="px-5 py-3">{inr(p.amount_inr)}</td>
@@ -240,7 +240,7 @@ export default function PlansPage() {
                       {p.status}
                     </span>
                   </td>
-                  <td className="px-5 py-3 text-stone-500">{p.utr ?? '—'}</td>
+                  <td className="px-5 py-3 text-stone-500 dark:text-stone-400">{p.utr ?? '—'}</td>
                 </tr>
               ))}
             </tbody>
@@ -250,7 +250,7 @@ export default function PlansPage() {
       {b.payments.length > 0 && (
         <Pager page={pagedPayments.page} pages={pagedPayments.pages} from={pagedPayments.from} to={pagedPayments.to} total={pagedPayments.total} onPage={pagedPayments.setPage} />
       )}
-      <p className="text-meta text-stone-400 mt-4">
+      <p className="text-meta text-stone-400 dark:text-stone-500 mt-4">
         Payments are collected by the workspace’s own UPI gateway — money settles directly to the firm’s bank account, with no aggregator fee.
       </p>
     </div>

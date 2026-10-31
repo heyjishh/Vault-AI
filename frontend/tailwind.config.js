@@ -1,5 +1,8 @@
 /** @type {import('tailwindcss').Config} */
 export default {
+  // Piece 35: dark mode is a class on <html> (pre-paint script in
+  // index.html + ThemeToggle), never the media query alone.
+  darkMode: 'class',
   content: ["./index.html", "./src/**/*.{js,ts,jsx,tsx}"],
   theme: {
     extend: {
@@ -28,9 +31,15 @@ export default {
           amber: '#eab308',
           highlighter: '#f6f202',
         },
-        // Piece 34 (achromatic ledger): the ONE data hue — token-usage
-        // bars only (sidebar plan block, Dashboard, Plans). Never chrome.
+        // Piece 34 (achromatic ledger): the ONE data hue. Piece 35 moved
+        // the token-usage bars to the dual tone, so ledger is retained
+        // only as a defined token — no longer the usage-bar fill.
         ledger: '#1d5fbf',
+        // Piece 35 (user-directed brand layer): the dual tone. Appears
+        // only as soft washes, the usage-bar gradient and one gradient
+        // wordmark — never as chrome fills. See DESIGN.md.
+        terra: '#c4664a',
+        sage: '#8fa382',
         'app-bg': '#fafaf9',
         'surface': '#FFFFFF',
         'surface-2': '#f2f1f0',

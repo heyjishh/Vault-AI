@@ -72,9 +72,9 @@ export default function AgentsPage({ go }: { go?: (view: string) => void } = {})
   return (
     <div className="w-full px-6 py-10">
       <h1 className="font-display text-[2rem] tracking-tight flex items-center gap-3">
-        <Bot className="text-stone-500" /> Agents
+        <Bot className="text-stone-500 dark:text-stone-400" /> Agents
       </h1>
-      <p className="text-stone-500 mt-1.5 text-[15px]">
+      <p className="text-stone-500 dark:text-stone-400 mt-1.5 text-[15px]">
         Multi-step agentic workflows — each step retrieves grounded evidence, feeds its findings forward, and the final report is synthesized with citations.
       </p>
 
@@ -88,29 +88,29 @@ export default function AgentsPage({ go }: { go?: (view: string) => void } = {})
             <button
               key={w.id}
               onClick={() => { setSelected(w); setRun(null); setError(null) }}
-              className={`text-left rounded-lex-lg border bg-white p-5 transition-colors ${
-                selected?.id === w.id ? 'border-ink' : 'border-stone-200 hover:border-stone-300'
+              className={`text-left rounded-lex-lg border bg-white dark:bg-[#1e1c19] p-5 transition-colors ${
+                selected?.id === w.id ? 'border-ink' : 'border-stone-200 dark:border-white/10 hover:border-stone-300'
               }`}
             >
               <p className="font-display text-lg tracking-tight">{w.name}</p>
-              <p className="text-meta2 text-stone-500 mt-1.5 leading-relaxed">{ICONS[w.id] ?? w.description}</p>
-              <p className="text-meta text-stone-400 mt-3">{w.steps.length} steps</p>
+              <p className="text-meta2 text-stone-500 dark:text-stone-400 mt-1.5 leading-relaxed">{ICONS[w.id] ?? w.description}</p>
+              <p className="text-meta text-stone-400 dark:text-stone-500 mt-3">{w.steps.length} steps</p>
             </button>
           ))}
         </div>
       )}
 
       {selected && (
-        <div className="mt-6 rounded-lex-lg border border-stone-200 bg-white p-5 fade-up">
-          <label className="block text-meta font-medium text-stone-600 mb-1.5">{selected.input_label}</label>
+        <div className="mt-6 rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1e1c19] p-5 fade-up">
+          <label className="block text-meta font-medium text-stone-600 dark:text-stone-300 mb-1.5">{selected.input_label}</label>
           <textarea
             value={input} onChange={(e) => setInput(e.target.value)} rows={4}
             placeholder="Paste the contract text, deal summary, or legal question…"
-            className="w-full rounded-lex border border-stone-300 px-3 py-2.5 text-[15px] outline-none focus:border-ink placeholder:text-stone-400 resize-y"
+            className="w-full rounded-lex border border-stone-300 dark:border-white/10 px-3 py-2.5 text-[15px] outline-none focus:border-ink placeholder:text-stone-400 resize-y"
           />
           <div className="flex items-center justify-between mt-3">
             <div className="flex items-center gap-3">
-              <p className="text-meta text-stone-400">Steps: {selected.steps.map((s) => s.name).join(' → ')}</p>
+              <p className="text-meta text-stone-400 dark:text-stone-500">Steps: {selected.steps.map((s) => s.name).join(' → ')}</p>
               <RefineControls ctl={refineWf} disabled={!input.trim()} />
             </div>
             <button
@@ -123,29 +123,29 @@ export default function AgentsPage({ go }: { go?: (view: string) => void } = {})
         </div>
       )}
 
-      <div className="mt-8 rounded-lex-lg border border-stone-200 bg-white p-5">
+      <div className="mt-8 rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1e1c19] p-5">
         <h2 className="font-display text-xl tracking-tight flex items-center gap-2">
-          <Compass size={18} className="text-stone-500" /> Autonomous research
+          <Compass size={18} className="text-stone-500 dark:text-stone-400" /> Autonomous research
         </h2>
-        <p className="text-meta2 text-stone-500 mt-1">
+        <p className="text-meta2 text-stone-500 dark:text-stone-400 mt-1">
           Give it a goal — a lead agent splits it across specialist researchers, a drafter, and an independent checker, then reconciles their work into a cited report. Fixed workflows below run a set recipe; this one chooses.
         </p>
         <textarea
           value={goal} onChange={(e) => setGoal(e.target.value)} rows={3}
           placeholder="e.g. What does the vault say about compensation for delayed possession, and what is the current law on the web?"
-          className="w-full mt-3 rounded-lex border border-stone-300 px-3 py-2.5 text-[15px] outline-none focus:border-ink placeholder:text-stone-400 resize-y"
+          className="w-full mt-3 rounded-lex border border-stone-300 dark:border-white/10 px-3 py-2.5 text-[15px] outline-none focus:border-ink placeholder:text-stone-400 resize-y"
         />
         <div className="flex flex-wrap items-center gap-3 mt-3">
           <select value={autoMatter} onChange={(e) => setAutoMatter(e.target.value)}
-            className="rounded-lex border border-stone-300 px-2.5 py-2 text-meta2 bg-white outline-none focus:border-ink max-w-[220px]">
+            className="rounded-lex border border-stone-300 dark:border-white/10 px-2.5 py-2 text-meta2 bg-white dark:bg-[#1e1c19] outline-none focus:border-ink max-w-[220px]">
             <option value="">Whole vault</option>
             {(matters.data ?? []).map((m) => <option key={m.id} value={m.id}>{m.title}</option>)}
           </select>
-          <label className="flex items-center gap-2 text-meta2 text-stone-600">
+          <label className="flex items-center gap-2 text-meta2 text-stone-600 dark:text-stone-300">
             Max steps
             <input type="number" min={1} max={10} value={autoSteps}
               onChange={(e) => setAutoSteps(Math.min(10, Math.max(1, Number(e.target.value) || 6)))}
-              className="w-16 rounded-lex border border-stone-300 px-2 py-1.5 outline-none focus:border-ink" />
+              className="w-16 rounded-lex border border-stone-300 dark:border-white/10 px-2 py-1.5 outline-none focus:border-ink" />
           </label>
           <RefineControls ctl={refineAuto} disabled={!goal.trim()} />
           <button
@@ -165,13 +165,13 @@ export default function AgentsPage({ go }: { go?: (view: string) => void } = {})
               <div className="space-y-1.5 mb-4">
                 {autoRun.sub_agents!.map((r) => (
                   <div key={r.name} className="flex items-start gap-2.5 text-meta2">
-                    <span className="shrink-0 text-meta font-medium text-stone-600">
+                    <span className="shrink-0 text-meta font-medium text-stone-600 dark:text-stone-300">
                       {r.role} · {r.name} · {r.status}
                     </span>
-                    <span className="text-stone-600">
+                    <span className="text-stone-600 dark:text-stone-300">
                       {r.input}
-                      {r.citations.length > 0 && <span className="text-stone-400"> · {r.citations.length} sources</span>}
-                      <span className="text-stone-400"> · {r.tokens_used.toLocaleString()} tokens</span>
+                      {r.citations.length > 0 && <span className="text-stone-400 dark:text-stone-500"> · {r.citations.length} sources</span>}
+                      <span className="text-stone-400 dark:text-stone-500"> · {r.tokens_used.toLocaleString()} tokens</span>
                     </span>
                   </div>
                 ))}
@@ -183,20 +183,20 @@ export default function AgentsPage({ go }: { go?: (view: string) => void } = {})
             <div className="space-y-1.5 mb-4">
               {(autoRun.steps ?? []).map((s) => (
                 <div key={s.n} className="flex items-start gap-2.5 text-meta2">
-                  <span className="shrink-0 text-meta font-medium text-stone-600">
+                  <span className="shrink-0 text-meta font-medium text-stone-600 dark:text-stone-300">
                     {s.n}. {s.action.replace('_', ' ')}
                   </span>
-                  <span className="text-stone-600">
+                  <span className="text-stone-600 dark:text-stone-300">
                     {s.input || s.reason}
-                    {s.citations.length > 0 && <span className="text-stone-400"> · {s.citations.length} sources</span>}
+                    {s.citations.length > 0 && <span className="text-stone-400 dark:text-stone-500"> · {s.citations.length} sources</span>}
                   </span>
                 </div>
               ))}
-              <p className="text-meta text-stone-400">
+              <p className="text-meta text-stone-400 dark:text-stone-500">
                 Stopped: {autoRun.stopped === 'finished' ? 'goal complete' : autoRun.stopped === 'budget' ? `step budget (${autoRun.max_steps}) reached` : autoRun.stopped}
               </p>
             </div>
-            <div className="rounded-lex-lg border border-stone-200 bg-ivory p-5">
+            <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-ivory dark:bg-[#14120f] p-5">
               <div className="prose-lex">
                 <ReactMarkdown
                   remarkPlugins={[remarkGfm]}
@@ -223,7 +223,7 @@ export default function AgentsPage({ go }: { go?: (view: string) => void } = {})
       {run && !start.isPending && (
         <div className="mt-8 fade-up">
           <h2 className="font-display text-2xl tracking-tight">{run.workflow_name}</h2>
-          <div className="mt-4 rounded-lex-lg border border-stone-200 bg-white p-6">
+          <div className="mt-4 rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1e1c19] p-6">
             <div className="prose-lex">
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
@@ -237,19 +237,19 @@ export default function AgentsPage({ go }: { go?: (view: string) => void } = {})
           <h3 className="font-display text-xl tracking-tight mt-8 mb-3">Step findings</h3>
           <div className="space-y-2">
             {run.steps.map((s, i) => (
-              <div key={s.step_id} className="rounded-lex-lg border border-stone-200 bg-white overflow-hidden">
+              <div key={s.step_id} className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1e1c19] overflow-hidden">
                 <button
                   onClick={() => setOpenStep(openStep === i ? null : i)}
                   className="w-full flex items-center justify-between px-5 py-3.5 text-left"
                 >
                   <span className="font-medium text-[15px]">{i + 1}. {s.name}</span>
-                  <span className="flex items-center gap-2 text-meta text-stone-400">
+                  <span className="flex items-center gap-2 text-meta text-stone-400 dark:text-stone-500">
                     {s.citations.length} citations
                     <ChevronDown size={15} className={`transition-transform ${openStep === i ? 'rotate-180' : ''}`} />
                   </span>
                 </button>
                 {openStep === i && (
-                  <div className="px-5 pb-4 border-t border-stone-200 pt-3">
+                  <div className="px-5 pb-4 border-t border-stone-200 dark:border-white/10 pt-3">
                     <p className="text-meta2 text-stone-700 leading-relaxed whitespace-pre-wrap">
                       <CitedText text={s.findings} citations={s.citations} onOpen={setModalCitation} />
                     </p>
@@ -266,7 +266,7 @@ export default function AgentsPage({ go }: { go?: (view: string) => void } = {})
 
           {run.citations.length > 0 && (
             <div className="mt-8">
-              <p className="text-[13px] text-stone-400 font-medium mb-2.5">All sources · {run.citations.length}</p>
+              <p className="text-[13px] text-stone-400 dark:text-stone-500 font-medium mb-2.5">All sources · {run.citations.length}</p>
               <div className="grid gap-2">
                 {run.citations.map((c) => <CitationCard key={c.chunk_id} citation={c} go={go} />)}
               </div>

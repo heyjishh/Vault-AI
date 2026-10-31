@@ -68,9 +68,9 @@ export function ClausePetToggle() {
   return (
     <div className="flex items-center gap-2.5 px-1 py-1">
       <img src="/clause-pet.png?v=2" alt="" className="w-6 h-7 object-contain" draggable={false} />
-      <span className="text-[13px] text-stone-600 flex-1">
+      <span className="text-[13px] text-stone-600 dark:text-stone-300 flex-1">
         Clause pet
-        <span className="block text-[11px] text-stone-400">
+        <span className="block text-[11px] text-stone-400 dark:text-stone-500">
           {on ? 'On — drag him anywhere, tap for tips' : 'Companion is hidden'}
         </span>
       </span>
@@ -567,20 +567,20 @@ export default function ClausePet({ view, go, askQuestion, startNewChat }: Claus
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 4, scale: 0.97 }}
             transition={{ duration: 0.18 }}
-            className="mb-1 mr-1 w-[268px] rounded-lex-lg border border-stone-200 bg-white shadow-lex-md px-3.5 py-2.5 relative"
+            className="mb-1 mr-1 w-[268px] rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1e1c19] shadow-lex-md px-3.5 py-2.5 relative"
           >
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-stone-400">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-stone-400 dark:text-stone-500">
               Clause · {page.name}
             </p>
-            <p className="text-[12.5px] leading-snug text-stone-600 mt-0.5">
+            <p className="text-[12.5px] leading-snug text-stone-600 dark:text-stone-300 mt-0.5">
               {menuOpen ? 'At your service — here’s what I can do on this page:' : bubbleText}
             </p>
             {menuOpen && (
               <div className="mt-2 flex flex-col gap-1">
-                <div className="px-1 pt-0.5 pb-2 mb-1.5 border-b border-stone-100">
+                <div className="px-1 pt-0.5 pb-2 mb-1.5 border-b border-stone-100 dark:border-white/10">
                   <div className="flex items-center">
-                    <span className="text-[11px] uppercase tracking-wider text-stone-400 font-medium">Size</span>
-                    <span className="ml-auto text-[11px] text-stone-400 tabular-nums">{size}px</span>
+                    <span className="text-[11px] uppercase tracking-wider text-stone-400 dark:text-stone-500 font-medium">Size</span>
+                    <span className="ml-auto text-[11px] text-stone-400 dark:text-stone-500 tabular-nums">{size}px</span>
                     {pos && (
                       <button
                         onClick={resetPos}
@@ -617,13 +617,13 @@ export default function ClausePet({ view, go, askQuestion, startNewChat }: Claus
                 ))}
                 <button
                   onClick={hide}
-                  className="flex items-center gap-2 rounded-lex px-2.5 py-1.5 text-[12.5px] text-stone-500 hover:bg-stone-100 hover:text-ink transition-colors"
+                  className="flex items-center gap-2 rounded-lex px-2.5 py-1.5 text-[12.5px] text-stone-500 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-white/10 hover:text-ink transition-colors"
                 >
                   <EyeOff size={13} /> Hide pet
                 </button>
               </div>
             )}
-            <span className="absolute -bottom-[5px] right-8 w-2.5 h-2.5 rotate-45 bg-white border-b border-r border-stone-200" />
+            <span className="absolute -bottom-[5px] right-8 w-2.5 h-2.5 rotate-45 bg-white dark:bg-[#1e1c19] border-b border-r border-stone-200 dark:border-white/10" />
           </motion.div>
         )}
       </AnimatePresence>

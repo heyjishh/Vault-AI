@@ -226,28 +226,28 @@ export default function AssistantPage({ matterId: fixedMatterId, go }: { matterI
       <div className="flex-1 min-w-0">
         <div className="w-full px-6 pb-16">
       {scopeMatterId && (
-        <div className="mt-6 flex items-center gap-2 rounded-lex border border-stone-200 bg-white px-3.5 py-2.5 text-[13px]">
+        <div className="mt-6 flex items-center gap-2 rounded-lex border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1e1c19] px-3.5 py-2.5 text-[13px]">
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 flex-shrink-0" />
           {briefVault ? (
-            <span className="text-stone-600">
-              <span className="font-medium text-ink">Brief vault is on</span>
-              {' '}— answers come only from <span className="font-medium text-ink">{scopeMatter?.title ?? 'this brief'}</span>'s documents, with no full-vault fallback.
+            <span className="text-stone-600 dark:text-stone-300">
+              <span className="font-medium text-ink dark:text-[#f4f2ee]">Brief vault is on</span>
+              {' '}— answers come only from <span className="font-medium text-ink dark:text-[#f4f2ee]">{scopeMatter?.title ?? 'this brief'}</span>'s documents, with no full-vault fallback.
             </span>
           ) : (
-            <span className="text-stone-600">
-              Asking within <span className="font-medium text-ink">{scopeMatter?.title ?? 'this brief'}</span>
+            <span className="text-stone-600 dark:text-stone-300">
+              Asking within <span className="font-medium text-ink dark:text-[#f4f2ee]">{scopeMatter?.title ?? 'this brief'}</span>
               {' '}— answers draw only on this brief's documents.
             </span>
           )}
           {!fixedMatterId && (briefVault ? (
             <button
               onClick={() => { setBriefVault(false); setStoreMatter(null); toast('success', 'Brief vault off — Ask now searches the full vault') }}
-              className="ml-auto text-stone-500 hover:text-ink font-medium whitespace-nowrap"
+              className="ml-auto text-stone-500 dark:text-stone-400 hover:text-ink font-medium whitespace-nowrap"
             >
               Turn off Brief vault &amp; search full vault
             </button>
           ) : (
-            <button onClick={() => setStoreMatter(null)} className="ml-auto text-stone-500 hover:text-ink font-medium whitespace-nowrap">
+            <button onClick={() => setStoreMatter(null)} className="ml-auto text-stone-500 dark:text-stone-400 hover:text-ink font-medium whitespace-nowrap">
               Search full vault instead
             </button>
           ))}
@@ -257,13 +257,13 @@ export default function AssistantPage({ matterId: fixedMatterId, go }: { matterI
         <div className="pt-16">
           <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}>
             <div className="flex justify-center"><AssistantAvatar size={84} /></div>
-            <p className="text-center text-[13px] font-medium text-stone-400 mt-5">
+            <p className="text-center text-[13px] font-medium text-stone-400 dark:text-stone-500 mt-5">
               Clause · your legal research companion
             </p>
             <h1 className="font-display text-[2.7rem] leading-[1.12] tracking-tight text-center mt-3">
               What would you like<br />to <em className="italic">research</em> today?
             </h1>
-            <p className="text-center text-stone-500 mt-4 text-[15px] max-w-md mx-auto">
+            <p className="text-center text-stone-500 dark:text-stone-400 mt-4 text-[15px] max-w-md mx-auto">
               Grounded answers from your Vault, streamed as they're drafted — every claim cited to its source.
             </p>
           </motion.div>
@@ -280,11 +280,11 @@ export default function AssistantPage({ matterId: fixedMatterId, go }: { matterI
                 initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.15 + i * 0.07, duration: 0.4 }}
                 onClick={() => ask(ex.q)}
-                className="text-left rounded-lex-lg border border-stone-200 bg-white px-4 py-3.5 hover:border-stone-300 transition-all group"
+                className="text-left rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1e1c19] px-4 py-3.5 hover:border-stone-300 transition-all group"
               >
-                <span className="text-[11px] font-medium text-stone-400">{ex.tag}</span>
+                <span className="text-[11px] font-medium text-stone-400 dark:text-stone-500">{ex.tag}</span>
                 <p className="font-display text-[17px] mt-1 group-hover:text-ink">{ex.title}</p>
-                <p className="text-[13px] text-stone-500 mt-0.5 line-clamp-2">{ex.q}</p>
+                <p className="text-[13px] text-stone-500 dark:text-stone-400 mt-0.5 line-clamp-2">{ex.q}</p>
               </motion.button>
             ))}
           </div>
@@ -295,7 +295,7 @@ export default function AssistantPage({ matterId: fixedMatterId, go }: { matterI
             <div className="flex justify-end mb-1">
               <button
                 onClick={() => setSourcesOpen((v) => !v)}
-                className="inline-flex items-center gap-1.5 rounded-lex border border-stone-200 bg-white px-3 py-1.5 text-[12.5px] font-medium text-stone-600 hover:text-ink hover:border-stone-300 transition-colors"
+                className="inline-flex items-center gap-1.5 rounded-lex border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1e1c19] px-3 py-1.5 text-[12.5px] font-medium text-stone-600 dark:text-stone-300 hover:text-ink hover:border-stone-300 transition-colors"
               >
                 <PanelRight size={14} /> Sources panel {sourcesOpen ? 'on' : 'off'}
               </button>
@@ -399,7 +399,7 @@ function Highlighted({ text, terms }: { text: string; terms: string[] }) {
     <>
       {parts.map((part, i) =>
         i % 2 === 1 ? (
-          <mark key={i} className="bg-[#fdf3d7] text-ink rounded px-0.5">{part}</mark>
+          <mark key={i} className="bg-[#fdf3d7] text-ink dark:text-[#f4f2ee] rounded px-0.5">{part}</mark>
         ) : (
           <span key={i}>{part}</span>
         ),
@@ -428,19 +428,19 @@ function SourcesSidebar({ turn, selectedChunkId, onClose, go, onOpenSource }: {
   }, [selectedChunkId, turn.id])
 
   return (
-    <aside className="sticky top-0 h-screen w-[350px] shrink-0 border-l border-stone-200 bg-[#fbfaf8] hidden lg:flex flex-col">
-      <div className="flex items-center gap-2 px-5 h-[4.5rem] border-b border-stone-200 shrink-0">
-        <PanelRight size={16} className="text-stone-500" />
+    <aside className="sticky top-0 h-screen w-[350px] shrink-0 border-l border-stone-200 dark:border-white/10 bg-[#fbfaf8] hidden lg:flex flex-col">
+      <div className="flex items-center gap-2 px-5 h-[4.5rem] border-b border-stone-200 dark:border-white/10 shrink-0">
+        <PanelRight size={16} className="text-stone-500 dark:text-stone-400" />
         <p className="font-display text-[17px]">Sources</p>
-        <span className="text-[12px] text-stone-400">{turn.citations.length} passage{turn.citations.length === 1 ? '' : 's'}</span>
-        <button onClick={onClose} className="ml-auto p-1.5 rounded-lex text-stone-400 hover:text-ink hover:bg-stone-100 transition-colors" title="Close sources panel">
+        <span className="text-[12px] text-stone-400 dark:text-stone-500">{turn.citations.length} passage{turn.citations.length === 1 ? '' : 's'}</span>
+        <button onClick={onClose} className="ml-auto p-1.5 rounded-lex text-stone-400 dark:text-stone-500 hover:text-ink hover:bg-stone-100 dark:hover:bg-white/10 transition-colors" title="Close sources panel">
           <X size={15} />
         </button>
       </div>
-      <div className="px-5 py-3 border-b border-stone-100 shrink-0">
-        <p className="text-[12.5px] text-stone-400 font-medium">For the question</p>
+      <div className="px-5 py-3 border-b border-stone-100 dark:border-white/10 shrink-0">
+        <p className="text-[12.5px] text-stone-400 dark:text-stone-500 font-medium">For the question</p>
         <p className="text-[13.5px] font-medium mt-0.5 line-clamp-2">{turn.question}</p>
-        <p className="text-[12px] text-stone-400 mt-1">Highlighted words are where the answer drew from the passage.</p>
+        <p className="text-[12px] text-stone-400 dark:text-stone-500 mt-1">Highlighted words are where the answer drew from the passage.</p>
       </div>
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
         {turn.citations.map((c) => {
@@ -480,20 +480,20 @@ function SourcesSidebar({ turn, selectedChunkId, onClose, go, onOpenSource }: {
               ref={(el) => { cardRefs.current[c.chunk_id] = el }}
               onClick={() => onOpenSource(c)}
               title="View the full document"
-              className={`rounded-lex-lg border bg-white px-4 py-3.5 transition-colors cursor-pointer hover:border-stone-400 ${selected ? 'border-ink' : 'border-stone-200'}`}
+              className={`rounded-lex-lg border bg-white dark:bg-[#1e1c19] px-4 py-3.5 transition-colors cursor-pointer hover:border-stone-400 ${selected ? 'border-ink' : 'border-stone-200 dark:border-white/10'}`}
             >
               <div className="flex items-center gap-2">
                 <span className="rounded bg-ink text-ivory px-1.5 py-0.5 text-[11px] font-mono font-semibold">{c.doc_id}</span>
-                <span className="text-[12px] tabular-nums text-stone-500">
+                <span className="text-[12px] tabular-nums text-stone-500 dark:text-stone-400">
                   {Math.round(c.score * 100)}%
                 </span>
                 {isPrivate && (
-                  <span className="text-[11px] text-stone-500">Private</span>
+                  <span className="text-[11px] text-stone-500 dark:text-stone-400">Private</span>
                 )}
                 {c.stale && (
                   <span
                     title={c.stale}
-                    className="inline-flex items-center gap-1.5 text-[11px] text-stone-600"
+                    className="inline-flex items-center gap-1.5 text-[11px] text-stone-600 dark:text-stone-300"
                   >
                     <span className="w-1.5 h-1.5 rounded-full bg-[#b7791f] shrink-0" />
                     Superseded
@@ -502,7 +502,7 @@ function SourcesSidebar({ turn, selectedChunkId, onClose, go, onOpenSource }: {
                 {c.treatment && c.treatment.status !== 'unknown' && (
                   <span
                     title={c.treatment.evidence_passage ?? undefined}
-                    className="inline-flex items-center gap-1.5 text-[11px] text-stone-600"
+                    className="inline-flex items-center gap-1.5 text-[11px] text-stone-600 dark:text-stone-300"
                   >
                     <span
                       className="w-1.5 h-1.5 rounded-full shrink-0"
@@ -520,22 +520,22 @@ function SourcesSidebar({ turn, selectedChunkId, onClose, go, onOpenSource }: {
                 {c.treatment && c.treatment.status === 'unknown' && (
                   <span
                     title="No judgment in the visible scope states a treatment for this authority — status unknown, not assumed good law."
-                    className="inline-flex items-center gap-1.5 text-[11px] text-stone-500"
+                    className="inline-flex items-center gap-1.5 text-[11px] text-stone-500 dark:text-stone-400"
                   >
                     <span className="w-1.5 h-1.5 rounded-full bg-stone-300 shrink-0" />
                     Status unknown
                   </span>
                 )}
                 {isWeb && (
-                  <span className="ml-auto text-[11px] text-stone-400">Web</span>
+                  <span className="ml-auto text-[11px] text-stone-400 dark:text-stone-500">Web</span>
                 )}
               </div>
               <p className="text-[13.5px] font-medium mt-2 leading-snug">{c.doc_title ?? c.doc_id}</p>
-              <div className="text-[12.5px] text-stone-600 leading-relaxed mt-1.5 max-h-72 overflow-y-auto pr-1">
+              <div className="text-[12.5px] text-stone-600 dark:text-stone-300 leading-relaxed mt-1.5 max-h-72 overflow-y-auto pr-1">
                 <Highlighted text={c.snippet} terms={terms} />
               </div>
               {c.treatment && c.treatment.status !== 'unknown' && c.treatment.evidence_passage && (
-                <p className="text-[12px] text-stone-500 italic leading-relaxed mt-2 border-l-2 border-stone-200 pl-2">
+                <p className="text-[12px] text-stone-500 dark:text-stone-400 italic leading-relaxed mt-2 border-l-2 border-stone-200 dark:border-white/10 pl-2">
                   “{c.treatment.evidence_passage}” — {c.treatment.evidence_source_title ?? 'a later judgment'}
                 </p>
               )}
@@ -545,22 +545,22 @@ function SourcesSidebar({ turn, selectedChunkId, onClose, go, onOpenSource }: {
                   target="_blank"
                   rel="noreferrer"
                   onClick={(e) => e.stopPropagation()}
-                  className="mt-3 flex items-center gap-1.5 border-t border-stone-100 pt-2.5 text-[12.5px] font-medium text-ink hover:underline underline-offset-2"
+                  className="mt-3 flex items-center gap-1.5 border-t border-stone-100 dark:border-white/10 pt-2.5 text-[12.5px] font-medium text-ink dark:text-[#f4f2ee] hover:underline underline-offset-2"
                 >
                   <ExternalLink size={12} />
                   Open original
-                  <span className="text-stone-400 font-normal">
+                  <span className="text-stone-400 dark:text-stone-500 font-normal">
                     {domain}
                     {c.source_date && <> · {c.source_date}</>}
                   </span>
                 </a>
               )}
               {isDoc && (
-                <div className="mt-3 flex flex-col gap-2 border-t border-stone-100 pt-2.5">
+                <div className="mt-3 flex flex-col gap-2 border-t border-stone-100 dark:border-white/10 pt-2.5">
                   <DocInsightButton citation={c} />
                   <button
                     onClick={(e) => { e.stopPropagation(); void openOriginal() }}
-                    className="flex items-center gap-1.5 text-[12.5px] font-medium text-ink hover:underline underline-offset-2"
+                    className="flex items-center gap-1.5 text-[12.5px] font-medium text-ink dark:text-[#f4f2ee] hover:underline underline-offset-2"
                   >
                     <ExternalLink size={12} />
                     Open original document
@@ -568,7 +568,7 @@ function SourcesSidebar({ turn, selectedChunkId, onClose, go, onOpenSource }: {
                   {go && (
                     <button
                       onClick={(e) => { e.stopPropagation(); openDoc() }}
-                      className="flex items-center gap-1.5 text-[12.5px] font-medium text-ink hover:underline underline-offset-2"
+                      className="flex items-center gap-1.5 text-[12.5px] font-medium text-ink dark:text-[#f4f2ee] hover:underline underline-offset-2"
                     >
                       <PanelRight size={12} />
                       Open this document in Interact
@@ -579,7 +579,7 @@ function SourcesSidebar({ turn, selectedChunkId, onClose, go, onOpenSource }: {
               {isPrivate && go && (
                 <button
                   onClick={(e) => { e.stopPropagation(); go('private') }}
-                  className="mt-3 flex items-center gap-1.5 border-t border-stone-100 pt-2.5 text-[12.5px] font-medium text-ink hover:underline underline-offset-2"
+                  className="mt-3 flex items-center gap-1.5 border-t border-stone-100 dark:border-white/10 pt-2.5 text-[12.5px] font-medium text-ink dark:text-[#f4f2ee] hover:underline underline-offset-2"
                 >
                   <Lock size={12} />
                   Open in Private Vault
@@ -632,9 +632,9 @@ function TurnView({ turn, onCopy, onRegenerate, onFollowUp, onCite, onShowSource
       <h2 className="font-display text-[1.6rem] leading-snug tracking-tight">{turn.question}</h2>
 
       {turn.status && (
-        <div className="mt-3 flex items-center gap-2.5 text-stone-500 text-[13px]">
+        <div className="mt-3 flex items-center gap-2.5 text-stone-500 dark:text-stone-400 text-[13px]">
           <AssistantAvatar size={22} playing float={false} />
-          <span className="font-medium text-ink">Clause</span>
+          <span className="font-medium text-ink dark:text-[#f4f2ee]">Clause</span>
           {turn.status}
           <span className="text-stone-300">·</span>
           <span className="tabular-nums">{secs}s</span>
@@ -669,7 +669,7 @@ function TurnView({ turn, onCopy, onRegenerate, onFollowUp, onCite, onShowSource
           )}
 
           {turn.refineTerms && turn.refineTerms.length > 0 && (
-            <p className="mt-3 text-[12px] text-stone-400">
+            <p className="mt-3 text-[12px] text-stone-400 dark:text-stone-500">
               Searching also for: {turn.refineTerms.join(' · ')}
             </p>
           )}
@@ -682,7 +682,7 @@ function TurnView({ turn, onCopy, onRegenerate, onFollowUp, onCite, onShowSource
           )}
 
           {turn.done && turn.audit && turn.audit.checked > 0 && (
-            <div className="mt-4 flex items-center gap-1.5 text-[12.5px] text-stone-600">
+            <div className="mt-4 flex items-center gap-1.5 text-[12.5px] text-stone-600 dark:text-stone-300">
               <ShieldCheck size={14} className="text-[#2f6b2f]" />
               Citation integrity: {turn.audit.verified} of {turn.audit.checked} verified against their sources
               {turn.audit.stripped > 0 && (
@@ -693,12 +693,12 @@ function TurnView({ turn, onCopy, onRegenerate, onFollowUp, onCite, onShowSource
 
           {turn.done && turn.expansions.length > 0 && (
             <div className="mt-4">
-              <p className="text-[12px] font-medium text-stone-400">
+              <p className="text-[12px] font-medium text-stone-400 dark:text-stone-500">
                 Question expanded for retrieval — also searched as
               </p>
               <div className="mt-1.5 flex flex-wrap gap-1.5">
                 {turn.expansions.map((x, i) => (
-                  <span key={i} className="inline-block max-w-full truncate rounded-lex border border-stone-200 bg-white px-2.5 py-1 text-[12px] text-stone-600" title={x}>
+                  <span key={i} className="inline-block max-w-full truncate rounded-lex border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1e1c19] px-2.5 py-1 text-[12px] text-stone-600 dark:text-stone-300" title={x}>
                     {x}
                   </span>
                 ))}
@@ -709,7 +709,7 @@ function TurnView({ turn, onCopy, onRegenerate, onFollowUp, onCite, onShowSource
           {turn.citations.length > 0 && (
             <button
               onClick={onShowSources}
-              className="mt-4 inline-flex items-center gap-1.5 text-[12.5px] font-medium text-stone-500 hover:text-ink transition-colors"
+              className="mt-4 inline-flex items-center gap-1.5 text-[12.5px] font-medium text-stone-500 dark:text-stone-400 hover:text-ink transition-colors"
             >
               <PanelRight size={13} />
               {turn.citations.length} source{turn.citations.length === 1 ? '' : 's'} in the panel · {turn.mode} mode
@@ -720,7 +720,7 @@ function TurnView({ turn, onCopy, onRegenerate, onFollowUp, onCite, onShowSource
           {turn.done && (
             <div className="mt-5">
               <div className="flex items-center gap-2">
-                <button onClick={onCopy} className="flex items-center gap-1.5 rounded-lex border border-stone-200 bg-white px-2.5 py-1.5 text-[12px] font-medium text-stone-600 hover:text-ink hover:border-stone-300 transition-colors">
+                <button onClick={onCopy} className="flex items-center gap-1.5 rounded-lex border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1e1c19] px-2.5 py-1.5 text-[12px] font-medium text-stone-600 dark:text-stone-300 hover:text-ink hover:border-stone-300 transition-colors">
                   <Copy size={13} /> Copy
                 </button>
                 <ResponseDownload
@@ -728,14 +728,14 @@ function TurnView({ turn, onCopy, onRegenerate, onFollowUp, onCite, onShowSource
                   answerMarkdown={turn.answer}
                   citations={exportCitations(turn.citations)}
                 />
-                <button onClick={onRegenerate} className="flex items-center gap-1.5 rounded-lex border border-stone-200 bg-white px-2.5 py-1.5 text-[12px] font-medium text-stone-600 hover:text-ink hover:border-stone-300 transition-colors">
+                <button onClick={onRegenerate} className="flex items-center gap-1.5 rounded-lex border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1e1c19] px-2.5 py-1.5 text-[12px] font-medium text-stone-600 dark:text-stone-300 hover:text-ink hover:border-stone-300 transition-colors">
                   <RotateCcw size={13} /> Regenerate
                 </button>
                 <button
                   onClick={() => void castVote('up')}
                   disabled={voting}
                   title="This answer was helpful"
-                  className={`flex items-center gap-1.5 rounded-lex border px-2.5 py-1.5 text-[12px] font-medium transition-colors disabled:opacity-40 ${vote === 'up' ? 'bg-ink text-ivory border-ink' : 'border-stone-200 bg-white text-stone-600 hover:text-ink hover:border-stone-300'}`}
+                  className={`flex items-center gap-1.5 rounded-lex border px-2.5 py-1.5 text-[12px] font-medium transition-colors disabled:opacity-40 ${vote === 'up' ? 'bg-ink text-ivory border-ink' : 'border-stone-200 dark:border-white/10 bg-white dark:bg-[#1e1c19] text-stone-600 dark:text-stone-300 hover:text-ink hover:border-stone-300'}`}
                 >
                   <ThumbsUp size={13} /> Helpful
                 </button>
@@ -743,11 +743,11 @@ function TurnView({ turn, onCopy, onRegenerate, onFollowUp, onCite, onShowSource
                   onClick={() => void castVote('down')}
                   disabled={voting}
                   title="This answer was not helpful"
-                  className={`flex items-center gap-1.5 rounded-lex border px-2.5 py-1.5 text-[12px] font-medium transition-colors disabled:opacity-40 ${vote === 'down' ? 'bg-ink text-ivory border-ink' : 'border-stone-200 bg-white text-stone-600 hover:text-ink hover:border-stone-300'}`}
+                  className={`flex items-center gap-1.5 rounded-lex border px-2.5 py-1.5 text-[12px] font-medium transition-colors disabled:opacity-40 ${vote === 'down' ? 'bg-ink text-ivory border-ink' : 'border-stone-200 dark:border-white/10 bg-white dark:bg-[#1e1c19] text-stone-600 dark:text-stone-300 hover:text-ink hover:border-stone-300'}`}
                 >
                   <ThumbsDown size={13} /> Not helpful
                 </button>
-                {vote && <span className="text-[12px] text-stone-400">Feedback saved</span>}
+                {vote && <span className="text-[12px] text-stone-400 dark:text-stone-500">Feedback saved</span>}
               </div>
               {voteError && <p className="mt-2 text-[12px] text-[#a02c2c]">Could not save feedback: {voteError}</p>}
               <div className="mt-4 flex flex-wrap gap-2">
@@ -755,7 +755,7 @@ function TurnView({ turn, onCopy, onRegenerate, onFollowUp, onCite, onShowSource
                   <button
                     key={f}
                     onClick={() => onFollowUp(f)}
-                    className="rounded-lex border border-stone-200 bg-white px-3 py-1.5 text-[13px] text-stone-600 hover:border-stone-300 hover:text-ink transition-colors"
+                    className="rounded-lex border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1e1c19] px-3 py-1.5 text-[13px] text-stone-600 dark:text-stone-300 hover:border-stone-300 hover:text-ink transition-colors"
                   >
                     {f}
                   </button>
@@ -785,7 +785,7 @@ function Composer(props: {
   const [lawOpen, setLawOpen] = useState(false)
   const lawActive = !!(asOf || jurisdiction.trim())
   return (
-    <div className="mt-8 rounded-lex-lg border border-stone-300 bg-white">
+    <div className="mt-8 rounded-lex-lg border border-stone-300 dark:border-white/10 bg-white dark:bg-[#1e1c19]">
       <textarea
         value={input}
         onChange={(e) => setInput(e.target.value)}
@@ -801,7 +801,7 @@ function Composer(props: {
             onClick={() => setWeb(!web)}
             title="Blend live web results into the answer"
             className={`flex items-center gap-1.5 rounded-lex border px-2.5 py-1 text-[12px] transition-colors ${
-              web ? 'bg-ink text-ivory border-ink' : 'border-stone-200 text-stone-500 hover:text-ink hover:border-stone-300'
+              web ? 'bg-ink text-ivory border-ink' : 'border-stone-200 dark:border-white/10 text-stone-500 dark:text-stone-400 hover:text-ink hover:border-stone-300'
             }`}
           >
             <Globe size={13} /> Web
@@ -811,7 +811,7 @@ function Composer(props: {
               onClick={() => setPriv(!priv)}
               title="Include your confidential vault documents (only you can see them)"
               className={`flex items-center gap-1.5 rounded-lex border px-2.5 py-1 text-[12px] transition-colors ${
-                priv ? 'bg-ink text-ivory border-ink' : 'border-stone-200 text-stone-500 hover:text-ink hover:border-stone-300'
+                priv ? 'bg-ink text-ivory border-ink' : 'border-stone-200 dark:border-white/10 text-stone-500 dark:text-stone-400 hover:text-ink hover:border-stone-300'
               }`}
             >
               <Lock size={13} /> Private
@@ -824,7 +824,7 @@ function Composer(props: {
               ? `Answer only from ${briefName ?? 'this brief'}'s vault — if the brief has no answer, Ask says so instead of searching the full vault`
               : 'Open a brief to answer from its vault only'}
             className={`flex items-center gap-1.5 rounded-lex border px-2.5 py-1 text-[12px] transition-colors disabled:opacity-40 ${
-              briefVault ? 'bg-ink text-ivory border-ink' : 'border-stone-200 text-stone-500 hover:text-ink hover:border-stone-300'
+              briefVault ? 'bg-ink text-ivory border-ink' : 'border-stone-200 dark:border-white/10 text-stone-500 dark:text-stone-400 hover:text-ink hover:border-stone-300'
             }`}
           >
             <Briefcase size={13} /> Brief vault
@@ -835,36 +835,36 @@ function Composer(props: {
               onClick={() => setLawOpen((v) => !v)}
               title="Only cite law in force on a date / in a jurisdiction"
               className={`flex items-center gap-1 rounded-lex border px-2.5 py-1 text-[12px] transition-colors ${
-                lawActive ? 'bg-ink text-ivory border-ink' : 'border-stone-200 text-stone-500 hover:text-ink hover:border-stone-300'
+                lawActive ? 'bg-ink text-ivory border-ink' : 'border-stone-200 dark:border-white/10 text-stone-500 dark:text-stone-400 hover:text-ink hover:border-stone-300'
               }`}
             >
               As of{lawActive ? `: ${asOf || jurisdiction}` : ''} <ChevronDown size={12} />
             </button>
             {lawOpen && (
-              <div className="absolute bottom-full mb-1.5 left-0 rounded-lex-lg border border-stone-200 bg-white shadow-lex-md p-3 z-10 w-60 space-y-2.5">
+              <div className="absolute bottom-full mb-1.5 left-0 rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1e1c19] shadow-lex-md p-3 z-10 w-60 space-y-2.5">
                 <label className="block">
-                  <span className="text-[12px] font-medium text-stone-500">In force on</span>
+                  <span className="text-[12px] font-medium text-stone-500 dark:text-stone-400">In force on</span>
                   <input
                     type="date"
                     value={asOf}
                     onChange={(e) => setAsOf(e.target.value)}
-                    className="mt-1 w-full rounded-lex border border-stone-200 px-2 py-1.5 text-[13px] outline-none focus:border-stone-400"
+                    className="mt-1 w-full rounded-lex border border-stone-200 dark:border-white/10 px-2 py-1.5 text-[13px] outline-none focus:border-stone-400"
                   />
                 </label>
                 <label className="block">
-                  <span className="text-[12px] font-medium text-stone-500">Jurisdiction</span>
+                  <span className="text-[12px] font-medium text-stone-500 dark:text-stone-400">Jurisdiction</span>
                   <input
                     type="text"
                     value={jurisdiction}
                     onChange={(e) => setJurisdiction(e.target.value)}
                     placeholder="e.g. IN, IN-DL, US-CA"
-                    className="mt-1 w-full rounded-lex border border-stone-200 px-2 py-1.5 text-[13px] outline-none focus:border-stone-400 placeholder:text-stone-400"
+                    className="mt-1 w-full rounded-lex border border-stone-200 dark:border-white/10 px-2 py-1.5 text-[13px] outline-none focus:border-stone-400 placeholder:text-stone-400"
                   />
                 </label>
                 <div className="flex items-center justify-between pt-0.5">
                   <button
                     onClick={() => { setAsOf(''); setJurisdiction('') }}
-                    className="text-[12px] text-stone-500 hover:text-ink"
+                    className="text-[12px] text-stone-500 dark:text-stone-400 hover:text-ink"
                   >
                     Clear
                   </button>
@@ -875,7 +875,7 @@ function Composer(props: {
                     Done
                   </button>
                 </div>
-                <p className="text-[11px] leading-relaxed text-stone-400">
+                <p className="text-[11px] leading-relaxed text-stone-400 dark:text-stone-500">
                   Only documents in force on that date are cited — no fallback to newer or older law.
                 </p>
               </div>
@@ -884,17 +884,17 @@ function Composer(props: {
           <div className="relative">
             <button
               onClick={() => setSrcOpen((v) => !v)}
-              className="flex items-center gap-1 rounded-lex border border-stone-200 px-2.5 py-1 text-[12px] text-stone-500 hover:text-ink hover:border-stone-300 transition-colors"
+              className="flex items-center gap-1 rounded-lex border border-stone-200 dark:border-white/10 px-2.5 py-1 text-[12px] text-stone-500 dark:text-stone-400 hover:text-ink hover:border-stone-300 transition-colors"
             >
               Sources: {sources} <ChevronDown size={12} />
             </button>
             {srcOpen && (
-              <div className="absolute bottom-full mb-1.5 left-0 rounded-lex-lg border border-stone-200 bg-white shadow-lex-md py-1 z-10 w-36">
+              <div className="absolute bottom-full mb-1.5 left-0 rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1e1c19] shadow-lex-md py-1 z-10 w-36">
                 {[3, 5, 10, 20].map((n) => (
                   <button
                     key={n}
                     onClick={() => { setSources(n); setSrcOpen(false) }}
-                    className="w-full flex items-center justify-between px-3 py-1.5 text-[13px] hover:bg-stone-100 text-left"
+                    className="w-full flex items-center justify-between px-3 py-1.5 text-[13px] hover:bg-stone-100 dark:hover:bg-white/10 text-left"
                   >
                     {n} sources {sources === n && <Check size={13} />}
                   </button>
@@ -920,8 +920,8 @@ function Composer(props: {
           </button>
         )}
       </div>
-      <div className="border-t border-stone-200 bg-stone-100/60 px-3 py-2 flex rounded-b-lex-lg">
-        <span className="ml-auto hidden sm:block text-[11px] text-stone-400 self-center">Enter to ask · Shift+Enter for a new line</span>
+      <div className="border-t border-stone-200 dark:border-white/10 bg-stone-100/60 px-3 py-2 flex rounded-b-lex-lg">
+        <span className="ml-auto hidden sm:block text-[11px] text-stone-400 dark:text-stone-500 self-center">Enter to ask · Shift+Enter for a new line</span>
       </div>
     </div>
   )

@@ -42,13 +42,13 @@ export default function ResearchPage({ go }: { go?: (view: string) => void } = {
   return (
     <div className="w-full px-6 py-10">
       <h1 className="font-display text-[2rem] tracking-tight flex items-center gap-3">
-        <FlaskConical className="text-stone-500" /> Research
+        <FlaskConical className="text-stone-500 dark:text-stone-400" /> Research
       </h1>
-      <p className="text-stone-500 mt-1.5 text-[15px]">
+      <p className="text-stone-500 dark:text-stone-400 mt-1.5 text-[15px]">
         Deep research runs an epistemic loop: frame hypotheses, gather cited evidence for each, then adjudicate.
       </p>
 
-      <div className="mt-6 rounded-lex-lg border border-stone-300 bg-white p-4">
+      <div className="mt-6 rounded-lex-lg border border-stone-300 dark:border-white/10 bg-white dark:bg-[#1e1c19] p-4">
         <textarea
           value={q} onChange={(e) => setQ(e.target.value)} rows={3}
           placeholder="State the legal question to investigate…"
@@ -60,7 +60,7 @@ export default function ResearchPage({ go }: { go?: (view: string) => void } = {
             <button
               onClick={() => setWeb(!web)}
               className={`flex items-center gap-1.5 rounded-lex border px-2.5 py-1 text-meta transition-colors ${
-                web ? 'bg-ink text-ivory border-ink' : 'border-stone-200 text-stone-500 hover:text-ink'
+                web ? 'bg-ink text-ivory border-ink' : 'border-stone-200 dark:border-white/10 text-stone-500 dark:text-stone-400 hover:text-ink'
               }`}
             >
               <Globe size={13} /> Include web evidence
@@ -109,8 +109,8 @@ export default function ResearchPage({ go }: { go?: (view: string) => void } = {
               citations={exportCitations(report.citations)}
             />
           </div>
-          <div className="mt-4 rounded-lex-lg border border-stone-200 bg-white p-5">
-            <p className="text-[13px] text-stone-400 font-medium">Conclusion</p>
+          <div className="mt-4 rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1e1c19] p-5">
+            <p className="text-[13px] text-stone-400 dark:text-stone-500 font-medium">Conclusion</p>
             <p className="text-[15px] leading-relaxed mt-2 whitespace-pre-wrap">
               <CitedText text={report.conclusion} citations={report.citations} onOpen={setModalCitation} />
             </p>
@@ -119,20 +119,20 @@ export default function ResearchPage({ go }: { go?: (view: string) => void } = {
           <h3 className="font-display text-xl tracking-tight mt-8 mb-3">Hypotheses</h3>
           <div className="space-y-3">
             {report.hypotheses.map((h, i) => (
-              <div key={i} className="rounded-lex-lg border border-stone-200 bg-white p-5">
+              <div key={i} className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1e1c19] p-5">
                 <div className="flex items-start justify-between gap-3">
                   <p className="font-medium text-[15px]">{h.question}</p>
                   <StatusBadge status={h.status} />
                 </div>
-                <p className="text-meta2 text-stone-600 mt-1.5"><span className="font-medium text-ink-800">Prediction:</span> {h.prediction}</p>
+                <p className="text-meta2 text-stone-600 dark:text-stone-300 mt-1.5"><span className="font-medium text-ink-800 dark:text-[#e8e5e0]">Prediction:</span> {h.prediction}</p>
                 {h.evidence.length > 0 && (
-                  <div className="mt-3 space-y-1.5 border-t border-stone-200 pt-3">
+                  <div className="mt-3 space-y-1.5 border-t border-stone-200 dark:border-white/10 pt-3">
                     {h.evidence.map((ev, j) => {
                       const srcId = ev.source.replace(/^\[|\]$/g, '')
                       const srcCite = report.citations.find((x) => x.doc_id === srcId)
                       return (
-                        <p key={j} className="text-meta2 text-stone-600 leading-relaxed">
-                          <span className="text-stone-400 mr-1.5">—</span>{ev.claim}
+                        <p key={j} className="text-meta2 text-stone-600 dark:text-stone-300 leading-relaxed">
+                          <span className="text-stone-400 dark:text-stone-500 mr-1.5">—</span>{ev.claim}
                           {srcCite ? (
                             <a
                               href={`#cite-${srcCite.chunk_id}`}
@@ -143,7 +143,7 @@ export default function ResearchPage({ go }: { go?: (view: string) => void } = {
                               {srcId}
                             </a>
                           ) : (
-                            <span className="text-stone-400 text-meta ml-1.5">[{ev.source}]</span>
+                            <span className="text-stone-400 dark:text-stone-500 text-meta ml-1.5">[{ev.source}]</span>
                           )}
                         </p>
                       )
@@ -161,7 +161,7 @@ export default function ResearchPage({ go }: { go?: (view: string) => void } = {
               </h3>
               <div className="space-y-2">
                 {report.conflicts.map((c, i) => (
-                  <div key={i} className="rounded-lex border border-stone-200 bg-white px-4 py-3">
+                  <div key={i} className="rounded-lex border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1e1c19] px-4 py-3">
                     <p className="font-medium text-[14px]">{c.topic}</p>
                     <p className="text-meta2 text-stone-700 mt-1">A: {c.position_a}</p>
                     <p className="text-meta2 text-stone-700">B: {c.position_b}</p>
@@ -174,7 +174,7 @@ export default function ResearchPage({ go }: { go?: (view: string) => void } = {
           {report.open_points.length > 0 && (
             <>
               <h3 className="font-display text-xl tracking-tight mt-8 mb-3 flex items-center gap-2">
-                <Lightbulb size={18} className="text-stone-500" /> Open points
+                <Lightbulb size={18} className="text-stone-500 dark:text-stone-400" /> Open points
               </h3>
               <ul className="list-disc pl-5 space-y-1 text-[15px] text-stone-700">
                 {report.open_points.map((p, i) => <li key={i}>{p}</li>)}
@@ -184,7 +184,7 @@ export default function ResearchPage({ go }: { go?: (view: string) => void } = {
 
           {report.citations.length > 0 && (
             <div className="mt-8">
-              <p className="text-[13px] text-stone-400 font-medium mb-2.5">Sources · {report.citations.length}</p>
+              <p className="text-[13px] text-stone-400 dark:text-stone-500 font-medium mb-2.5">Sources · {report.citations.length}</p>
               <div className="grid gap-2">
                 {report.citations.map((c) => <CitationCard key={c.chunk_id} citation={c} go={go} />)}
               </div>

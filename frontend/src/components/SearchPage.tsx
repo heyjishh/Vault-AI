@@ -21,13 +21,13 @@ function Snippet({ text, needle }: { text: string; needle: string }) {
     }
     if (idx > i) parts.push(text.slice(i, idx))
     parts.push(
-      <mark key={k++} className="bg-[#fdf3d7] text-ink rounded px-0.5">
+      <mark key={k++} className="bg-[#fdf3d7] text-ink dark:text-[#f4f2ee] rounded px-0.5">
         {text.slice(idx, idx + n.length)}
       </mark>,
     )
     i = idx + n.length
   }
-  return <p className="text-[13px] text-stone-500 leading-relaxed">{parts}</p>
+  return <p className="text-[13px] text-stone-500 dark:text-stone-400 leading-relaxed">{parts}</p>
 }
 
 export default function SearchPage({ go }: { go: (v: View) => void }) {
@@ -53,12 +53,12 @@ export default function SearchPage({ go }: { go: (v: View) => void }) {
   return (
     <div className="w-full px-6 py-10">
       <h1 className="font-display text-[2rem] tracking-tight">Search documents</h1>
-      <p className="text-stone-500 mt-1.5 text-[15px]">
+      <p className="text-stone-500 dark:text-stone-400 mt-1.5 text-[15px]">
         Find documents in the corpus by title or by any word inside them — names, sections, amounts, clauses.
       </p>
 
-      <div className="mt-6 flex items-center gap-2.5 rounded-lex border border-stone-200 bg-white px-4 py-3 focus-within:border-stone-400 transition-colors">
-        <Search size={17} className="text-stone-400 shrink-0" />
+      <div className="mt-6 flex items-center gap-2.5 rounded-lex border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1e1c19] px-4 py-3 focus-within:border-stone-400 transition-colors">
+        <Search size={17} className="text-stone-400 dark:text-stone-500 shrink-0" />
         <input
           autoFocus
           value={input}
@@ -66,7 +66,7 @@ export default function SearchPage({ go }: { go: (v: View) => void }) {
           placeholder="Search the corpus — try “Section 86”, a party name, an amount…"
           className="flex-1 min-w-0 bg-transparent outline-none text-[15px] placeholder:text-stone-400"
         />
-        {results.isFetching && <span className="text-[12px] text-stone-400 shrink-0">Searching…</span>}
+        {results.isFetching && <span className="text-[12px] text-stone-400 dark:text-stone-500 shrink-0">Searching…</span>}
       </div>
 
       <div className="mt-6">
@@ -78,7 +78,7 @@ export default function SearchPage({ go }: { go: (v: View) => void }) {
           <EmptyState title={`No matches for “${q}”`} hint="Try a different spelling, a shorter term, or ask Clause instead — Ask searches by meaning, not just words." />
         ) : (
           <>
-            <p className="text-[13px] text-stone-400 mb-3">
+            <p className="text-[13px] text-stone-400 dark:text-stone-500 mb-3">
               {(results.data ?? []).length} document{(results.data ?? []).length === 1 ? '' : 's'} mention “{q}”
             </p>
             <div className="space-y-3">
@@ -86,19 +86,19 @@ export default function SearchPage({ go }: { go: (v: View) => void }) {
                 <button
                   key={hit.doc_id}
                   onClick={() => openInInteract(hit)}
-                  className="w-full text-left rounded-lex-lg border border-stone-200 bg-white px-5 py-4 hover:border-stone-300 transition-all"
+                  className="w-full text-left rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1e1c19] px-5 py-4 hover:border-stone-300 transition-all"
                 >
                   <span className="flex items-center gap-2.5">
-                    <FileText size={16} className="text-stone-400 shrink-0" />
+                    <FileText size={16} className="text-stone-400 dark:text-stone-500 shrink-0" />
                     <span className="font-display text-[16.5px] truncate">{hit.title}</span>
-                    <span className="ml-auto text-[11.5px] font-medium text-stone-400 shrink-0">
+                    <span className="ml-auto text-[11.5px] font-medium text-stone-400 dark:text-stone-500 shrink-0">
                       {hit.title_match ? 'title match · ' : ''}{hit.matches} mention{hit.matches === 1 ? '' : 's'}
                     </span>
                   </span>
                   <span className="block mt-2.5 space-y-1.5">
                     {hit.snippets.map((s, i) => <Snippet key={i} text={s} needle={q} />)}
                   </span>
-                  <span className="block mt-2.5 text-[12.5px] font-medium text-stone-400">Open in Interact →</span>
+                  <span className="block mt-2.5 text-[12.5px] font-medium text-stone-400 dark:text-stone-500">Open in Interact →</span>
                 </button>
               ))}
             </div>

@@ -188,13 +188,13 @@ export default function PrivateVaultPage() {
     <div className="w-full px-6 py-10">
       <div className="mb-8">
         <h1 className="font-display text-[2rem] tracking-tight">Confidential Vault</h1>
-        <p className="text-stone-500 mt-1.5 text-[15px] max-w-xl">
+        <p className="text-stone-500 dark:text-stone-400 mt-1.5 text-[15px] max-w-xl">
           Your most sensitive documents, sealed under your own password. Stored only as
           ciphertext — invisible in the database, the corpus, and every admin view. The AI can
           work on them only while you unlock the vault, and only for you.
         </p>
         {st?.routing && (
-          <p className="text-meta2 text-stone-500 mt-3">
+          <p className="text-meta2 text-stone-500 dark:text-stone-400 mt-3">
             Private traffic: embeddings via{' '}
             <span className="font-medium text-stone-700">{st.routing.embeddings === 'local' ? 'a local endpoint' : 'the main provider'}</span>
             {' · '}answers via{' '}
@@ -209,12 +209,12 @@ export default function PrivateVaultPage() {
       {status.isLoading || !st ? (
         <Spinner label="Checking your vault…" />
       ) : !st.has_password ? (
-        <section className="rounded-lex-lg border border-stone-200 bg-white p-6">
+        <section className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1e1c19] p-6">
           <div className="flex items-center gap-2.5">
-            <ShieldCheck size={18} className="text-stone-500" />
+            <ShieldCheck size={18} className="text-stone-500 dark:text-stone-400" />
             <h2 className="font-display text-lg">Set your vault password</h2>
           </div>
-          <p className="text-[13.5px] text-stone-500 mt-2 leading-relaxed">
+          <p className="text-[13.5px] text-stone-500 dark:text-stone-400 mt-2 leading-relaxed">
             This password is separate from your login. It derives the encryption key for everything
             you seal here — it is never stored, and we cannot recover it for you. Lose it, and the
             sealed documents cannot be opened again.
@@ -225,7 +225,7 @@ export default function PrivateVaultPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="At least 8 characters"
-              className="flex-1 rounded-lex border border-stone-200 bg-ivory px-3 py-2 text-sm outline-none focus:border-stone-400"
+              className="flex-1 rounded-lex border border-stone-200 dark:border-white/10 bg-ivory dark:bg-[#14120f] px-3 py-2 text-sm outline-none focus:border-stone-400"
             />
             <button
               onClick={() => setPw.mutate()}
@@ -237,12 +237,12 @@ export default function PrivateVaultPage() {
           </div>
         </section>
       ) : !st.unlocked ? (
-        <section className="rounded-lex-lg border border-stone-200 bg-white p-6">
+        <section className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1e1c19] p-6">
           <div className="flex items-center gap-2.5">
-            <Lock size={18} className="text-stone-500" />
+            <Lock size={18} className="text-stone-500 dark:text-stone-400" />
             <h2 className="font-display text-lg">Vault locked</h2>
           </div>
-          <p className="text-[13.5px] text-stone-500 mt-2">
+          <p className="text-[13.5px] text-stone-500 dark:text-stone-400 mt-2">
             {st.documents} sealed document{st.documents === 1 ? '' : 's'} inside. While locked, the key
             exists nowhere — not in memory, not on disk — and the AI cannot read them.
           </p>
@@ -253,7 +253,7 @@ export default function PrivateVaultPage() {
               onChange={(e) => setPassword(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') unlock.mutate() }}
               placeholder="Vault password"
-              className="flex-1 rounded-lex border border-stone-200 bg-ivory px-3 py-2 text-sm outline-none focus:border-stone-400"
+              className="flex-1 rounded-lex border border-stone-200 dark:border-white/10 bg-ivory dark:bg-[#14120f] px-3 py-2 text-sm outline-none focus:border-stone-400"
             />
             <button
               onClick={() => unlock.mutate()}
@@ -267,21 +267,21 @@ export default function PrivateVaultPage() {
       ) : (
         <>
           <div className="flex items-center justify-between mb-5">
-            <p className="inline-flex items-center gap-2 text-[13px] text-stone-500">
+            <p className="inline-flex items-center gap-2 text-[13px] text-stone-500 dark:text-stone-400">
               <LockOpen size={14} className="text-emerald-700" /> Unlocked for this session —{' '}
               {st.documents} sealed document{st.documents === 1 ? '' : 's'}. In Ask, switch on{' '}
-              <span className="font-medium text-ink">Private</span> to include them in answers.
+              <span className="font-medium text-ink dark:text-[#f4f2ee]">Private</span> to include them in answers.
             </p>
             <div className="flex gap-2 shrink-0">
               <button
                 onClick={() => setShowChange((v) => !v)}
-                className="inline-flex items-center gap-1.5 rounded-lex border border-stone-200 px-3 py-1.5 text-[12.5px] text-stone-600 hover:text-ink hover:border-stone-300 transition-colors"
+                className="inline-flex items-center gap-1.5 rounded-lex border border-stone-200 dark:border-white/10 px-3 py-1.5 text-[12.5px] text-stone-600 dark:text-stone-300 hover:text-ink hover:border-stone-300 transition-colors"
               >
                 <KeyRound size={13} /> Change password
               </button>
               <button
                 onClick={() => lock.mutate()}
-                className="inline-flex items-center gap-1.5 rounded-lex border border-stone-200 px-3 py-1.5 text-[12.5px] text-stone-600 hover:text-ink hover:border-stone-300 transition-colors"
+                className="inline-flex items-center gap-1.5 rounded-lex border border-stone-200 dark:border-white/10 px-3 py-1.5 text-[12.5px] text-stone-600 dark:text-stone-300 hover:text-ink hover:border-stone-300 transition-colors"
               >
                 <Lock size={13} /> Lock now
               </button>
@@ -289,12 +289,12 @@ export default function PrivateVaultPage() {
           </div>
 
           {showChange && (
-            <section className="rounded-lex-lg border border-stone-200 bg-white p-5 mb-6">
+            <section className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1e1c19] p-5 mb-6">
               <h3 className="font-display text-[15px]">Change vault password</h3>
-              <p className="text-[13px] text-stone-500 mt-1">Every sealed document is re-encrypted under the new key.</p>
+              <p className="text-[13px] text-stone-500 dark:text-stone-400 mt-1">Every sealed document is re-encrypted under the new key.</p>
               <div className="flex flex-col sm:flex-row gap-2 mt-3">
-                <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Current password" className="flex-1 rounded-lex border border-stone-200 bg-ivory px-3 py-2 text-sm outline-none focus:border-stone-400" />
-                <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="New password (8+ characters)" className="flex-1 rounded-lex border border-stone-200 bg-ivory px-3 py-2 text-sm outline-none focus:border-stone-400" />
+                <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Current password" className="flex-1 rounded-lex border border-stone-200 dark:border-white/10 bg-ivory dark:bg-[#14120f] px-3 py-2 text-sm outline-none focus:border-stone-400" />
+                <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="New password (8+ characters)" className="flex-1 rounded-lex border border-stone-200 dark:border-white/10 bg-ivory dark:bg-[#14120f] px-3 py-2 text-sm outline-none focus:border-stone-400" />
                 <button onClick={() => change.mutate()} disabled={!password || newPassword.length < 8 || change.isPending} className="px-4 py-2 rounded-lex bg-ink text-ivory text-sm font-medium hover:bg-ink-900 disabled:opacity-40 transition-colors">
                   {change.isPending ? 'Re-encrypting…' : 'Change'}
                 </button>
@@ -302,16 +302,16 @@ export default function PrivateVaultPage() {
             </section>
           )}
 
-          <section className="rounded-lex-lg border border-stone-200 bg-white p-5 mb-6">
+          <section className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1e1c19] p-5 mb-6">
             <h3 className="font-display text-[15px]">Seal a document</h3>
             <div className="flex items-center gap-3 mt-3 flex-wrap">
               <input
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="Title (only you ever see this)"
-                className="flex-1 min-w-[220px] rounded-lex border border-stone-200 bg-ivory px-3 py-2 text-sm outline-none focus:border-stone-400"
+                className="flex-1 min-w-[220px] rounded-lex border border-stone-200 dark:border-white/10 bg-ivory dark:bg-[#14120f] px-3 py-2 text-sm outline-none focus:border-stone-400"
               />
-              <label className="rounded-lex border border-stone-200 px-3.5 py-1.5 text-[13px] text-stone-600 hover:text-ink hover:border-stone-300 transition-colors cursor-pointer">
+              <label className="rounded-lex border border-stone-200 dark:border-white/10 px-3.5 py-1.5 text-[13px] text-stone-600 dark:text-stone-300 hover:text-ink hover:border-stone-300 transition-colors cursor-pointer">
                 Choose files…
                 <input
                   ref={fileRef} type="file" multiple accept={UPLOAD_ACCEPT} className="hidden"
@@ -322,7 +322,7 @@ export default function PrivateVaultPage() {
                   }}
                 />
               </label>
-              <label className="rounded-lex border border-stone-200 px-3.5 py-1.5 text-[13px] text-stone-600 hover:text-ink hover:border-stone-300 transition-colors cursor-pointer inline-flex items-center gap-1.5">
+              <label className="rounded-lex border border-stone-200 dark:border-white/10 px-3.5 py-1.5 text-[13px] text-stone-600 dark:text-stone-300 hover:text-ink hover:border-stone-300 transition-colors cursor-pointer inline-flex items-center gap-1.5">
                 <FolderUp size={13} /> Choose folder…
                 <input
                   ref={folderRef} type="file" accept={UPLOAD_ACCEPT} className="hidden"
@@ -337,7 +337,7 @@ export default function PrivateVaultPage() {
                   }}
                 />
               </label>
-              <span className="text-[12.5px] text-stone-400">
+              <span className="text-[12.5px] text-stone-400 dark:text-stone-500">
                 up to {MAX_BATCH_FILES} files and {MAX_BATCH_FOLDERS} folders per batch · {UPLOAD_FORMATS_HINT}
               </span>
             </div>
@@ -346,7 +346,7 @@ export default function PrivateVaultPage() {
               onChange={(e) => setText(e.target.value)}
               placeholder="…or paste confidential text"
               rows={5}
-              className="mt-3 w-full rounded-lex border border-stone-200 bg-ivory px-3 py-2 text-sm outline-none focus:border-stone-400 resize-y"
+              className="mt-3 w-full rounded-lex border border-stone-200 dark:border-white/10 bg-ivory dark:bg-[#14120f] px-3 py-2 text-sm outline-none focus:border-stone-400 resize-y"
             />
             <div className="mt-3 flex justify-end">
               <button
@@ -378,17 +378,17 @@ export default function PrivateVaultPage() {
           ) : (
             <div className="space-y-2.5">
               {(docs.data ?? []).map((d: PrivateDocMeta) => (
-                <div key={d.id} className="rounded-lex-lg border border-stone-200 bg-white px-4 py-3 flex items-center gap-3">
-                  <Lock size={15} className="text-stone-400 shrink-0" />
+                <div key={d.id} className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1e1c19] px-4 py-3 flex items-center gap-3">
+                  <Lock size={15} className="text-stone-400 dark:text-stone-500 shrink-0" />
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-[14px] truncate">{d.title}</p>
-                    <p className="text-[12px] text-stone-400 inline-flex items-center gap-1.5 mt-0.5">
+                    <p className="text-[12px] text-stone-400 dark:text-stone-500 inline-flex items-center gap-1.5 mt-0.5">
                       <Fingerprint size={11} /> {d.sha256.slice(0, 16)}… · {d.chunks} chunks · sealed {new Date(d.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
                     </p>
                   </div>
                   <button
                     onClick={() => setPendingDestroy({ id: d.id, title: d.title })}
-                    className="p-1.5 text-stone-400 hover:text-[#a02c2c] transition-colors"
+                    className="p-1.5 text-stone-400 dark:text-stone-500 hover:text-[#a02c2c] transition-colors"
                     title="Destroy document"
                   >
                     <Trash2 size={15} />
