@@ -154,7 +154,7 @@ export function SourceModal({ citation: c, onClose, go }: {
               <p className="text-[13.5px] leading-relaxed text-stone-600 dark:text-stone-300">
                 This source lives in your Confidential Vault. Its full text is only shown inside the vault, never in the Ask view.
               </p>
-              <div className="mt-4 rounded-lex border border-stone-200 dark:border-white/10 bg-[#fafaf9] px-4 py-3 text-[13px] leading-relaxed text-stone-600 dark:text-stone-300">
+              <div className="mt-4 rounded-lex border border-stone-200 dark:border-white/10 bg-[#fafaf9] dark:bg-white/5 px-4 py-3 text-[13px] leading-relaxed text-stone-600 dark:text-stone-300">
                 <span className="font-medium text-ink dark:text-[#f4f2ee]">Cited passage — </span>
                 {pinpoint}
               </div>
@@ -193,7 +193,7 @@ export function SourceModal({ citation: c, onClose, go }: {
                   The exact cited passage couldn’t be located in the fetched text — showing the full document.
                 </p>
               )}
-              <div className="whitespace-pre-wrap text-[13.5px] leading-[1.8] text-stone-700">
+              <div className="whitespace-pre-wrap text-[13.5px] leading-[1.8] text-stone-700 dark:text-stone-200">
                 {range ? (
                   <>
                     {doc.text.slice(0, range[0])}

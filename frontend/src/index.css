@@ -140,6 +140,13 @@ html.dark .hover\:bg-stone-50:hover,
 html.dark .hover\:bg-ivory:hover,
 html.dark .hover\:bg-ivory\/15:hover { background-color: rgba(255,255,255,.08); }
 html.dark ::selection { background: rgba(42,208,111,.48); color: #ffffff; }
+/* Piece 56: passage highlight marks in dark mode — every <mark>
+   in the app (Sources panel, Search results, Source modal) pairs
+   the pale cream #fdf3d7 background with near-white dark text, so
+   highlighted words rendered as blank cream bars (JISHAN's
+   screenshot). In dark mode the mark becomes a translucent
+   brand-green with the light text it already carries. */
+html.dark mark { background-color: rgba(33,192,99,.34); }
 
 @media (prefers-reduced-motion: reduce) {
   .view-enter, .dialog-pop, .menu-pop, .toast-in { animation: none; }

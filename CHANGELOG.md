@@ -15,6 +15,22 @@ live**, what is **built but unverified**, and what is **roadmap**.
 ## [Unreleased]
 
 ### Added
+- **Sources panel dark-mode visuals fixed (1 Nov 2026,
+  Piece 56).** JISHAN's screenshot: the Ask Sources panel
+  rendered on a white shell in dark mode, its question echo
+  invisible (near-white text on white), and the highlighted
+  words inside passages showed as blank cream bars. Causes: the
+  panel's `bg-[#fbfaf8]` had no dark variant, and every `<mark>`
+  in the app pairs the pale cream `#fdf3d7` background with
+  near-white dark-mode text. Fixes: the panel is now
+  `dark:bg-[#061a12]`; one central rule (`html.dark mark`) turns
+  marks into a translucent brand-green in dark mode, covering
+  the Sources panel, Search results and the Source modal at
+  once; the Source modal also gained its missing dark variants
+  (body text `dark:text-stone-200`, inner panel `dark:bg-white/5`)
+  — its document text was stone-700 on near-black. Verified:
+  build clean, panel class + mark rule in the shipped bundle,
+  live on test + public.
 - **Dark-mode hover + selection repair (1 Nov 2026, Piece 55).**
   JISHAN: "in darkmode the hover text is not visible and
   highlitted text also" — `hover:text-ink` (64 uses in the user

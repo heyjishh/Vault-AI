@@ -428,7 +428,7 @@ function SourcesSidebar({ turn, selectedChunkId, onClose, go, onOpenSource }: {
   }, [selectedChunkId, turn.id])
 
   return (
-    <aside className="sticky top-0 h-screen w-[350px] shrink-0 border-l border-stone-200 dark:border-white/10 bg-[#fbfaf8] hidden lg:flex flex-col">
+    <aside className="sticky top-0 h-screen w-[350px] shrink-0 border-l border-stone-200 dark:border-white/10 bg-[#fbfaf8] dark:bg-[#061a12] hidden lg:flex flex-col">
       <div className="flex items-center gap-2 px-5 h-[4.5rem] border-b border-stone-200 dark:border-white/10 shrink-0">
         <PanelRight size={16} className="text-stone-500 dark:text-stone-400" />
         <p className="font-display text-[17px]">Sources</p>
