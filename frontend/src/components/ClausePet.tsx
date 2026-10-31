@@ -376,6 +376,15 @@ function loadPos(): { x: number; y: number } | null {
   }
 }
 
+/* Keep a box of w×h fully inside the viewport, 4px edge margin. */
+const EDGE = 4
+function clampPos(p: { x: number; y: number }, w: number, h: number): { x: number; y: number } {
+  return {
+    x: Math.min(Math.max(EDGE, p.x), Math.max(EDGE, window.innerWidth - w - EDGE)),
+    y: Math.min(Math.max(EDGE, p.y), Math.max(EDGE, window.innerHeight - h - EDGE)),
+  }
+}
+
 export default function ClausePet({ view, go, askQuestion, startNewChat }: ClausePetProps) {
   const [on, setOn] = usePetEnabled()
   const toast = useSession((s) => s.toast)
@@ -393,6 +402,34 @@ export default function ClausePet({ view, go, askQuestion, startNewChat }: Claus
   const dragRef = useRef<{ startX: number; startY: number; baseX: number; baseY: number; moved: boolean } | null>(null)
   const justDraggedRef = useRef(0)
   const rootRef = useRef<HTMLDivElement>(null)
+
+  /* Pull the pet back inside the viewport whenever it could have ended
+     up outside: a position saved on a bigger screen, a window resize,
+     or growing him from the size slider while parked at an edge. The
+     root box is always exactly the pet (the bubble is absolutely
+     positioned), so the measured size is stable. */
+  const keepInside = useCallback(() => {
+    const el = rootRef.current
+    if (!el) return
+    setPos((p) => {
+      if (!p) return p
+      const c = clampPos(p, el.offsetWidth, el.offsetHeight)
+      if (c.x === p.x && c.y === p.y) return p
+      try {
+        localStorage.setItem(POS_KEY, JSON.stringify(c))
+      } catch { /* ignore */ }
+      return c
+    })
+  }, [])
+
+  useEffect(() => {
+    keepInside()
+  }, [keepInside, size, on])
+
+  useEffect(() => {
+    window.addEventListener('resize', keepInside)
+    return () => window.removeEventListener('resize', keepInside)
+  }, [keepInside])
 
   const page = PAGES[view] ?? PAGES.tab
 
@@ -506,9 +543,7 @@ export default function ClausePet({ view, go, askQuestion, startNewChat }: Claus
     }
     const w = rootRef.current?.offsetWidth ?? size
     const h = rootRef.current?.offsetHeight ?? size * 1.3
-    const x = Math.min(Math.max(4, d.baseX + dx), window.innerWidth - w - 4)
-    const y = Math.min(Math.max(4, d.baseY + dy), window.innerHeight - h - 4)
-    setPos({ x, y })
+    setPos(clampPos({ x: d.baseX + dx, y: d.baseY + dy }, w, h))
   }
 
   const onPointerUp = () => {
@@ -541,6 +576,16 @@ export default function ClausePet({ view, go, askQuestion, startNewChat }: Claus
 
   const bubbleShown = menuOpen || bubbleText !== null
 
+  /* The bubble is absolutely positioned against the pet — never in
+     flow, so it can no longer push him off screen when it opens. It
+     opens upward, unless he is parked near the top (then below), and
+     aligns to his right edge, unless he is parked near the left (then
+     his left edge) — so the bubble itself always stays on screen too. */
+  const px = pos ? pos.x : window.innerWidth - 20 - size
+  const py = pos ? pos.y : window.innerHeight - 20 - size * 1.3
+  const bubbleBelow = py < 380
+  const bubbleLeft = px < 240
+
   const runAction = (a: PetAction) => {
     setMenuOpen(false)
     setBubbleText(null)
@@ -553,7 +598,7 @@ export default function ClausePet({ view, go, askQuestion, startNewChat }: Claus
   return (
     <div
       ref={rootRef}
-      className="fixed z-40 flex flex-col items-end select-none"
+      className="fixed z-40 select-none"
       style={
         pos
           ? { left: pos.x, top: pos.y }
@@ -567,7 +612,7 @@ export default function ClausePet({ view, go, askQuestion, startNewChat }: Claus
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 4, scale: 0.97 }}
             transition={{ duration: 0.18 }}
-            className="mb-1 mr-1 w-[268px] rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] shadow-lex-md px-3.5 py-2.5 relative"
+            className={`absolute z-10 w-[268px] rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] shadow-lex-md px-3.5 py-2.5 ${bubbleBelow ? 'top-[calc(100%+8px)]' : 'bottom-[calc(100%+8px)]'} ${bubbleLeft ? 'left-0' : 'right-0'}`}
           >
             <p className="text-[10px] font-semibold uppercase tracking-wider text-stone-400 dark:text-stone-500">
               Clause · {page.name}
@@ -623,7 +668,7 @@ export default function ClausePet({ view, go, askQuestion, startNewChat }: Claus
                 </button>
               </div>
             )}
-            <span className="absolute -bottom-[5px] right-8 w-2.5 h-2.5 rotate-45 bg-white dark:bg-[#1d1f19] border-b border-r border-stone-200 dark:border-white/10" />
+            <span className={`absolute w-2.5 h-2.5 rotate-45 bg-white dark:bg-[#1d1f19] border-stone-200 dark:border-white/10 ${bubbleBelow ? '-top-[5px] border-t border-l' : '-bottom-[5px] border-b border-r'} ${bubbleLeft ? 'left-8' : 'right-8'}`} />
           </motion.div>
         )}
       </AnimatePresence>
