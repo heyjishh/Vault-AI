@@ -70,7 +70,7 @@ export default function GraphPage() {
           <button
             key={k}
             onClick={() => setKindFilter(k)}
-            className={`rounded-full px-3 py-1 text-meta font-medium border transition-colors ${
+            className={`rounded-lex px-3 py-1 text-meta font-medium border transition-colors ${
               kindFilter === k ? 'bg-ink text-ivory border-ink' : 'border-stone-200 bg-white text-stone-500 hover:text-ink'
             }`}
           >
@@ -85,7 +85,7 @@ export default function GraphPage() {
         <div className="mt-6"><EmptyState title="Graph is empty" hint="Ingest documents in the Vault to extract entities and relations." /></div>
       ) : (
         <div className="mt-4 grid lg:grid-cols-[1fr_300px] gap-4">
-          <div className="rounded-lex-lg border border-stone-200 bg-white shadow-lex overflow-hidden">
+          <div className="rounded-lex-lg border border-stone-200 bg-white overflow-hidden">
             <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto block">
               {rels.map((r, i) => {
                 const a = positions.get(r.from), b = positions.get(r.to)
@@ -108,15 +108,15 @@ export default function GraphPage() {
             </svg>
           </div>
 
-          <div className="rounded-lex-lg border border-stone-200 bg-white shadow-lex p-5 h-fit">
+          <div className="rounded-lex-lg border border-stone-200 bg-white p-5 h-fit">
             {selected ? (
               <>
-                <p className="text-meta uppercase tracking-wider font-medium" style={{ color: colorFor(selected.kind) }}>{selected.kind}</p>
+                <p className="text-[13px] font-medium" style={{ color: colorFor(selected.kind) }}>{selected.kind}</p>
                 <h3 className="font-display text-xl mt-1 tracking-tight">{selected.name}</h3>
                 <p className="text-meta2 text-stone-600 leading-relaxed mt-2">{selected.description || 'No description.'}</p>
                 <p className="text-meta text-stone-400 mt-3">Appears in {selected.chunk_ids.length} chunk(s)</p>
                 <div className="mt-4 border-t border-stone-200 pt-3">
-                  <p className="text-meta uppercase tracking-wider text-stone-400 font-medium mb-2">Relations</p>
+                  <p className="text-[13px] text-stone-400 font-medium mb-2">Relations</p>
                   <div className="space-y-1.5">
                     {(data?.relations ?? [])
                       .filter((r) => r.from === selected.name || r.to === selected.name)

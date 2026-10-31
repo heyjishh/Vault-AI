@@ -98,10 +98,10 @@ export default function PlansPage() {
       </p>
 
       {/* Current plan + usage */}
-      <div className="rounded-lex-lg border border-stone-200 bg-white shadow-lex px-6 py-5 mt-6">
+      <div className="rounded-lex-lg border border-stone-200 bg-white px-6 py-5 mt-6">
         <div className="flex flex-wrap items-baseline justify-between gap-3">
           <div>
-            <p className="text-meta uppercase tracking-wider text-stone-500 font-medium">Current plan</p>
+            <p className="text-[13px] text-stone-500 font-medium">Current plan</p>
             <p className="font-display text-2xl mt-1">
               {b.plan.name}
               <span className="text-stone-400 text-base ml-2">
@@ -122,7 +122,7 @@ export default function PlansPage() {
           </div>
           <div className="h-2.5 rounded-full bg-stone-100 mt-1.5 overflow-hidden">
             <div
-              className={`h-full rounded-full ${exhausted ? 'bg-[#c2410c]' : 'bg-ink'}`}
+              className={`h-full rounded-full ${exhausted ? 'bg-[#a02c2c]' : 'bg-ledger'}`}
               style={{ width: `${pct}%` }}
             />
           </div>
@@ -174,7 +174,7 @@ export default function PlansPage() {
           return (
             <div
               key={plan.id}
-              className={`rounded-lex-lg border bg-white shadow-lex px-6 py-5 flex flex-col ${current ? 'border-ink ring-1 ring-ink' : 'border-stone-200'}`}
+              className={`rounded-lex-lg border bg-white px-6 py-5 flex flex-col ${current ? 'border-ink' : 'border-stone-200'}`}
             >
               <p className="font-display text-xl">{plan.name}</p>
               <p className="mt-2">
@@ -212,10 +212,10 @@ export default function PlansPage() {
       {b.payments.length === 0 ? (
         <EmptyState title="No payments yet" hint="Your subscription payments will appear here." />
       ) : (
-        <div className="rounded-lex-lg border border-stone-200 bg-white shadow-lex overflow-hidden">
+        <div className="rounded-lex-lg border border-stone-200 bg-white overflow-hidden">
           <table className="w-full text-[13.5px]">
             <thead>
-              <tr className="text-left text-meta uppercase tracking-wider text-stone-500 border-b border-stone-200">
+              <tr className="text-left text-meta text-stone-500 border-b border-stone-200">
                 <th className="px-5 py-3 font-medium">Date</th>
                 <th className="px-5 py-3 font-medium">Plan</th>
                 <th className="px-5 py-3 font-medium">Amount</th>
@@ -232,7 +232,11 @@ export default function PlansPage() {
                   <td className="px-5 py-3">{inr(p.amount_inr)}</td>
                   <td className="px-5 py-3">{p.provider === 'youpi' ? 'UPI (YouPI-PG)' : 'Test mode'}</td>
                   <td className="px-5 py-3">
-                    <span className={`rounded-full px-2 py-0.5 text-[12px] ${p.status === 'success' ? 'bg-[#e7f4e4] text-[#2f6b2f]' : p.status === 'initiated' ? 'bg-[#fdf3d7] text-[#8a6d1a]' : 'bg-[#feeaea] text-[#a02c2c]'}`}>
+                    <span className="inline-flex items-center gap-1.5 text-[12px] text-stone-700">
+                      <span
+                        className="w-1.5 h-1.5 rounded-full shrink-0"
+                        style={{ background: p.status === 'success' ? '#16a34a' : p.status === 'initiated' ? '#b7791f' : '#a02c2c' }}
+                      />
                       {p.status}
                     </span>
                   </td>

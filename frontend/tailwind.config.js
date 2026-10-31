@@ -28,6 +28,9 @@ export default {
           amber: '#eab308',
           highlighter: '#f6f202',
         },
+        // Piece 34 (achromatic ledger): the ONE data hue — token-usage
+        // bars only (sidebar plan block, Dashboard, Plans). Never chrome.
+        ledger: '#1d5fbf',
         'app-bg': '#fafaf9',
         'surface': '#FFFFFF',
         'surface-2': '#f2f1f0',
@@ -42,8 +45,9 @@ export default {
         mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', 'monospace'],
       },
       borderRadius: {
-        'lex': '4px',
-        'lex-lg': '10px',
+        // Piece 34: the tight pair — 6px controls, 8px cards.
+        'lex': '6px',
+        'lex-lg': '8px',
       },
       boxShadow: {
         'lex': '0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.04)',

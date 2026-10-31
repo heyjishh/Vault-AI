@@ -88,7 +88,7 @@ export default function AgentsPage({ go }: { go?: (view: string) => void } = {})
             <button
               key={w.id}
               onClick={() => { setSelected(w); setRun(null); setError(null) }}
-              className={`text-left rounded-lex-lg border bg-white shadow-lex p-5 transition-colors ${
+              className={`text-left rounded-lex-lg border bg-white p-5 transition-colors ${
                 selected?.id === w.id ? 'border-ink' : 'border-stone-200 hover:border-stone-300'
               }`}
             >
@@ -101,7 +101,7 @@ export default function AgentsPage({ go }: { go?: (view: string) => void } = {})
       )}
 
       {selected && (
-        <div className="mt-6 rounded-lex-lg border border-stone-200 bg-white shadow-lex p-5 fade-up">
+        <div className="mt-6 rounded-lex-lg border border-stone-200 bg-white p-5 fade-up">
           <label className="block text-meta font-medium text-stone-600 mb-1.5">{selected.input_label}</label>
           <textarea
             value={input} onChange={(e) => setInput(e.target.value)} rows={4}
@@ -123,7 +123,7 @@ export default function AgentsPage({ go }: { go?: (view: string) => void } = {})
         </div>
       )}
 
-      <div className="mt-8 rounded-lex-lg border border-stone-200 bg-white shadow-lex p-5">
+      <div className="mt-8 rounded-lex-lg border border-stone-200 bg-white p-5">
         <h2 className="font-display text-xl tracking-tight flex items-center gap-2">
           <Compass size={18} className="text-stone-500" /> Autonomous research
         </h2>
@@ -165,7 +165,7 @@ export default function AgentsPage({ go }: { go?: (view: string) => void } = {})
               <div className="space-y-1.5 mb-4">
                 {autoRun.sub_agents!.map((r) => (
                   <div key={r.name} className="flex items-start gap-2.5 text-meta2">
-                    <span className="shrink-0 rounded-full bg-stone-100 border border-stone-200 px-2 py-0.5 text-meta font-medium text-stone-600">
+                    <span className="shrink-0 text-meta font-medium text-stone-600">
                       {r.role} · {r.name} · {r.status}
                     </span>
                     <span className="text-stone-600">
@@ -176,14 +176,14 @@ export default function AgentsPage({ go }: { go?: (view: string) => void } = {})
                   </div>
                 ))}
                 {(autoRun.conflicts?.length ?? 0) > 0 && (
-                  <p className="text-meta2 text-[#a02c2c]">⚠ Conflicts flagged (see the reconciliation section in the report): {autoRun.conflicts!.join(' · ')}</p>
+                  <p className="text-meta2 text-[#a02c2c]">Conflicts flagged (see the reconciliation section in the report): {autoRun.conflicts!.join(' · ')}</p>
                 )}
               </div>
             )}
             <div className="space-y-1.5 mb-4">
               {(autoRun.steps ?? []).map((s) => (
                 <div key={s.n} className="flex items-start gap-2.5 text-meta2">
-                  <span className="shrink-0 rounded-full bg-stone-100 border border-stone-200 px-2 py-0.5 text-meta font-medium text-stone-600">
+                  <span className="shrink-0 text-meta font-medium text-stone-600">
                     {s.n}. {s.action.replace('_', ' ')}
                   </span>
                   <span className="text-stone-600">
@@ -223,7 +223,7 @@ export default function AgentsPage({ go }: { go?: (view: string) => void } = {})
       {run && !start.isPending && (
         <div className="mt-8 fade-up">
           <h2 className="font-display text-2xl tracking-tight">{run.workflow_name}</h2>
-          <div className="mt-4 rounded-lex-lg border border-stone-200 bg-white shadow-lex p-6">
+          <div className="mt-4 rounded-lex-lg border border-stone-200 bg-white p-6">
             <div className="prose-lex">
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
@@ -237,7 +237,7 @@ export default function AgentsPage({ go }: { go?: (view: string) => void } = {})
           <h3 className="font-display text-xl tracking-tight mt-8 mb-3">Step findings</h3>
           <div className="space-y-2">
             {run.steps.map((s, i) => (
-              <div key={s.step_id} className="rounded-lex-lg border border-stone-200 bg-white shadow-lex overflow-hidden">
+              <div key={s.step_id} className="rounded-lex-lg border border-stone-200 bg-white overflow-hidden">
                 <button
                   onClick={() => setOpenStep(openStep === i ? null : i)}
                   className="w-full flex items-center justify-between px-5 py-3.5 text-left"
@@ -266,7 +266,7 @@ export default function AgentsPage({ go }: { go?: (view: string) => void } = {})
 
           {run.citations.length > 0 && (
             <div className="mt-8">
-              <p className="text-meta uppercase tracking-wider text-stone-400 font-medium mb-2.5">All sources · {run.citations.length}</p>
+              <p className="text-[13px] text-stone-400 font-medium mb-2.5">All sources · {run.citations.length}</p>
               <div className="grid gap-2">
                 {run.citations.map((c) => <CitationCard key={c.chunk_id} citation={c} go={go} />)}
               </div>

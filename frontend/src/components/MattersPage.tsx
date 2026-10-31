@@ -9,14 +9,13 @@ import { EmptyState, Pager, Spinner, usePagination } from './ui'
 const KINDS = ['Litigation', 'Corporate', 'Tax', 'Advisory', 'Property', 'General']
 
 export function StatusPill({ status }: { status: string }) {
-  const cls =
-    status === 'Active'
-      ? 'bg-emerald-700/10 text-emerald-800'
-      : status === 'On hold'
-        ? 'bg-amber-600/10 text-amber-800'
-        : 'bg-stone-500/10 text-stone-500'
+  const dot =
+    status === 'Active' ? '#16a34a' : status === 'On hold' ? '#b7791f' : '#8f8b85'
   return (
-    <span className={`text-[11px] font-medium rounded-full px-2 py-0.5 ${cls}`}>{status}</span>
+    <span className="inline-flex items-center gap-1.5 text-[12px] text-stone-700">
+      <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: dot }} />
+      {status}
+    </span>
   )
 }
 
@@ -82,7 +81,7 @@ export default function MattersPage({ open }: { open: (id: string) => void }) {
         </div>
         <button
           onClick={() => setCreating((c) => !c)}
-          className="flex items-center gap-2 rounded-lex bg-ink text-ivory px-3.5 py-2.5 text-[14px] font-medium hover:bg-ink-900 transition-colors shadow-lex whitespace-nowrap"
+          className="flex items-center gap-2 rounded-lex bg-ink text-ivory px-3.5 py-2.5 text-[14px] font-medium hover:bg-ink-900 transition-colors whitespace-nowrap"
         >
           {creating ? <X size={15} /> : <Plus size={15} />}
           {creating ? 'Cancel' : 'New brief'}
@@ -90,10 +89,10 @@ export default function MattersPage({ open }: { open: (id: string) => void }) {
       </div>
 
       {creating && (
-        <div className="rounded-lex-lg border border-stone-200 bg-white shadow-lex px-6 py-5 mt-6">
+        <div className="rounded-lex-lg border border-stone-200 bg-white px-6 py-5 mt-6">
           <div className="grid sm:grid-cols-2 gap-4">
             <label className="block">
-              <span className="text-[12px] uppercase tracking-wider text-stone-400 font-medium">Brief title</span>
+              <span className="text-[12.5px] text-stone-400 font-medium">Brief title</span>
               <input
                 value={title} onChange={(e) => setTitle(e.target.value)}
                 placeholder="e.g. Verma v. Kanpur Development Authority"
@@ -101,7 +100,7 @@ export default function MattersPage({ open }: { open: (id: string) => void }) {
               />
             </label>
             <label className="block">
-              <span className="text-[12px] uppercase tracking-wider text-stone-400 font-medium">Client</span>
+              <span className="text-[12.5px] text-stone-400 font-medium">Client</span>
               <input
                 value={client} onChange={(e) => setClient(e.target.value)}
                 placeholder="Client name"
@@ -109,7 +108,7 @@ export default function MattersPage({ open }: { open: (id: string) => void }) {
               />
             </label>
             <label className="block">
-              <span className="text-[12px] uppercase tracking-wider text-stone-400 font-medium">Type</span>
+              <span className="text-[12.5px] text-stone-400 font-medium">Type</span>
               <select
                 value={kind} onChange={(e) => setKind(e.target.value)}
                 className="mt-1.5 w-full rounded-lex border border-stone-200 px-3 py-2 text-[14px] bg-white outline-none focus:border-stone-400"
@@ -118,7 +117,7 @@ export default function MattersPage({ open }: { open: (id: string) => void }) {
               </select>
             </label>
             <label className="block">
-              <span className="text-[12px] uppercase tracking-wider text-stone-400 font-medium">Notes</span>
+              <span className="text-[12.5px] text-stone-400 font-medium">Notes</span>
               <input
                 value={notes} onChange={(e) => setNotes(e.target.value)}
                 placeholder="Optional — key facts, forum, next date…"
@@ -126,7 +125,7 @@ export default function MattersPage({ open }: { open: (id: string) => void }) {
               />
             </label>
             <label className="block">
-              <span className="text-[12px] uppercase tracking-wider text-stone-400 font-medium">Space</span>
+              <span className="text-[12.5px] text-stone-400 font-medium">Space</span>
               <select
                 value={spaceId} onChange={(e) => setSpaceId(e.target.value)}
                 className="mt-1.5 w-full rounded-lex border border-stone-200 px-3 py-2 text-[14px] bg-white outline-none focus:border-stone-400"
@@ -154,7 +153,7 @@ export default function MattersPage({ open }: { open: (id: string) => void }) {
               value={briefQuery}
               onChange={(e) => setBriefQuery(e.target.value)}
               placeholder="Search briefs…"
-              className="rounded-full border border-stone-200 bg-white px-3.5 py-1.5 text-[13px] outline-none focus:border-stone-400 w-56"
+              className="rounded-lex border border-stone-200 bg-white px-3.5 py-1.5 text-[13px] outline-none focus:border-stone-400 w-56"
             />
           </div>
         )}
@@ -164,7 +163,7 @@ export default function MattersPage({ open }: { open: (id: string) => void }) {
               <button
                 key={f}
                 onClick={() => setSpaceFilter(f)}
-                className={`rounded-full border px-2.5 py-1 text-[12px] transition-colors ${
+                className={`rounded-lex border px-2.5 py-1 text-[12px] transition-colors ${
                   spaceFilter === f ? 'bg-ink text-ivory border-ink' : 'border-stone-200 text-stone-500 hover:text-ink hover:border-stone-300'
                 }`}
               >
@@ -175,7 +174,7 @@ export default function MattersPage({ open }: { open: (id: string) => void }) {
               <button
                 key={s.id}
                 onClick={() => setSpaceFilter(s.id)}
-                className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[12px] transition-colors ${
+                className={`flex items-center gap-1.5 rounded-lex border px-2.5 py-1 text-[12px] transition-colors ${
                   spaceFilter === s.id ? 'bg-ink text-ivory border-ink' : 'border-stone-200 text-stone-500 hover:text-ink hover:border-stone-300'
                 }`}
               >
@@ -274,7 +273,7 @@ function SpacesPanel({ spaces, myId }: { spaces: Space[]; myId?: string }) {
           const iOwn = s.owner_id === myId
           const expanded = openId === s.id
           return (
-            <div key={s.id} className="rounded-lex-lg border border-stone-200 bg-white shadow-lex px-5 py-4">
+            <div key={s.id} className="rounded-lex-lg border border-stone-200 bg-white px-5 py-4">
               <div className="flex items-center gap-3 flex-wrap">
                 <span className="w-8 h-8 rounded-lex bg-stone-100 flex items-center justify-center">
                   <Users size={14} className="text-stone-500" />
@@ -306,7 +305,7 @@ function SpacesPanel({ spaces, myId }: { spaces: Space[]; myId?: string }) {
                     {s.members.map((m) => (
                       <div key={m.user_id} className="flex items-center gap-2.5 text-[13px]">
                         <span className="text-ink">{m.email}</span>
-                        <span className="rounded-full bg-stone-100 border border-stone-200 px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide text-stone-600">
+                        <span className="text-[11px] text-stone-500">
                           {m.role}
                         </span>
                         {iOwn && m.user_id !== s.owner_id && (
@@ -363,7 +362,7 @@ function MatterCard({ matter: m, spaceName, onOpen, onDelete }: { matter: Matter
   return (
     <div
       onClick={onOpen}
-      className="text-left rounded-lex-lg border border-stone-200 bg-white shadow-lex px-5 py-4 hover:border-stone-300 hover:shadow-lex-md transition-all cursor-pointer group"
+      className="text-left rounded-lex-lg border border-stone-200 bg-white px-5 py-4 hover:border-stone-300 transition-all cursor-pointer group"
     >
       <div className="flex items-start gap-3">
         <div className="w-9 h-9 rounded-lex bg-stone-100 flex items-center justify-center flex-shrink-0">
@@ -381,14 +380,14 @@ function MatterCard({ matter: m, spaceName, onOpen, onDelete }: { matter: Matter
         <span>{m.document_count} documents</span>
         <span>{m.activity_count} activities</span>
         {spaceName && (
-          <span className="flex items-center gap-1 rounded-full bg-stone-100 border border-stone-200 px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide text-stone-600">
+          <span className="flex items-center gap-1 text-[11px] text-stone-500">
             <Users size={10} /> {spaceName}
           </span>
         )}
         <span className="ml-auto">
           {new Date(m.updated_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
         </span>
-        {m.is_default && <span className="text-[10px] font-semibold uppercase tracking-wide bg-stone-100 rounded px-1.5 py-0.5">Default</span>}
+        {m.is_default && <span className="text-[11px] text-stone-500">Default</span>}
         {!m.is_default && (
           <button
             onClick={(e) => { e.stopPropagation(); onDelete() }}

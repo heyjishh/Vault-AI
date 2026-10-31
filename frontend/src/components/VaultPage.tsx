@@ -227,7 +227,7 @@ export default function VaultPage() {
         Documents are parsed (PDF text layer + OCR fallback), chunked, embedded and added to the knowledge graph.
       </p>
       {matterId && (
-        <p className="mt-2 inline-flex rounded-full bg-stone-500/10 text-stone-600 px-3 py-1 text-[12px] font-medium">
+        <p className="mt-2 text-stone-600 text-[12px] font-medium">
           Showing documents in {scopeTitle ?? 'the active brief'} — uploads file here
         </p>
       )}
@@ -275,7 +275,7 @@ export default function VaultPage() {
           </div>
         )}
         <p className="text-[13px] text-stone-500 mt-1 flex items-center justify-center gap-1.5 flex-wrap">
-          {UPLOAD_FORMATS_HINT} <span className="inline-flex items-center gap-1 rounded-full bg-stone-100 border border-stone-200 px-2 py-0.5 text-[11px]"><ScanText size={11} /> scanned pages & photos auto-OCR'd</span>
+          {UPLOAD_FORMATS_HINT} <span className="inline-flex items-center gap-1 rounded-lex bg-stone-100 border border-stone-200 px-2 py-0.5 text-[11px]"><ScanText size={11} /> scanned pages & photos auto-OCR'd</span>
         </p>
         <input
           ref={fileRef} type="file" multiple className="hidden"
@@ -289,7 +289,7 @@ export default function VaultPage() {
       </motion.div>
 
       <div className="mt-3 flex items-center justify-center gap-3 flex-wrap">
-        <label className="inline-flex items-center gap-1.5 rounded-full border border-stone-300 px-3.5 py-1.5 text-[13px] font-medium cursor-pointer hover:bg-stone-100 transition-colors">
+        <label className="inline-flex items-center gap-1.5 rounded-lex border border-stone-300 px-3.5 py-1.5 text-[13px] font-medium cursor-pointer hover:bg-stone-100 transition-colors">
           <FolderUp size={13} /> Upload a folder
           <input
             ref={folderRef} type="file" className="hidden"
@@ -325,7 +325,7 @@ export default function VaultPage() {
       )}
 
       <div className="grid md:grid-cols-2 gap-4 mt-4">
-        <div className="rounded-lex-lg border border-stone-200 bg-white shadow-lex p-5">
+        <div className="rounded-lex-lg border border-stone-200 bg-white p-5">
           <h3 className="font-medium text-[15px]">Paste text</h3>
           <input
             value={title} onChange={(e) => setTitle(e.target.value)}
@@ -351,7 +351,7 @@ export default function VaultPage() {
             />
           )}
         </div>
-        <div className="rounded-lex-lg border border-stone-200 bg-white shadow-lex p-5">
+        <div className="rounded-lex-lg border border-stone-200 bg-white p-5">
           <h3 className="font-medium text-[15px]">Ingest from S3 / R2</h3>
           <p className="text-[13px] text-stone-500 mt-2 leading-relaxed">
             Pulls every supported file under a prefix from the bucket configured on the server
@@ -379,7 +379,7 @@ export default function VaultPage() {
             value={docQuery}
             onChange={(e) => setDocQuery(e.target.value)}
             placeholder="Search documents…"
-            className="rounded-full border border-stone-200 bg-white px-3.5 py-1.5 text-[13px] outline-none focus:border-stone-400 w-56"
+            className="rounded-lex border border-stone-200 bg-white px-3.5 py-1.5 text-[13px] outline-none focus:border-stone-400 w-56"
           />
         )}
       </div>
@@ -391,7 +391,7 @@ export default function VaultPage() {
         <EmptyState title="No documents match" hint="Try a different search term." />
       ) : (
         <>
-        <div className="rounded-lex-lg border border-stone-200 bg-white shadow-lex overflow-hidden">
+        <div className="rounded-lex-lg border border-stone-200 bg-white overflow-hidden">
           {pagedDocs.pageItems.map((d, i) => (
             <div key={d.id} className={i > 0 ? 'border-t border-stone-200' : ''}>
             <div className="flex items-center gap-4 px-5 py-3.5">
@@ -409,7 +409,8 @@ export default function VaultPage() {
                       <span>in force {d.meta?.effective_from ?? '…'} → {d.meta?.effective_to ?? 'present'}</span>
                     )}
                     {d.meta?.superseded_by && (
-                      <span className="rounded-full bg-amber-50 border border-amber-600/30 text-amber-800 px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide">
+                      <span className="inline-flex items-center gap-1.5 text-[11px] text-stone-600">
+                        <span className="w-1.5 h-1.5 rounded-full bg-[#b7791f] shrink-0" />
                         Superseded by {d.meta.superseded_by}
                       </span>
                     )}
@@ -447,14 +448,14 @@ export default function VaultPage() {
               <button
                 onClick={() => setPendingDelete(d)}
                 title="Delete this document permanently"
-                className="p-2 rounded-lex text-stone-400 hover:text-[#a02c2c] hover:bg-[#feeaea] transition-colors"
+                className="p-2 rounded-lex text-stone-400 hover:text-[#a02c2c] hover:bg-stone-100 transition-colors"
               >
                 <Trash2 size={15} />
               </button>
             </div>
             {indexDocId === d.id && (
               <div className="border-t border-stone-100 bg-[#fcfbf9] px-5 py-4">
-                <p className="text-[11.5px] font-medium uppercase tracking-wide text-stone-400">
+                <p className="text-[12px] font-medium text-stone-400">
                   Indexing — generated at ingest (augmentation + statute hyperedges)
                 </p>
                 {indexLoading ? (
@@ -467,7 +468,7 @@ export default function VaultPage() {
                       <div key={c.id} className="rounded-lex border border-stone-200 bg-white px-4 py-3">
                         <p className="text-[13px] text-stone-600 leading-relaxed">{c.text_preview}…</p>
                         {c.hyper_id && (
-                          <span className="mt-2 inline-block rounded-full bg-[#eef3fb] border border-[#c9d8f2] text-[#31558f] px-2 py-px text-[11px] font-medium">
+                          <span className="mt-2 inline-block rounded-lex bg-white border border-stone-200 text-stone-600 px-2 py-px text-[11px] font-medium">
                             Hyperedge: {c.hyper_id.split('#').pop()}
                           </span>
                         )}
@@ -479,7 +480,7 @@ export default function VaultPage() {
                         {c.aug_questions && (
                           <div className="mt-1.5 flex flex-wrap gap-1.5">
                             {c.aug_questions.split(' ;; ').map((q, qi) => (
-                              <span key={qi} className="inline-block rounded-full border border-stone-200 bg-[#fcfbf9] px-2.5 py-1 text-[12px] text-stone-600">
+                              <span key={qi} className="inline-block rounded-lex border border-stone-200 bg-[#fcfbf9] px-2.5 py-1 text-[12px] text-stone-600">
                                 {q}
                               </span>
                             ))}
@@ -533,7 +534,7 @@ function MetaEditor(props: {
   const [to, setTo] = useState(doc.meta?.effective_to ?? '')
   const [supersededBy, setSupersededBy] = useState(doc.meta?.superseded_by ?? '')
   const field = 'w-full rounded-lex border border-stone-200 px-2.5 py-1.5 text-[13px] outline-none focus:border-stone-400 placeholder:text-stone-400 bg-white'
-  const label = 'block text-[11px] font-medium uppercase tracking-wide text-stone-500 mb-1'
+  const label = 'block text-[12px] font-medium text-stone-500 mb-1'
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-ink/30 p-4" onClick={onClose}>
       <div
@@ -573,7 +574,7 @@ function MetaEditor(props: {
           </div>
         </div>
         <div className="mt-5 flex justify-end gap-2">
-          <button onClick={onClose} className="rounded-full border border-stone-300 px-3.5 py-1.5 text-[13px] text-stone-600 hover:text-ink">
+          <button onClick={onClose} className="rounded-lex border border-stone-300 px-3.5 py-1.5 text-[13px] text-stone-600 hover:text-ink">
             Cancel
           </button>
           <button
@@ -584,7 +585,7 @@ function MetaEditor(props: {
               effective_to: to || undefined,
               superseded_by: supersededBy.trim() || undefined,
             })}
-            className="rounded-full bg-ink text-ivory px-4 py-1.5 text-[13px] font-medium disabled:opacity-50"
+            className="rounded-lex bg-ink text-ivory px-4 py-1.5 text-[13px] font-medium disabled:opacity-50"
           >
             {saving ? 'Saving…' : 'Save validity'}
           </button>

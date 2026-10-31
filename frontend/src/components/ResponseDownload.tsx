@@ -69,7 +69,7 @@ export function ResponseDownload({ question, title, answerMarkdown, citations }:
       </button>
       {open && (
         <div className="absolute left-0 top-full z-20 mt-1.5 w-60 overflow-hidden rounded-lex-lg border border-stone-200 bg-white py-1 shadow-lex-md">
-          <p className="px-3 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-stone-400">
+          <p className="px-3 pt-2 pb-1 text-[12px] font-medium text-stone-400">
             With citations
           </p>
           <button
@@ -87,7 +87,7 @@ export function ResponseDownload({ question, title, answerMarkdown, citations }:
             <span className="block text-[11px] text-stone-400">Citations in the text + Sources list</span>
           </button>
           <div className="my-1 border-t border-stone-100" />
-          <p className="px-3 pt-1 pb-1 text-[11px] font-semibold uppercase tracking-wide text-stone-400">
+          <p className="px-3 pt-1 pb-1 text-[12px] font-medium text-stone-400">
             Without citations
           </p>
           <button

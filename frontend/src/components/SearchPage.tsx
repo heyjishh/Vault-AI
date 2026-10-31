@@ -57,7 +57,7 @@ export default function SearchPage({ go }: { go: (v: View) => void }) {
         Find documents in the corpus by title or by any word inside them — names, sections, amounts, clauses.
       </p>
 
-      <div className="mt-6 flex items-center gap-2.5 rounded-full border border-stone-200 bg-white shadow-lex px-4 py-3 focus-within:border-stone-400 transition-colors">
+      <div className="mt-6 flex items-center gap-2.5 rounded-lex border border-stone-200 bg-white px-4 py-3 focus-within:border-stone-400 transition-colors">
         <Search size={17} className="text-stone-400 shrink-0" />
         <input
           autoFocus
@@ -86,7 +86,7 @@ export default function SearchPage({ go }: { go: (v: View) => void }) {
                 <button
                   key={hit.doc_id}
                   onClick={() => openInInteract(hit)}
-                  className="w-full text-left rounded-lex-lg border border-stone-200 bg-white shadow-lex px-5 py-4 hover:border-stone-300 hover:shadow-lex-md transition-all"
+                  className="w-full text-left rounded-lex-lg border border-stone-200 bg-white px-5 py-4 hover:border-stone-300 transition-all"
                 >
                   <span className="flex items-center gap-2.5">
                     <FileText size={16} className="text-stone-400 shrink-0" />

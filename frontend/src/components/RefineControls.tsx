@@ -83,7 +83,7 @@ export function RefineControls({ ctl, disabled }: { ctl: RefineCtl; disabled?: b
           type="button"
           onClick={ctl.undo}
           title="Restore the exact text you wrote before refining"
-          className="flex items-center gap-1.5 rounded-full border border-ink bg-ink px-2.5 py-1 text-[12px] text-ivory transition-colors"
+          className="flex items-center gap-1.5 rounded-lex border border-ink bg-ink px-2.5 py-1 text-[12px] text-ivory transition-colors"
         >
           <Undo2 size={12} /> Refined — Undo
         </button>
@@ -93,7 +93,7 @@ export function RefineControls({ ctl, disabled }: { ctl: RefineCtl; disabled?: b
           onClick={ctl.refine}
           disabled={disabled || ctl.busy}
           title="Rewrite your prompt so the system understands it better, and add retrieval terms. You review the rewrite before sending — nothing is sent automatically."
-          className="flex items-center gap-1.5 rounded-full border border-stone-200 px-2.5 py-1 text-[12px] text-stone-500 transition-colors hover:border-stone-300 hover:text-ink disabled:opacity-40"
+          className="flex items-center gap-1.5 rounded-lex border border-stone-200 px-2.5 py-1 text-[12px] text-stone-500 transition-colors hover:border-stone-300 hover:text-ink disabled:opacity-40"
         >
           <Sparkles size={12} /> {ctl.busy ? 'Refining…' : 'Refine'}
         </button>

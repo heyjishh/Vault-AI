@@ -226,7 +226,7 @@ export default function AssistantPage({ matterId: fixedMatterId, go }: { matterI
       <div className="flex-1 min-w-0">
         <div className="w-full px-6 pb-16">
       {scopeMatterId && (
-        <div className="mt-6 flex items-center gap-2 rounded-lex border border-stone-200 bg-white px-3.5 py-2.5 text-[13px] shadow-lex">
+        <div className="mt-6 flex items-center gap-2 rounded-lex border border-stone-200 bg-white px-3.5 py-2.5 text-[13px]">
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 flex-shrink-0" />
           {briefVault ? (
             <span className="text-stone-600">
@@ -257,7 +257,7 @@ export default function AssistantPage({ matterId: fixedMatterId, go }: { matterI
         <div className="pt-16">
           <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}>
             <div className="flex justify-center"><AssistantAvatar size={84} /></div>
-            <p className="text-center text-[12px] font-semibold uppercase tracking-[0.16em] text-stone-400 mt-5">
+            <p className="text-center text-[13px] font-medium text-stone-400 mt-5">
               Clause · your legal research companion
             </p>
             <h1 className="font-display text-[2.7rem] leading-[1.12] tracking-tight text-center mt-3">
@@ -280,9 +280,9 @@ export default function AssistantPage({ matterId: fixedMatterId, go }: { matterI
                 initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.15 + i * 0.07, duration: 0.4 }}
                 onClick={() => ask(ex.q)}
-                className="text-left rounded-lex-lg border border-stone-200 bg-white shadow-lex px-4 py-3.5 hover:border-stone-300 hover:shadow-lex-md transition-all group"
+                className="text-left rounded-lex-lg border border-stone-200 bg-white px-4 py-3.5 hover:border-stone-300 transition-all group"
               >
-                <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-stone-400">{ex.tag}</span>
+                <span className="text-[11px] font-medium text-stone-400">{ex.tag}</span>
                 <p className="font-display text-[17px] mt-1 group-hover:text-ink">{ex.title}</p>
                 <p className="text-[13px] text-stone-500 mt-0.5 line-clamp-2">{ex.q}</p>
               </motion.button>
@@ -295,7 +295,7 @@ export default function AssistantPage({ matterId: fixedMatterId, go }: { matterI
             <div className="flex justify-end mb-1">
               <button
                 onClick={() => setSourcesOpen((v) => !v)}
-                className="inline-flex items-center gap-1.5 rounded-full border border-stone-200 bg-white px-3 py-1.5 text-[12.5px] font-medium text-stone-600 hover:text-ink hover:border-stone-300 transition-colors shadow-lex-sm"
+                className="inline-flex items-center gap-1.5 rounded-lex border border-stone-200 bg-white px-3 py-1.5 text-[12.5px] font-medium text-stone-600 hover:text-ink hover:border-stone-300 transition-colors"
               >
                 <PanelRight size={14} /> Sources panel {sourcesOpen ? 'on' : 'off'}
               </button>
@@ -438,7 +438,7 @@ function SourcesSidebar({ turn, selectedChunkId, onClose, go, onOpenSource }: {
         </button>
       </div>
       <div className="px-5 py-3 border-b border-stone-100 shrink-0">
-        <p className="text-[11px] uppercase tracking-wider text-stone-400 font-medium">For the question</p>
+        <p className="text-[12.5px] text-stone-400 font-medium">For the question</p>
         <p className="text-[13.5px] font-medium mt-0.5 line-clamp-2">{turn.question}</p>
         <p className="text-[12px] text-stone-400 mt-1">Highlighted words are where the answer drew from the passage.</p>
       </div>
@@ -480,48 +480,54 @@ function SourcesSidebar({ turn, selectedChunkId, onClose, go, onOpenSource }: {
               ref={(el) => { cardRefs.current[c.chunk_id] = el }}
               onClick={() => onOpenSource(c)}
               title="View the full document"
-              className={`rounded-lex-lg border bg-white shadow-lex px-4 py-3.5 transition-colors cursor-pointer hover:border-stone-400 ${selected ? 'border-ink ring-1 ring-ink/60' : 'border-stone-200'}`}
+              className={`rounded-lex-lg border bg-white px-4 py-3.5 transition-colors cursor-pointer hover:border-stone-400 ${selected ? 'border-ink' : 'border-stone-200'}`}
             >
               <div className="flex items-center gap-2">
                 <span className="rounded bg-ink text-ivory px-1.5 py-0.5 text-[11px] font-mono font-semibold">{c.doc_id}</span>
-                <span className="rounded bg-stone-100 border border-stone-200 px-1.5 py-0.5 text-[11px] font-mono font-semibold text-stone-600">
+                <span className="text-[12px] tabular-nums text-stone-500">
                   {Math.round(c.score * 100)}%
                 </span>
                 {isPrivate && (
-                  <span className="rounded-full bg-ink text-ivory px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide">Private</span>
+                  <span className="text-[11px] text-stone-500">Private</span>
                 )}
                 {c.stale && (
                   <span
                     title={c.stale}
-                    className="rounded-full bg-amber-50 border border-amber-600/30 text-amber-800 px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide"
+                    className="inline-flex items-center gap-1.5 text-[11px] text-stone-600"
                   >
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#b7791f] shrink-0" />
                     Superseded
                   </span>
                 )}
                 {c.treatment && c.treatment.status !== 'unknown' && (
                   <span
                     title={c.treatment.evidence_passage ?? undefined}
-                    className={`rounded-full border px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide ${
-                      c.treatment.status === 'overruled'
-                        ? 'bg-red-50 border-red-600/30 text-red-800'
-                        : c.treatment.status === 'distinguished'
-                          ? 'bg-amber-50 border-amber-600/30 text-amber-800'
-                          : 'bg-emerald-50 border-emerald-600/30 text-emerald-800'
-                    }`}
+                    className="inline-flex items-center gap-1.5 text-[11px] text-stone-600"
                   >
+                    <span
+                      className="w-1.5 h-1.5 rounded-full shrink-0"
+                      style={{
+                        background: c.treatment.status === 'overruled'
+                          ? '#a02c2c'
+                          : c.treatment.status === 'distinguished'
+                            ? '#b7791f'
+                            : '#16a34a',
+                      }}
+                    />
                     {c.treatment.status === 'good_law' ? 'Good law' : c.treatment.status}
                   </span>
                 )}
                 {c.treatment && c.treatment.status === 'unknown' && (
                   <span
                     title="No judgment in the visible scope states a treatment for this authority — status unknown, not assumed good law."
-                    className="rounded-full bg-stone-50 border border-stone-200 px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide text-stone-500"
+                    className="inline-flex items-center gap-1.5 text-[11px] text-stone-500"
                   >
+                    <span className="w-1.5 h-1.5 rounded-full bg-stone-300 shrink-0" />
                     Status unknown
                   </span>
                 )}
                 {isWeb && (
-                  <span className="ml-auto text-[10px] font-semibold uppercase tracking-wide text-stone-400">Web</span>
+                  <span className="ml-auto text-[11px] text-stone-400">Web</span>
                 )}
               </div>
               <p className="text-[13.5px] font-medium mt-2 leading-snug">{c.doc_title ?? c.doc_id}</p>
@@ -669,14 +675,14 @@ function TurnView({ turn, onCopy, onRegenerate, onFollowUp, onCite, onShowSource
           )}
 
           {turn.verified && (
-            <div className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-[#e7f4e4] text-[#2f6b2f] px-3 py-1 text-[12.5px] font-medium">
+            <div className="mt-4 flex items-center gap-1.5 text-[12.5px] text-stone-700">
               <BadgeCheck size={14} />
               Verified answer — curated and checked by a human
             </div>
           )}
 
           {turn.done && turn.audit && turn.audit.checked > 0 && (
-            <div className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-stone-100 border border-stone-200 text-stone-600 px-3 py-1 text-[12.5px] font-medium">
+            <div className="mt-4 flex items-center gap-1.5 text-[12.5px] text-stone-600">
               <ShieldCheck size={14} className="text-[#2f6b2f]" />
               Citation integrity: {turn.audit.verified} of {turn.audit.checked} verified against their sources
               {turn.audit.stripped > 0 && (
@@ -687,12 +693,12 @@ function TurnView({ turn, onCopy, onRegenerate, onFollowUp, onCite, onShowSource
 
           {turn.done && turn.expansions.length > 0 && (
             <div className="mt-4">
-              <p className="text-[11.5px] font-medium uppercase tracking-wide text-stone-400">
+              <p className="text-[12px] font-medium text-stone-400">
                 Question expanded for retrieval — also searched as
               </p>
               <div className="mt-1.5 flex flex-wrap gap-1.5">
                 {turn.expansions.map((x, i) => (
-                  <span key={i} className="inline-block max-w-full truncate rounded-full border border-stone-200 bg-white px-2.5 py-1 text-[12px] text-stone-600" title={x}>
+                  <span key={i} className="inline-block max-w-full truncate rounded-lex border border-stone-200 bg-white px-2.5 py-1 text-[12px] text-stone-600" title={x}>
                     {x}
                   </span>
                 ))}
@@ -749,7 +755,7 @@ function TurnView({ turn, onCopy, onRegenerate, onFollowUp, onCite, onShowSource
                   <button
                     key={f}
                     onClick={() => onFollowUp(f)}
-                    className="rounded-full border border-stone-200 bg-white px-3 py-1.5 text-[13px] text-stone-600 hover:border-stone-300 hover:text-ink transition-colors shadow-lex"
+                    className="rounded-lex border border-stone-200 bg-white px-3 py-1.5 text-[13px] text-stone-600 hover:border-stone-300 hover:text-ink transition-colors"
                   >
                     {f}
                   </button>
@@ -779,7 +785,7 @@ function Composer(props: {
   const [lawOpen, setLawOpen] = useState(false)
   const lawActive = !!(asOf || jurisdiction.trim())
   return (
-    <div className="mt-8 rounded-lex-lg border border-stone-300 bg-white shadow-lex-md">
+    <div className="mt-8 rounded-lex-lg border border-stone-300 bg-white">
       <textarea
         value={input}
         onChange={(e) => setInput(e.target.value)}
@@ -794,7 +800,7 @@ function Composer(props: {
           <button
             onClick={() => setWeb(!web)}
             title="Blend live web results into the answer"
-            className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[12px] transition-colors ${
+            className={`flex items-center gap-1.5 rounded-lex border px-2.5 py-1 text-[12px] transition-colors ${
               web ? 'bg-ink text-ivory border-ink' : 'border-stone-200 text-stone-500 hover:text-ink hover:border-stone-300'
             }`}
           >
@@ -804,7 +810,7 @@ function Composer(props: {
             <button
               onClick={() => setPriv(!priv)}
               title="Include your confidential vault documents (only you can see them)"
-              className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[12px] transition-colors ${
+              className={`flex items-center gap-1.5 rounded-lex border px-2.5 py-1 text-[12px] transition-colors ${
                 priv ? 'bg-ink text-ivory border-ink' : 'border-stone-200 text-stone-500 hover:text-ink hover:border-stone-300'
               }`}
             >
@@ -817,7 +823,7 @@ function Composer(props: {
             title={briefAvailable
               ? `Answer only from ${briefName ?? 'this brief'}'s vault — if the brief has no answer, Ask says so instead of searching the full vault`
               : 'Open a brief to answer from its vault only'}
-            className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[12px] transition-colors disabled:opacity-40 ${
+            className={`flex items-center gap-1.5 rounded-lex border px-2.5 py-1 text-[12px] transition-colors disabled:opacity-40 ${
               briefVault ? 'bg-ink text-ivory border-ink' : 'border-stone-200 text-stone-500 hover:text-ink hover:border-stone-300'
             }`}
           >
@@ -828,7 +834,7 @@ function Composer(props: {
             <button
               onClick={() => setLawOpen((v) => !v)}
               title="Only cite law in force on a date / in a jurisdiction"
-              className={`flex items-center gap-1 rounded-full border px-2.5 py-1 text-[12px] transition-colors ${
+              className={`flex items-center gap-1 rounded-lex border px-2.5 py-1 text-[12px] transition-colors ${
                 lawActive ? 'bg-ink text-ivory border-ink' : 'border-stone-200 text-stone-500 hover:text-ink hover:border-stone-300'
               }`}
             >
@@ -837,7 +843,7 @@ function Composer(props: {
             {lawOpen && (
               <div className="absolute bottom-full mb-1.5 left-0 rounded-lex-lg border border-stone-200 bg-white shadow-lex-md p-3 z-10 w-60 space-y-2.5">
                 <label className="block">
-                  <span className="text-[11px] font-medium uppercase tracking-wide text-stone-500">In force on</span>
+                  <span className="text-[12px] font-medium text-stone-500">In force on</span>
                   <input
                     type="date"
                     value={asOf}
@@ -846,7 +852,7 @@ function Composer(props: {
                   />
                 </label>
                 <label className="block">
-                  <span className="text-[11px] font-medium uppercase tracking-wide text-stone-500">Jurisdiction</span>
+                  <span className="text-[12px] font-medium text-stone-500">Jurisdiction</span>
                   <input
                     type="text"
                     value={jurisdiction}
@@ -864,7 +870,7 @@ function Composer(props: {
                   </button>
                   <button
                     onClick={() => setLawOpen(false)}
-                    className="rounded-full bg-ink text-ivory px-3 py-1 text-[12px] font-medium"
+                    className="rounded-lex bg-ink text-ivory px-3 py-1 text-[12px] font-medium"
                   >
                     Done
                   </button>
@@ -878,7 +884,7 @@ function Composer(props: {
           <div className="relative">
             <button
               onClick={() => setSrcOpen((v) => !v)}
-              className="flex items-center gap-1 rounded-full border border-stone-200 px-2.5 py-1 text-[12px] text-stone-500 hover:text-ink hover:border-stone-300 transition-colors"
+              className="flex items-center gap-1 rounded-lex border border-stone-200 px-2.5 py-1 text-[12px] text-stone-500 hover:text-ink hover:border-stone-300 transition-colors"
             >
               Sources: {sources} <ChevronDown size={12} />
             </button>
@@ -900,14 +906,14 @@ function Composer(props: {
         {busy ? (
           <button
             onClick={onStop}
-            className="flex items-center gap-1.5 rounded-full bg-[#a02c2c] text-white pl-3 pr-3.5 py-1.5 text-[13px] font-medium hover:bg-[#8a2424] transition-colors"
+            className="flex items-center gap-1.5 rounded-lex bg-[#a02c2c] text-white pl-3 pr-3.5 py-1.5 text-[13px] font-medium hover:bg-[#8a2424] transition-colors"
           >
             <Square size={12} /> Stop
           </button>
         ) : (
           <button
             onClick={onSubmit} disabled={!input.trim()}
-            className="w-8 h-8 rounded-full bg-ink text-ivory flex items-center justify-center hover:bg-ink-900 disabled:opacity-40 transition-colors"
+            className="w-8 h-8 rounded-lex bg-ink text-ivory flex items-center justify-center hover:bg-ink-900 disabled:opacity-40 transition-colors"
             title="Ask (Enter)"
           >
             <ArrowUp size={16} />

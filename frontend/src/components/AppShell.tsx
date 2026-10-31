@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
   MessageSquare, FlaskConical, Bot, FolderOpen, Network, LogOut, LayoutDashboard,
-  PenSquare, Trash2, CreditCard, FileSearch, PenLine, Briefcase, Scale, Lock, ExternalLink, PanelTop, Search, X,
+  PenSquare, Trash2, CreditCard, FileSearch, PenLine, Briefcase, Lock, ExternalLink, PanelTop, Search, X,
 } from 'lucide-react'
 import { useAuth } from '../stores/auth'
 import { useSession } from '../stores/session'
@@ -137,17 +137,14 @@ export default function AppShell() {
     <div className="h-screen flex bg-ivory text-ink overflow-hidden">
       {/* Sidebar — ivory, hairline right border (Harvey) */}
       <aside className="w-64 flex-shrink-0 border-r border-stone-200 flex flex-col">
-        <div className="h-[4.5rem] flex items-center gap-2.5 px-5 border-b border-stone-200">
-          <div className="w-8 h-8 rounded-lg bg-ink flex items-center justify-center">
-            <Scale size={16} className="text-ivory" />
-          </div>
+        <div className="h-[4.5rem] flex items-center px-5 border-b border-stone-200">
           <span className="font-display text-xl tracking-tight">{brand.product_name}</span>
         </div>
 
         <div className="px-3 pt-4">
           <button
             onClick={newChat}
-            className="w-full flex items-center gap-2.5 rounded-lex bg-ink text-ivory px-3 py-2.5 text-[14px] font-medium hover:bg-ink-900 transition-colors shadow-lex"
+            className="w-full flex items-center gap-2.5 rounded-lex bg-ink text-ivory px-3 py-2.5 text-[14px] font-medium hover:bg-ink-900 transition-colors"
           >
             <PenSquare size={15} />
             New research
@@ -158,7 +155,7 @@ export default function AppShell() {
               uploads to one brief. Brief-only vault — the switcher
               only chooses WHICH brief; there is no full-vault view. */}
           <div className="mt-3">
-            <p className="text-[11px] uppercase tracking-wider text-stone-400 font-medium px-1">Working in</p>
+            <p className="text-[12.5px] text-stone-400 font-medium px-1">Working in</p>
             <select
               value={effectiveMatterId ?? ''}
               onChange={(e) => setCurrentMatter(e.target.value)}
@@ -186,7 +183,7 @@ export default function AppShell() {
               onClick={() => { setActiveTabId(null); setView(id) }}
               className={`w-full flex items-center gap-3 rounded-lex px-3 py-2 text-[14px] transition-colors ${
                 view === id || (id === 'matters' && view === 'matter')
-                  ? 'bg-stone-100 text-ink font-medium shadow-[inset_0_0_0_1px_#e5e5e3]'
+                  ? 'bg-stone-100 text-ink font-medium'
                   : 'text-stone-600 hover:bg-stone-100/70 hover:text-ink'
               }`}
             >
@@ -202,7 +199,7 @@ export default function AppShell() {
             >
               <LayoutDashboard size={16} strokeWidth={1.8} />
               Command Center
-              <span className="ml-auto text-[10px] font-semibold uppercase tracking-wide bg-ink text-ivory rounded px-1.5 py-0.5">Admin</span>
+              <span className="ml-auto text-[12px] text-stone-400">Admin</span>
             </a>
           )}
 
@@ -224,7 +221,7 @@ export default function AppShell() {
                 onClick={() => { setActiveTabId(t.id); setView('tab') }}
                 className={`w-full flex items-center gap-3 rounded-lex px-3 py-2 text-[14px] transition-colors ${
                   view === 'tab' && activeTabId === t.id
-                    ? 'bg-stone-100 text-ink font-medium shadow-[inset_0_0_0_1px_#e5e5e3]'
+                    ? 'bg-stone-100 text-ink font-medium'
                     : 'text-stone-600 hover:bg-stone-100/70 hover:text-ink'
                 }`}
               >
@@ -237,7 +234,7 @@ export default function AppShell() {
           {history.length > 0 && (
             <div className="mt-6">
               <div className="flex items-center justify-between px-3">
-                <p className="text-[11px] uppercase tracking-wider text-stone-400 font-medium">Recent research</p>
+                <p className="text-[12.5px] text-stone-400 font-medium">Recent research</p>
                 <button onClick={() => setHistoryRemoval('all')} title="Clear history" className="text-stone-400 hover:text-ink p-0.5">
                   <Trash2 size={12} />
                 </button>
@@ -285,19 +282,19 @@ export default function AppShell() {
           {dash && (
             <button
               onClick={() => { setActiveTabId(null); setView('plans') }}
-              className="mt-6 mx-3 block text-left rounded-lex-lg border border-stone-200 bg-white shadow-lex-sm px-3.5 py-3 hover:border-stone-300 transition-colors"
+              className="mt-6 mx-3 block text-left border-t border-stone-200 px-1 pt-3 pb-1"
             >
               <span className="flex items-center justify-between">
-                <span className="text-[11px] uppercase tracking-wider text-stone-400 font-medium">Your plan</span>
-                <span className="text-[10px] font-semibold uppercase tracking-wide bg-ink text-ivory rounded px-1.5 py-0.5">{dash.plan_name}</span>
+                <span className="text-[12.5px] text-stone-400 font-medium">Your plan</span>
+                <span className="text-[12px] text-stone-500">{dash.plan_name}</span>
               </span>
-              <span className="block font-display text-[19px] leading-tight mt-1.5">
+              <span className="block text-[19px] font-medium tabular-nums leading-tight mt-1.5">
                 {Math.max(0, dash.token_quota - dash.tokens_used).toLocaleString('en-IN')}
-                <span className="text-[12.5px] text-stone-500 font-sans"> tokens left</span>
+                <span className="text-[12.5px] text-stone-500 font-normal"> tokens left</span>
               </span>
               <span className="block h-1.5 rounded-full bg-stone-100 mt-2 overflow-hidden">
                 <span
-                  className={`block h-full rounded-full ${Math.round((dash.tokens_used / Math.max(1, dash.token_quota)) * 100) >= 90 ? 'bg-[#a02c2c]' : Math.round((dash.tokens_used / Math.max(1, dash.token_quota)) * 100) >= 70 ? 'bg-[#b7791f]' : 'bg-ink'}`}
+                  className={`block h-full rounded-full ${Math.round((dash.tokens_used / Math.max(1, dash.token_quota)) * 100) >= 90 ? 'bg-[#a02c2c]' : 'bg-ledger'}`}
                   style={{ width: `${Math.min(100, Math.round((dash.tokens_used / Math.max(1, dash.token_quota)) * 100))}%` }}
                 />
               </span>

@@ -66,9 +66,7 @@ export function ConfirmDialog({
         aria-label={title}
       >
         <div className="flex items-start gap-3 px-6 pt-5">
-          <span className="w-9 h-9 rounded-full bg-[#feeaea] flex items-center justify-center shrink-0">
-            <Trash2 size={16} className="text-[#a02c2c]" />
-          </span>
+          <Trash2 size={17} className="text-[#a02c2c] shrink-0 mt-0.5" />
           <div className="min-w-0 flex-1">
             <h3 className="font-display text-[17px] leading-snug">{title}</h3>
             <p className="text-[13.5px] text-stone-500 mt-1 leading-relaxed">{body}</p>
@@ -84,14 +82,14 @@ export function ConfirmDialog({
         <div className="flex justify-end gap-2 px-6 py-4 mt-2 bg-ivory border-t border-stone-100">
           <button
             onClick={() => !busy && onCancel()}
-            className="rounded-full border border-stone-300 px-4 py-1.5 text-[13px] font-medium text-stone-600 hover:bg-stone-100 transition-colors"
+            className="rounded-lex border border-stone-300 px-4 py-1.5 text-[13px] font-medium text-stone-600 hover:bg-stone-100 transition-colors"
           >
             Cancel
           </button>
           <button
             onClick={onConfirm}
             disabled={busy}
-            className="rounded-full bg-[#a02c2c] px-4 py-1.5 text-[13px] font-semibold text-white hover:bg-[#8c2626] disabled:opacity-50 transition-colors"
+            className="rounded-lex bg-[#a02c2c] px-4 py-1.5 text-[13px] font-semibold text-white hover:bg-[#8c2626] disabled:opacity-50 transition-colors"
           >
             {busy ? 'Deleting…' : confirmLabel}
           </button>
@@ -110,27 +108,28 @@ export function CitationCard({ citation, active, go }: {
   const [modalOpen, setModalOpen] = useState(false)
   return (
     <div
-      className={`rounded-lex-lg border bg-white shadow-lex transition-colors cursor-pointer ${active ? 'border-ink' : 'border-stone-200 hover:border-stone-300'}`}
+      className={`rounded-lex-lg border bg-white transition-colors cursor-pointer ${active ? 'border-ink' : 'border-stone-200 hover:border-stone-300'}`}
       onClick={() => setModalOpen(true)}
       title="View the full document"
     >
       <div className="flex items-start gap-3 px-4 py-3">
-        <span className="mt-0.5 flex-shrink-0 rounded bg-stone-100 border border-stone-200 px-1.5 py-0.5 text-[11px] font-mono font-semibold text-stone-600">
+        <span className="mt-0.5 flex-shrink-0 text-meta2 tabular-nums text-stone-500">
           {Math.round(citation.score * 100)}%
         </span>
         <div className="min-w-0">
           <p className="text-meta2 font-medium text-ink truncate flex items-center gap-1.5">
             {citation.doc_title ?? citation.doc_id}
             {citation.doc_id.startsWith('private:') && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-ink text-ivory px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide shrink-0">
+              <span className="text-[11px] text-stone-500 shrink-0">
                 Private
               </span>
             )}
             {citation.stale && (
               <span
                 title={citation.stale}
-                className="inline-flex items-center gap-1 rounded-full bg-amber-50 border border-amber-600/30 text-amber-800 px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide shrink-0"
+                className="inline-flex items-center gap-1.5 text-[11px] text-stone-600 shrink-0"
               >
+                <span className="w-1.5 h-1.5 rounded-full bg-[#b7791f] shrink-0" />
                 Superseded
               </span>
             )}
@@ -153,25 +152,30 @@ export function CitationCard({ citation, active, go }: {
 }
 
 export function StatusBadge({ status }: { status: string }) {
-  const map: Record<string, string> = {
-    supported: 'bg-green-50 text-green-700 border-green-200',
-    refuted: 'bg-[#feeaea] text-[#a02c2c] border-[#f26161]/30',
-    inconclusive: 'bg-amber-50 text-amber-700 border-amber-200',
-    ready: 'bg-green-50 text-green-700 border-green-200',
+  // Piece 34: status is a small coloured dot + sentence-case word —
+  // the meaning survives, the tinted pill does not.
+  const dots: Record<string, string> = {
+    supported: '#16a34a',
+    refuted: '#a02c2c',
+    inconclusive: '#b7791f',
+    ready: '#16a34a',
   }
-  const cls = map[status.toLowerCase()] ?? 'bg-stone-100 text-stone-600 border-stone-200'
+  const dot = dots[status.toLowerCase()] ?? '#8f8b85'
   return (
-    <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${cls}`}>
+    <span className="inline-flex items-center gap-1.5 text-[12px] text-stone-700">
+      <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: dot }} />
       {status}
     </span>
   )
 }
 
 export function StatCard({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
+  // Piece 34: a ledger KPI — bare type, no tile. Pages place these in
+  // one hairline-divided strip (see MatterPage overview).
   return (
-    <div className="rounded-lex-lg border border-stone-200 bg-white shadow-lex px-5 py-4">
-      <p className="text-meta uppercase tracking-wider text-stone-500 font-medium">{label}</p>
-      <p className="font-display text-3xl mt-1.5 tracking-tight">{value}</p>
+    <div className="px-5 py-4">
+      <p className="text-[13px] text-stone-500">{label}</p>
+      <p className="text-[24px] font-medium mt-1 tabular-nums">{value}</p>
       {sub && <p className="text-meta text-stone-500 mt-1">{sub}</p>}
     </div>
   )
@@ -179,8 +183,8 @@ export function StatCard({ label, value, sub }: { label: string; value: string |
 
 export function EmptyState({ title, hint }: { title: string; hint?: string }) {
   return (
-    <div className="rounded-lex-lg border border-dashed border-stone-300 bg-white/50 px-6 py-10 text-center">
-      <p className="font-display text-lg text-ink-800">{title}</p>
+    <div className="px-6 py-10 text-center">
+      <p className="text-lg font-medium text-ink-800">{title}</p>
       {hint && <p className="text-meta2 text-stone-500 mt-1.5">{hint}</p>}
     </div>
   )
@@ -211,7 +215,7 @@ export function Pager({
   page: number; pages: number; from: number; to: number; total: number; onPage: (p: number) => void
 }) {
   if (pages <= 1) return null
-  const btn = 'inline-flex items-center gap-1 rounded-full border border-stone-200 bg-white px-3 py-1.5 text-[12.5px] text-stone-600 hover:text-ink hover:border-stone-300 disabled:opacity-40 disabled:hover:text-stone-600 transition-colors'
+  const btn = 'inline-flex items-center gap-1 rounded-lex border border-stone-200 bg-white px-3 py-1.5 text-[12.5px] text-stone-600 hover:text-ink hover:border-stone-300 disabled:opacity-40 disabled:hover:text-stone-600 transition-colors'
   return (
     <div className="flex items-center gap-3 mt-3">
       <span className="text-[12.5px] text-stone-400">Showing {from}–{to} of {total}</span>
@@ -252,7 +256,7 @@ export function DateChips({ value, onChange }: { value: DateRange; onChange: (r:
         <button
           key={o.id}
           onClick={() => onChange(o.id)}
-          className={`rounded-full px-3 py-1.5 text-[12.5px] font-medium transition-colors ${
+          className={`rounded-lex px-3 py-1.5 text-[12.5px] font-medium transition-colors ${
             value === o.id ? 'bg-ink text-ivory' : 'border border-stone-200 bg-white text-stone-500 hover:text-ink hover:border-stone-300'
           }`}
         >

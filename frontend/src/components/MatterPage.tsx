@@ -108,7 +108,8 @@ function Overview({ matterId, notes }: { matterId: string; notes: string }) {
   const d = memory.data
   return (
     <div>
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      {/* Piece 34: the KPIs sit in ONE hairline-divided strip, not tiles. */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 sm:divide-x divide-stone-200 rounded-lex-lg border border-stone-200 bg-white [&>*]:min-w-0">
         <StatCard label="Documents" value={d?.document_count ?? '—'} />
         <StatCard label="Chunks indexed" value={d?.chunk_count ?? '—'} />
         <StatCard label="Activities" value={d?.activity_count ?? '—'} />
@@ -119,14 +120,14 @@ function Overview({ matterId, notes }: { matterId: string; notes: string }) {
       </div>
 
       {notes && (
-        <div className="mt-5 rounded-lex-lg border border-stone-200 bg-white shadow-lex px-5 py-4">
-          <p className="text-[11px] uppercase tracking-wider text-stone-400 font-medium">Notes</p>
+        <div className="mt-5 rounded-lex-lg border border-stone-200 bg-white px-5 py-4">
+          <p className="text-[12.5px] text-stone-400 font-medium">Notes</p>
           <p className="text-[14px] mt-1.5 whitespace-pre-wrap">{notes}</p>
         </div>
       )}
 
       <div className="mt-6">
-        <p className="text-[11px] uppercase tracking-wider text-stone-400 font-medium">
+        <p className="text-[12.5px] text-stone-400 font-medium">
           Brief memory — who &amp; what this brief is about
         </p>
         {memory.isLoading ? (
@@ -136,7 +137,7 @@ function Overview({ matterId, notes }: { matterId: string; notes: string }) {
         ) : (
           <div className="mt-3 flex flex-wrap gap-2">
             {d.entities.map((e) => (
-              <span key={e.name} className="rounded-full border border-stone-200 bg-white px-3 py-1.5 text-[13px] shadow-lex" title={`${e.kind} · mentioned in ${e.mentions} chunks`}>
+              <span key={e.name} className="rounded-lex border border-stone-200 bg-white px-3 py-1.5 text-[13px]" title={`${e.kind} · mentioned in ${e.mentions} chunks`}>
                 {e.name}
                 <span className="text-stone-400 ml-1.5 text-[11px]">{e.kind} · {e.mentions}</span>
               </span>
@@ -146,7 +147,7 @@ function Overview({ matterId, notes }: { matterId: string; notes: string }) {
       </div>
 
       <div className="mt-8">
-        <p className="text-[11px] uppercase tracking-wider text-stone-400 font-medium">Recent history</p>
+        <p className="text-[12.5px] text-stone-400 font-medium">Recent history</p>
         <div className="mt-3">
           <TimelineList items={(timeline.data ?? []).slice(0, 6)} loading={timeline.isLoading} matterId={matterId} />
         </div>
@@ -188,7 +189,7 @@ function TimelineList({ items, loading, matterId }: { items: import('../api/type
       {items.map((t, i) => {
         const mine = !!t.id && !!myEmail && t.user_email === myEmail
         return (
-          <div key={t.id ?? i} className="rounded-lex-lg border border-stone-200 bg-white shadow-lex px-4 py-3 flex gap-3">
+          <div key={t.id ?? i} className="rounded-lex-lg border border-stone-200 bg-white px-4 py-3 flex gap-3">
             <div className="min-w-0 flex-1">
               <p className="text-[14px] font-medium truncate">{t.title}</p>
               {t.excerpt && <p className="text-[13px] text-stone-500 mt-0.5 line-clamp-2">{t.excerpt}</p>}
@@ -200,7 +201,7 @@ function TimelineList({ items, loading, matterId }: { items: import('../api/type
               </p>
             </div>
             <span className="flex flex-col items-end gap-1.5 shrink-0">
-              <span className="text-[11px] font-medium rounded-full px-2 py-0.5 bg-stone-500/10 text-stone-500 h-fit whitespace-nowrap">
+              <span className="text-[11px] font-medium text-stone-500 h-fit whitespace-nowrap">
                 {KIND_LABEL[t.kind] ?? t.kind}
               </span>
               {mine && t.id && (
@@ -356,7 +357,7 @@ function Documents({ matterId }: { matterId: string }) {
       ) : (
         <div className="space-y-2">
           {docs.map((d) => (
-            <div key={d.id} className="rounded-lex-lg border border-stone-200 bg-white shadow-lex px-4 py-3 flex items-center gap-3">
+            <div key={d.id} className="rounded-lex-lg border border-stone-200 bg-white px-4 py-3 flex items-center gap-3">
               <FileText size={16} className="text-stone-400 flex-shrink-0" />
               <div className="min-w-0 flex-1">
                 <p className="text-[14px] font-medium truncate">{d.title}</p>
@@ -377,8 +378,8 @@ function Documents({ matterId }: { matterId: string }) {
         </div>
       )}
 
-      <div className="rounded-lex-lg border border-stone-200 bg-white shadow-lex px-5 py-4 mt-5">
-        <p className="text-[11px] uppercase tracking-wider text-stone-400 font-medium">Add documents</p>
+      <div className="rounded-lex-lg border border-stone-200 bg-white px-5 py-4 mt-5">
+        <p className="text-[12.5px] text-stone-400 font-medium">Add documents</p>
         <div className="mt-3 flex flex-wrap items-center gap-3">
           <label className="rounded-lex bg-ink text-ivory px-3.5 py-2 text-[13px] font-medium cursor-pointer hover:bg-ink-900 transition-colors">
             Upload files
@@ -489,7 +490,7 @@ function Notes({ matterId, initial }: { matterId: string; initial: string }) {
         value={notes} onChange={(e) => setNotes(e.target.value)}
         rows={10}
         placeholder="What should anyone opening this brief know?"
-        className="mt-3 w-full rounded-lex-lg border border-stone-200 bg-white shadow-lex px-4 py-3 text-[14px] outline-none focus:border-stone-400"
+        className="mt-3 w-full rounded-lex-lg border border-stone-200 bg-white px-4 py-3 text-[14px] outline-none focus:border-stone-400"
       />
       <button
         onClick={() => save.mutate()} disabled={save.isPending}

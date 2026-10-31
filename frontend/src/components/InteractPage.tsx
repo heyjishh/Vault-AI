@@ -63,10 +63,10 @@ const SOURCES: { id: InteractSource; label: string; hint: string }[] = [
  *  the analysis budget is split across the selected documents. */
 export const MAX_INTERACT_DOCS = 20
 
-function treatmentChip(status: string) {
-  if (status === 'overruled') return 'bg-rose-100 text-rose-800'
-  if (status === 'good_law' || status === 'followed' || status === 'applied') return 'bg-emerald-100 text-emerald-800'
-  return 'bg-amber-100 text-amber-800'
+function treatmentDot(status: string) {
+  if (status === 'overruled') return '#a02c2c'
+  if (status === 'good_law' || status === 'followed' || status === 'applied') return '#16a34a'
+  return '#b7791f'
 }
 
 /** One Interact run in the Ask-style thread (Piece 16). */
@@ -375,8 +375,8 @@ export default function InteractPage({ matterId, go }: { matterId?: string; go?:
       </p>
 
       {/* ---- Piece 16: source selector ---- */}
-      <div className="rounded-lex-lg border border-stone-200 bg-white shadow-lex px-6 py-5 mt-6">
-        <span className="text-meta uppercase tracking-wider text-stone-500 font-medium">Sources</span>
+      <div className="rounded-lex-lg border border-stone-200 bg-white px-6 py-5 mt-6">
+        <span className="text-[13px] text-stone-500 font-medium">Sources</span>
         <div className="grid sm:grid-cols-3 gap-2.5 mt-3">
           {SOURCES.map((s) => (
             <button
@@ -389,7 +389,7 @@ export default function InteractPage({ matterId, go }: { matterId?: string; go?:
               <span className="flex items-center gap-1.5 text-[13.5px] font-medium">
                 {s.id === 'private' ? <Lock size={14} /> : s.id === 'both' ? <Briefcase size={14} /> : <FileSearch size={14} />}
                 {s.label}
-                {source === s.id && <span className="ml-auto text-[11px] font-semibold uppercase tracking-wide text-stone-400">Active</span>}
+                {source === s.id && <span className="ml-auto text-[11px] font-medium text-stone-400">Active</span>}
               </span>
               <span className="block text-[11.5px] text-stone-400 leading-snug mt-1">{s.hint}</span>
             </button>
@@ -420,9 +420,9 @@ export default function InteractPage({ matterId, go }: { matterId?: string; go?:
       </div>
 
       {source !== 'private' && (
-      <div className="rounded-lex-lg border border-stone-200 bg-white shadow-lex px-6 py-5 mt-5">
+      <div className="rounded-lex-lg border border-stone-200 bg-white px-6 py-5 mt-5">
         <div className="flex items-baseline justify-between gap-3 flex-wrap">
-          <span className="text-meta uppercase tracking-wider text-stone-500 font-medium">
+          <span className="text-[13px] text-stone-500 font-medium">
             Documents — {selectedIds.length} selected (max {MAX_INTERACT_DOCS})
             {effectiveMatterId && briefWide ? ' · all of this brief' : ''}
           </span>
@@ -591,7 +591,7 @@ export default function InteractPage({ matterId, go }: { matterId?: string; go?:
       )}
 
       {/* ---- Composer (Ask-style) ---- */}
-      <div className="mt-5 rounded-lex-lg border border-stone-300 bg-white shadow-lex-md">
+      <div className="mt-5 rounded-lex-lg border border-stone-300 bg-white">
         <textarea
           value={question}
           onChange={(e) => setQuestion(e.target.value)}
@@ -606,7 +606,7 @@ export default function InteractPage({ matterId, go }: { matterId?: string; go?:
         />
         <div className="flex items-center justify-between px-3 pb-3">
           <div className="flex items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-ink text-ivory px-2.5 py-1 text-[12px]">
+            <span className="inline-flex items-center gap-1.5 rounded-lex bg-ink text-ivory px-2.5 py-1 text-[12px]">
               {source === 'private' ? <Lock size={13} /> : source === 'both' ? <Briefcase size={13} /> : <FileSearch size={13} />}
               {SOURCES.find((s) => s.id === source)?.label}
             </span>
@@ -615,7 +615,7 @@ export default function InteractPage({ matterId, go }: { matterId?: string; go?:
           <button
             onClick={sendChat}
             disabled={chatBlocked}
-            className="w-8 h-8 rounded-full bg-ink text-ivory flex items-center justify-center hover:bg-ink-900 disabled:opacity-40 transition-colors"
+            className="w-8 h-8 rounded-lex bg-ink text-ivory flex items-center justify-center hover:bg-ink-900 disabled:opacity-40 transition-colors"
             title="Ask (Enter)"
           >
             <ArrowUp size={16} />
@@ -691,11 +691,12 @@ function TurnView({ turn, onRetry, onCite, retryDisabled }: {
           {turn.documents.length > 0 && (
             <div className="flex gap-1.5 flex-wrap mt-3">
               {turn.documents.map((d) => (
-                <span key={d.document_id} className="inline-flex items-center gap-1.5 rounded-full bg-stone-100 px-2.5 py-1 text-[12px] text-stone-600">
+                <span key={d.document_id} className="inline-flex items-center gap-1.5 rounded-lex bg-stone-100 px-2.5 py-1 text-[12px] text-stone-600">
                   {d.document_title}
                   {d.truncated && <span className="text-stone-400">(partial)</span>}
                   {d.treatment && d.treatment.status !== 'unknown' && (
-                    <span className={`rounded-full px-1.5 py-0.5 text-[11px] font-medium ${treatmentChip(d.treatment.status)}`} title={d.treatment.evidence_passage ?? undefined}>
+                    <span className="inline-flex items-center gap-1.5 text-[11px] text-stone-600" title={d.treatment.evidence_passage ?? undefined}>
+                      <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: treatmentDot(d.treatment.status) }} />
                       {d.treatment.status.replace('_', ' ')}
                     </span>
                   )}
@@ -722,12 +723,12 @@ function TurnView({ turn, onRetry, onCite, retryDisabled }: {
                     key={c.chunk_id + c.doc_id}
                     onClick={() => onCite(c)}
                     title="View source"
-                    className="text-left rounded-lex-lg border border-stone-200 bg-white shadow-lex px-4 py-3 hover:border-stone-400 transition-colors"
+                    className="text-left rounded-lex-lg border border-stone-200 bg-white px-4 py-3 hover:border-stone-400 transition-colors"
                   >
                     <span className="flex items-center gap-2">
                       <span className="rounded bg-ink text-ivory px-1.5 py-0.5 text-[11px] font-mono font-semibold">{c.doc_id}</span>
                       {isPrivate && (
-                        <span className="rounded-full bg-ink text-ivory px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide">Private</span>
+                        <span className="text-[11px] text-stone-500">Private</span>
                       )}
                       <span className="text-[13px] font-medium truncate">{c.doc_title ?? c.doc_id}</span>
                     </span>

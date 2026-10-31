@@ -209,7 +209,7 @@ export default function PrivateVaultPage() {
       {status.isLoading || !st ? (
         <Spinner label="Checking your vault…" />
       ) : !st.has_password ? (
-        <section className="rounded-lex-lg border border-stone-200 bg-white shadow-lex-sm p-6">
+        <section className="rounded-lex-lg border border-stone-200 bg-white p-6">
           <div className="flex items-center gap-2.5">
             <ShieldCheck size={18} className="text-stone-500" />
             <h2 className="font-display text-lg">Set your vault password</h2>
@@ -230,14 +230,14 @@ export default function PrivateVaultPage() {
             <button
               onClick={() => setPw.mutate()}
               disabled={password.length < 8 || setPw.isPending}
-              className="px-4 py-2 rounded-full bg-ink text-ivory text-sm font-medium hover:bg-ink-900 disabled:opacity-40 transition-colors"
+              className="px-4 py-2 rounded-lex bg-ink text-ivory text-sm font-medium hover:bg-ink-900 disabled:opacity-40 transition-colors"
             >
               {setPw.isPending ? 'Setting…' : 'Set password & open vault'}
             </button>
           </div>
         </section>
       ) : !st.unlocked ? (
-        <section className="rounded-lex-lg border border-stone-200 bg-white shadow-lex-sm p-6">
+        <section className="rounded-lex-lg border border-stone-200 bg-white p-6">
           <div className="flex items-center gap-2.5">
             <Lock size={18} className="text-stone-500" />
             <h2 className="font-display text-lg">Vault locked</h2>
@@ -258,7 +258,7 @@ export default function PrivateVaultPage() {
             <button
               onClick={() => unlock.mutate()}
               disabled={!password || unlock.isPending}
-              className="px-4 py-2 rounded-full bg-ink text-ivory text-sm font-medium hover:bg-ink-900 disabled:opacity-40 transition-colors"
+              className="px-4 py-2 rounded-lex bg-ink text-ivory text-sm font-medium hover:bg-ink-900 disabled:opacity-40 transition-colors"
             >
               {unlock.isPending ? 'Unlocking…' : 'Unlock'}
             </button>
@@ -275,13 +275,13 @@ export default function PrivateVaultPage() {
             <div className="flex gap-2 shrink-0">
               <button
                 onClick={() => setShowChange((v) => !v)}
-                className="inline-flex items-center gap-1.5 rounded-full border border-stone-200 px-3 py-1.5 text-[12.5px] text-stone-600 hover:text-ink hover:border-stone-300 transition-colors"
+                className="inline-flex items-center gap-1.5 rounded-lex border border-stone-200 px-3 py-1.5 text-[12.5px] text-stone-600 hover:text-ink hover:border-stone-300 transition-colors"
               >
                 <KeyRound size={13} /> Change password
               </button>
               <button
                 onClick={() => lock.mutate()}
-                className="inline-flex items-center gap-1.5 rounded-full border border-stone-200 px-3 py-1.5 text-[12.5px] text-stone-600 hover:text-ink hover:border-stone-300 transition-colors"
+                className="inline-flex items-center gap-1.5 rounded-lex border border-stone-200 px-3 py-1.5 text-[12.5px] text-stone-600 hover:text-ink hover:border-stone-300 transition-colors"
               >
                 <Lock size={13} /> Lock now
               </button>
@@ -289,20 +289,20 @@ export default function PrivateVaultPage() {
           </div>
 
           {showChange && (
-            <section className="rounded-lex-lg border border-stone-200 bg-white shadow-lex-sm p-5 mb-6">
+            <section className="rounded-lex-lg border border-stone-200 bg-white p-5 mb-6">
               <h3 className="font-display text-[15px]">Change vault password</h3>
               <p className="text-[13px] text-stone-500 mt-1">Every sealed document is re-encrypted under the new key.</p>
               <div className="flex flex-col sm:flex-row gap-2 mt-3">
                 <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Current password" className="flex-1 rounded-lex border border-stone-200 bg-ivory px-3 py-2 text-sm outline-none focus:border-stone-400" />
                 <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="New password (8+ characters)" className="flex-1 rounded-lex border border-stone-200 bg-ivory px-3 py-2 text-sm outline-none focus:border-stone-400" />
-                <button onClick={() => change.mutate()} disabled={!password || newPassword.length < 8 || change.isPending} className="px-4 py-2 rounded-full bg-ink text-ivory text-sm font-medium hover:bg-ink-900 disabled:opacity-40 transition-colors">
+                <button onClick={() => change.mutate()} disabled={!password || newPassword.length < 8 || change.isPending} className="px-4 py-2 rounded-lex bg-ink text-ivory text-sm font-medium hover:bg-ink-900 disabled:opacity-40 transition-colors">
                   {change.isPending ? 'Re-encrypting…' : 'Change'}
                 </button>
               </div>
             </section>
           )}
 
-          <section className="rounded-lex-lg border border-stone-200 bg-white shadow-lex-sm p-5 mb-6">
+          <section className="rounded-lex-lg border border-stone-200 bg-white p-5 mb-6">
             <h3 className="font-display text-[15px]">Seal a document</h3>
             <div className="flex items-center gap-3 mt-3 flex-wrap">
               <input
@@ -311,7 +311,7 @@ export default function PrivateVaultPage() {
                 placeholder="Title (only you ever see this)"
                 className="flex-1 min-w-[220px] rounded-lex border border-stone-200 bg-ivory px-3 py-2 text-sm outline-none focus:border-stone-400"
               />
-              <label className="rounded-full border border-stone-200 px-3.5 py-1.5 text-[13px] text-stone-600 hover:text-ink hover:border-stone-300 transition-colors cursor-pointer">
+              <label className="rounded-lex border border-stone-200 px-3.5 py-1.5 text-[13px] text-stone-600 hover:text-ink hover:border-stone-300 transition-colors cursor-pointer">
                 Choose files…
                 <input
                   ref={fileRef} type="file" multiple accept={UPLOAD_ACCEPT} className="hidden"
@@ -322,7 +322,7 @@ export default function PrivateVaultPage() {
                   }}
                 />
               </label>
-              <label className="rounded-full border border-stone-200 px-3.5 py-1.5 text-[13px] text-stone-600 hover:text-ink hover:border-stone-300 transition-colors cursor-pointer inline-flex items-center gap-1.5">
+              <label className="rounded-lex border border-stone-200 px-3.5 py-1.5 text-[13px] text-stone-600 hover:text-ink hover:border-stone-300 transition-colors cursor-pointer inline-flex items-center gap-1.5">
                 <FolderUp size={13} /> Choose folder…
                 <input
                   ref={folderRef} type="file" accept={UPLOAD_ACCEPT} className="hidden"
@@ -352,7 +352,7 @@ export default function PrivateVaultPage() {
               <button
                 onClick={enqueueSealText}
                 disabled={!text.trim()}
-                className="px-4 py-2 rounded-full bg-ink text-ivory text-sm font-medium hover:bg-ink-900 disabled:opacity-40 transition-colors"
+                className="px-4 py-2 rounded-lex bg-ink text-ivory text-sm font-medium hover:bg-ink-900 disabled:opacity-40 transition-colors"
               >
                 Seal pasted text
               </button>
@@ -378,7 +378,7 @@ export default function PrivateVaultPage() {
           ) : (
             <div className="space-y-2.5">
               {(docs.data ?? []).map((d: PrivateDocMeta) => (
-                <div key={d.id} className="rounded-lex-lg border border-stone-200 bg-white px-4 py-3 shadow-lex-sm flex items-center gap-3">
+                <div key={d.id} className="rounded-lex-lg border border-stone-200 bg-white px-4 py-3 flex items-center gap-3">
                   <Lock size={15} className="text-stone-400 shrink-0" />
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-[14px] truncate">{d.title}</p>

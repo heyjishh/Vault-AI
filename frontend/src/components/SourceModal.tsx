@@ -141,7 +141,7 @@ export function SourceModal({ citation: c, onClose, go }: {
           </div>
           <button
             onClick={onClose}
-            className="rounded-full p-1.5 text-stone-500 transition-colors hover:bg-stone-100 hover:text-ink"
+            className="rounded-lex p-1.5 text-stone-500 transition-colors hover:bg-stone-100 hover:text-ink"
             title="Close"
           >
             <X size={17} />

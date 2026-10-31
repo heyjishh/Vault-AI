@@ -39,6 +39,30 @@ live**, what is **built but unverified**, and what is **roadmap**.
   allocates a unique file per test.
 
 ### Changed
+- **Minimalist redesign — achromatic ledger (31 Oct 2026, Piece 34).**
+  The user app was restyled with the design-taste-frontend skill
+  (tasteskill v2, app-screen run; direction *achromatic-ledger*, seed
+  1210974860) over the existing Harvey-derived palette and type, which
+  are unchanged. The chrome now holds no colour at all: the primary
+  action is a near-black ink fill, secondaries are grey, and the one
+  hue — ledger blue `#1d5fbf` — appears only on the token-usage bars
+  (sidebar plan block, Dashboard usage ring, Plans usage bar), turning
+  red at ≥90% used as the quota signal. Everything that used to be a
+  tinted pill or badge (citation status, Superseded, citator
+  treatments, brief status, payment status, plan markers) is now a
+  small coloured dot beside a sentence-case word. Surfaces are flat —
+  no shadows on anything at rest, hairlines and tone steps only;
+  corner radii are the tight pair 6px/8px; labels are sentence case;
+  KPI figures are tabular sans in one hairline-divided strip instead
+  of tiled cards; the sidebar keeps its labelled 256px form (the
+  dealt icon-rail/no-sidebar shells don't fit a 12-destination
+  product) with the wordmark as the serif name alone and the active
+  item a plain grey fill. The ground stays legal-paper ivory and the
+  product's signature — verdict-first answers with citation chips —
+  stays, quieter. Presentation only: no behaviour, API, routing,
+  copy or data changed; the consent dialogs, Insight buttons,
+  downloads, Clause pet, pagination and streaming UI all work as
+  before. Frontend-only; bundle rebuilt.
 - **Full-width pages everywhere (31 Oct 2026, Piece 32).** Every page
   sat in a centred, max-width column (3xl–5xl), leaving large empty
   margins on both sides on a wide screen — the Dashboard screenshot

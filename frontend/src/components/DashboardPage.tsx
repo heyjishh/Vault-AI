@@ -101,7 +101,7 @@ function ActivityRow({ e, go }: { e: ActivityEvent; go: (v: View) => void }) {
         </span>
         <span className="min-w-0 flex-1">
           <span className="flex items-baseline gap-2">
-            <span className="text-[12px] font-medium uppercase tracking-wide text-stone-400">{meta.label}</span>
+            <span className="text-[12px] font-medium text-stone-400">{meta.label}</span>
             {e.detail && <span className="text-[12px] text-stone-400">· {e.detail}</span>}
             <span className="ml-auto text-[12px] text-stone-400 shrink-0">{when(e.created_at)}</span>
           </span>
@@ -117,7 +117,7 @@ function ActivityRow({ e, go }: { e: ActivityEvent; go: (v: View) => void }) {
       <button
         onClick={() => setConfirming(true)}
         title="Delete this history entry"
-        className="mr-4 mt-3.5 shrink-0 p-1.5 rounded-lex text-stone-400 hover:text-[#a02c2c] hover:bg-[#feeaea] transition-colors"
+        className="mr-4 mt-3.5 shrink-0 p-1.5 rounded-lex text-stone-400 hover:text-[#a02c2c] hover:bg-stone-100 transition-colors"
       >
         <Trash2 size={14} />
       </button>
@@ -137,7 +137,9 @@ function ActivityRow({ e, go }: { e: ActivityEvent; go: (v: View) => void }) {
 function UsageRing({ pct }: { pct: number }) {
   const r = 34
   const c = 2 * Math.PI * r
-  const color = pct >= 90 ? '#a02c2c' : pct >= 70 ? '#b7791f' : '#0f0e0d'
+  // Piece 34: the ring is a token-usage bar, so it takes the one
+  // ledger hue; red is the ≥90% data signal.
+  const color = pct >= 90 ? '#a02c2c' : '#1d5fbf'
   return (
     <div className="relative w-[92px] h-[92px] shrink-0">
       <svg viewBox="0 0 84 84" className="w-full h-full -rotate-90">
@@ -148,8 +150,8 @@ function UsageRing({ pct }: { pct: number }) {
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="font-display text-[22px] leading-none">{pct}%</span>
-        <span className="text-[10px] uppercase tracking-wider text-stone-400 mt-0.5">used</span>
+        <span className="text-[22px] font-medium tabular-nums leading-none">{pct}%</span>
+        <span className="text-[11px] text-stone-400 mt-0.5">used</span>
       </div>
     </div>
   )
@@ -182,19 +184,22 @@ export default function DashboardPage({ go, openMatter }: { go: (v: View) => voi
   return (
     <div className="w-full px-6 py-8">
       {/* ——— Clause hero ——— */}
-      <div className="rounded-lex-lg border border-stone-200 bg-gradient-to-br from-white via-white to-[#f4f1ea] shadow-lex px-6 py-6 sm:px-8">
+      <div className="rounded-lex-lg border border-stone-200 bg-white px-6 py-6 sm:px-8">
         <div className="flex items-start gap-5">
           <AssistantAvatar size={76} />
           <div className="min-w-0 flex-1">
-            <h1 className="font-display text-[1.8rem] leading-tight tracking-tight capitalize">
+            <h1 className="text-[24px] font-semibold leading-tight tracking-tight">
               {greeting()}, {firstName}
             </h1>
+            <p className="text-stone-500 mt-1 text-[14px]">
+              {remaining.toLocaleString('en-IN')} tokens left this period · {d.documents.length} documents in your vault · {(matters.data ?? []).length} briefs
+            </p>
             <p className="text-stone-500 mt-1 text-[14.5px] max-w-xl">
               I'm <span className="font-semibold text-ink">Clause</span>, your legal research companion.
               Ask me anything across your briefs and vault — every answer cited to its source.
             </p>
             <form
-              className="mt-4 flex items-center gap-2 rounded-full border border-stone-200 bg-white shadow-lex-sm pl-4 pr-1.5 py-1.5 focus-within:border-stone-400 transition-colors"
+              className="mt-4 flex items-center gap-2 rounded-lex border border-stone-200 bg-white pl-4 pr-1.5 py-1.5 focus-within:border-stone-400 transition-colors"
               onSubmit={(e) => { e.preventDefault(); askNow(heroQ) }}
             >
               <Sparkles size={15} className="text-stone-400 shrink-0" />
@@ -207,7 +212,7 @@ export default function DashboardPage({ go, openMatter }: { go: (v: View) => voi
               <button
                 type="submit"
                 disabled={!heroQ.trim()}
-                className="w-8 h-8 rounded-full bg-ink text-ivory flex items-center justify-center hover:bg-ink-900 disabled:opacity-40 transition-colors shrink-0"
+                className="w-8 h-8 rounded-lex bg-ink text-ivory flex items-center justify-center hover:bg-ink-900 disabled:opacity-40 transition-colors shrink-0"
                 title="Ask Clause"
               >
                 <ArrowUp size={15} />
@@ -218,7 +223,7 @@ export default function DashboardPage({ go, openMatter }: { go: (v: View) => voi
                 <button
                   key={s}
                   onClick={() => askNow(s)}
-                  className="rounded-full border border-stone-200 bg-white/70 px-3 py-1.5 text-[12px] text-stone-500 hover:text-ink hover:border-stone-300 transition-colors"
+                  className="rounded-lex border border-stone-200 bg-white/70 px-3 py-1.5 text-[12px] text-stone-500 hover:text-ink hover:border-stone-300 transition-colors"
                 >
                   {s}
                 </button>
@@ -230,29 +235,29 @@ export default function DashboardPage({ go, openMatter }: { go: (v: View) => voi
 
       {/* ——— Subscription & activity ——— */}
       <div className="grid lg:grid-cols-5 gap-4 mt-5">
-        <div className="lg:col-span-3 rounded-lex-lg border border-stone-200 bg-white shadow-lex px-6 py-5 flex items-center gap-6">
+        <div className="lg:col-span-3 rounded-lex-lg border border-stone-200 bg-white px-6 py-5 flex items-center gap-6">
           <UsageRing pct={pct} />
           <div className="min-w-0">
             <p className="flex items-center gap-2">
-              <span className="text-meta uppercase tracking-wider text-stone-500 font-medium">Subscription</span>
-              <span className="text-[10.5px] font-semibold uppercase tracking-wide bg-ink text-ivory rounded px-1.5 py-0.5">{d.plan_name}</span>
+              <span className="text-[13px] text-stone-500 font-medium">Subscription</span>
+              <span className="text-[12px] text-stone-500">{d.plan_name}</span>
             </p>
-            <p className="font-display text-[26px] leading-tight mt-1.5">
-              {remaining.toLocaleString('en-IN')} <span className="text-[16px] text-stone-500">tokens left</span>
+            <p className="text-[26px] font-medium tabular-nums leading-tight mt-1.5">
+              {remaining.toLocaleString('en-IN')} <span className="text-[16px] font-normal text-stone-500">tokens left</span>
             </p>
             <p className="text-[13px] text-stone-500 mt-0.5">
               {d.tokens_used.toLocaleString('en-IN')} of {d.token_quota.toLocaleString('en-IN')} used · renews {fmtDate(d.period_end)}
             </p>
             <button
               onClick={() => go('plans')}
-              className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-ink text-ivory px-4 py-2 text-[13px] font-medium hover:bg-ink-900 transition-colors"
+              className="mt-3 inline-flex items-center gap-1.5 rounded-lex bg-ink text-ivory px-4 py-2 text-[13px] font-medium hover:bg-ink-900 transition-colors"
             >
               {isFree ? 'Upgrade your plan' : 'Manage subscription'} <ArrowRight size={13} />
             </button>
           </div>
         </div>
-        <div className="lg:col-span-2 rounded-lex-lg border border-stone-200 bg-white shadow-lex px-6 py-5">
-          <p className="text-meta uppercase tracking-wider text-stone-500 font-medium">This period with Clause</p>
+        <div className="lg:col-span-2 rounded-lex-lg border border-stone-200 bg-white px-6 py-5">
+          <p className="text-[13px] text-stone-500 font-medium">This period with Clause</p>
           <div className="grid grid-cols-2 gap-x-4 gap-y-4 mt-4">
             {[
               { n: d.counts.queries, label: 'questions answered' },
@@ -261,7 +266,7 @@ export default function DashboardPage({ go, openMatter }: { go: (v: View) => voi
               { n: d.counts.workflows, label: 'agent runs' },
             ].map((s) => (
               <div key={s.label}>
-                <p className="font-display text-[24px] leading-none">{s.n}</p>
+                <p className="text-[24px] font-medium tabular-nums leading-none">{s.n}</p>
                 <p className="text-[12px] text-stone-500 mt-1">{s.label}</p>
               </div>
             ))}
@@ -276,7 +281,7 @@ export default function DashboardPage({ go, openMatter }: { go: (v: View) => voi
           <button
             key={c.view}
             onClick={() => go(c.view)}
-            className="rounded-lex-lg border border-stone-200 bg-white shadow-lex px-5 py-4 text-left hover:border-ink transition-colors group"
+            className="rounded-lex-lg border border-stone-200 bg-white px-5 py-4 text-left hover:border-ink transition-colors group"
           >
             <span className="flex items-center justify-between">
               <c.icon size={18} className="text-stone-500 group-hover:text-ink transition-colors" />
@@ -301,7 +306,7 @@ export default function DashboardPage({ go, openMatter }: { go: (v: View) => voi
             <EmptyState title="Nothing in this period" hint="Try a wider date range — your older work is still here." />
           ) : (
             <>
-              <div className="rounded-lex-lg border border-stone-200 bg-white shadow-lex overflow-hidden">
+              <div className="rounded-lex-lg border border-stone-200 bg-white overflow-hidden">
                 {act.pageItems.map((e) => <ActivityRow key={e.id} e={e} go={go} />)}
               </div>
               <Pager page={act.page} pages={act.pages} from={act.from} to={act.to} total={act.total} onPage={act.setPage} />
@@ -318,7 +323,7 @@ export default function DashboardPage({ go, openMatter }: { go: (v: View) => voi
           {(matters.data ?? []).length === 0 ? (
             <EmptyState title="No briefs yet" hint="Briefs keep each matter's documents, memory, and history together." />
           ) : (
-            <div className="rounded-lex-lg border border-stone-200 bg-white shadow-lex overflow-hidden">
+            <div className="rounded-lex-lg border border-stone-200 bg-white overflow-hidden">
               {(matters.data ?? []).slice(0, 3).map((m) => (
                 <button
                   key={m.id}
@@ -336,7 +341,7 @@ export default function DashboardPage({ go, openMatter }: { go: (v: View) => voi
           )}
           {d.documents.length > 0 && (
             <>
-              <p className="text-meta uppercase tracking-wider text-stone-400 font-medium mt-6 mb-2">Latest in your vault</p>
+              <p className="text-[13px] text-stone-400 font-medium mt-6 mb-2">Latest in your vault</p>
               <div className="space-y-1">
                 {d.documents.slice(0, 4).map((doc) => (
                   <button

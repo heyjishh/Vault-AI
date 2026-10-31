@@ -48,7 +48,7 @@ export default function ResearchPage({ go }: { go?: (view: string) => void } = {
         Deep research runs an epistemic loop: frame hypotheses, gather cited evidence for each, then adjudicate.
       </p>
 
-      <div className="mt-6 rounded-lex-lg border border-stone-300 bg-white shadow-lex-md p-4">
+      <div className="mt-6 rounded-lex-lg border border-stone-300 bg-white p-4">
         <textarea
           value={q} onChange={(e) => setQ(e.target.value)} rows={3}
           placeholder="State the legal question to investigate…"
@@ -59,7 +59,7 @@ export default function ResearchPage({ go }: { go?: (view: string) => void } = {
           <div className="flex items-center gap-2">
             <button
               onClick={() => setWeb(!web)}
-              className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-meta transition-colors ${
+              className={`flex items-center gap-1.5 rounded-lex border px-2.5 py-1 text-meta transition-colors ${
                 web ? 'bg-ink text-ivory border-ink' : 'border-stone-200 text-stone-500 hover:text-ink'
               }`}
             >
@@ -109,8 +109,8 @@ export default function ResearchPage({ go }: { go?: (view: string) => void } = {
               citations={exportCitations(report.citations)}
             />
           </div>
-          <div className="mt-4 rounded-lex-lg border border-stone-200 bg-white shadow-lex p-5">
-            <p className="text-meta uppercase tracking-wider text-stone-400 font-medium">Conclusion</p>
+          <div className="mt-4 rounded-lex-lg border border-stone-200 bg-white p-5">
+            <p className="text-[13px] text-stone-400 font-medium">Conclusion</p>
             <p className="text-[15px] leading-relaxed mt-2 whitespace-pre-wrap">
               <CitedText text={report.conclusion} citations={report.citations} onOpen={setModalCitation} />
             </p>
@@ -119,7 +119,7 @@ export default function ResearchPage({ go }: { go?: (view: string) => void } = {
           <h3 className="font-display text-xl tracking-tight mt-8 mb-3">Hypotheses</h3>
           <div className="space-y-3">
             {report.hypotheses.map((h, i) => (
-              <div key={i} className="rounded-lex-lg border border-stone-200 bg-white shadow-lex p-5">
+              <div key={i} className="rounded-lex-lg border border-stone-200 bg-white p-5">
                 <div className="flex items-start justify-between gap-3">
                   <p className="font-medium text-[15px]">{h.question}</p>
                   <StatusBadge status={h.status} />
@@ -161,7 +161,7 @@ export default function ResearchPage({ go }: { go?: (view: string) => void } = {
               </h3>
               <div className="space-y-2">
                 {report.conflicts.map((c, i) => (
-                  <div key={i} className="rounded-lex border border-amber-200 bg-amber-50 px-4 py-3">
+                  <div key={i} className="rounded-lex border border-stone-200 bg-white px-4 py-3">
                     <p className="font-medium text-[14px]">{c.topic}</p>
                     <p className="text-meta2 text-stone-700 mt-1">A: {c.position_a}</p>
                     <p className="text-meta2 text-stone-700">B: {c.position_b}</p>
@@ -184,7 +184,7 @@ export default function ResearchPage({ go }: { go?: (view: string) => void } = {
 
           {report.citations.length > 0 && (
             <div className="mt-8">
-              <p className="text-meta uppercase tracking-wider text-stone-400 font-medium mb-2.5">Sources · {report.citations.length}</p>
+              <p className="text-[13px] text-stone-400 font-medium mb-2.5">Sources · {report.citations.length}</p>
               <div className="grid gap-2">
                 {report.citations.map((c) => <CitationCard key={c.chunk_id} citation={c} go={go} />)}
               </div>

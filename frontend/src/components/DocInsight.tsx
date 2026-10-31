@@ -107,7 +107,7 @@ export function DocInsightModal({ documentId, title, onClose }: {
           </div>
           <button
             onClick={onClose}
-            className="rounded-full p-1.5 text-stone-500 transition-colors hover:bg-stone-100 hover:text-ink"
+            className="rounded-lex p-1.5 text-stone-500 transition-colors hover:bg-stone-100 hover:text-ink"
             title="Close"
           >
             <X size={17} />
@@ -119,7 +119,7 @@ export function DocInsightModal({ documentId, title, onClose }: {
             <button
               key={v.action}
               onClick={() => setAction(v.action)}
-              className={`rounded-full px-3 py-1.5 text-[12.5px] font-medium transition-colors ${
+              className={`rounded-lex px-3 py-1.5 text-[12.5px] font-medium transition-colors ${
                 action === v.action
                   ? 'bg-ink text-ivory'
                   : 'border border-stone-200 bg-white text-stone-600 hover:text-ink hover:border-stone-300'

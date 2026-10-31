@@ -72,13 +72,13 @@ export default function DraftPage({ matterId: fixedMatterId, go }: { matterId?: 
         Generate a structured first draft. Facts you don't supply become [BRACKETED PLACEHOLDERS] — the drafter never invents citations.
       </p>
 
-      <div className="rounded-lex-lg border border-stone-200 bg-white shadow-lex px-6 py-5 mt-6">
+      <div className="rounded-lex-lg border border-stone-200 bg-white px-6 py-5 mt-6">
         <div className="flex flex-wrap gap-2">
           {KINDS.map((k) => (
             <button
               key={k.id}
               onClick={() => setKind(k.id)}
-              className={`rounded-full px-3.5 py-1.5 text-[13px] border transition-colors ${kind === k.id ? 'bg-ink text-ivory border-ink' : 'border-stone-300 text-stone-600 hover:border-ink'}`}
+              className={`rounded-lex px-3.5 py-1.5 text-[13px] border transition-colors ${kind === k.id ? 'bg-ink text-ivory border-ink' : 'border-stone-300 text-stone-600 hover:border-ink'}`}
               title={k.hint}
             >
               {k.label}
@@ -113,7 +113,7 @@ export default function DraftPage({ matterId: fixedMatterId, go }: { matterId?: 
       {run.isPending && <Spinner label="Drafting…" />}
       {!run.isPending && result && (
         <div className="mt-5">
-          <div className="rounded-lex-lg border border-stone-200 bg-white shadow-lex px-6 py-5">
+          <div className="rounded-lex-lg border border-stone-200 bg-white px-6 py-5">
             <div className="flex items-center justify-between gap-3 flex-wrap">
               <h2 className="font-display text-xl">{KINDS.find((k) => k.id === result.kind)?.label} — draft</h2>
               <div className="flex gap-2">
@@ -142,7 +142,7 @@ export default function DraftPage({ matterId: fixedMatterId, go }: { matterId?: 
           </div>
           {result.citations.length > 0 && (
             <div className="mt-4">
-              <p className="text-meta uppercase tracking-wider text-stone-500 font-medium mb-2">Sources used</p>
+              <p className="text-[13px] text-stone-500 font-medium mb-2">Sources used</p>
               <div className="grid md:grid-cols-2 gap-2.5">
                 {result.citations.map((c, i) => <CitationCard key={c.chunk_id + i} citation={c} go={go} />)}
               </div>
