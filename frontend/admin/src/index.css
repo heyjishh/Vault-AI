@@ -2,11 +2,36 @@
 @tailwind components;
 @tailwind utilities;
 
-/* REA'd from harvey.ai — warm ivory paper, ink text, hairline borders */
+/* REA'd from harvey.ai — warm ivory paper, ink text, hairline borders.
+   Piece 39: the token layer is ported 1:1 from the user app
+   (frontend/src/index.css) — the dual-tone page wash in both themes,
+   the reference glow, theme-flipping accents, and bronze. The light
+   wash/glow carry Piece 38's user-directed lightening; the dark
+   values are unchanged from the taste-skill reference. */
 :root {
   --paper: #fafaf9;
   --ink: #0f0e0d;
   --hairline: #e5e5e3;
+  --accent-a: #b4552d;
+  --accent-b: #5c7350;
+  --bronze: #593d3a;
+  --grad-page: linear-gradient(155deg,#fcf9f1 0%,#f9f7f0 34%,#f4f6ec 68%,#ecf1e0 100%);
+  --grad-glow: radial-gradient(58% 46% at 12% 0%,rgba(240,190,120,.36),transparent 70%),radial-gradient(52% 50% at 92% 8%,rgba(146,168,120,.32),transparent 70%);
+}
+
+html.dark {
+  --accent-a: #e08a5f;
+  --accent-b: #9db488;
+  --bronze: #c8b184;
+  --grad-page: linear-gradient(155deg,#221a12 0%,#191a13 38%,#12150d 70%,#0d120a 100%);
+  --grad-glow: radial-gradient(58% 46% at 12% 0%,rgba(214,130,70,.28),transparent 70%),radial-gradient(52% 50% at 92% 8%,rgba(120,150,95,.26),transparent 70%);
+}
+
+/* The page wash: the dual-tone gradient as the app ground, fixed to
+   the viewport exactly as on the reference page's body. */
+.app-wash {
+  background: var(--grad-page);
+  background-attachment: fixed;
 }
 
 html, body, #root {
@@ -14,19 +39,61 @@ html, body, #root {
 }
 
 body {
-  background: var(--paper);
+  background: #ecf1e0;
+  background: var(--grad-page);
+  background-attachment: fixed;
   color: var(--ink);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
 
-::selection { background: #f6f202; }
+::selection { background: #e5e5e3; }
 
 /* thin scrollbars */
 * { scrollbar-width: thin; scrollbar-color: #cccac6 transparent; }
 *::-webkit-scrollbar { width: 8px; height: 8px; }
 *::-webkit-scrollbar-thumb { background: #cccac6; border-radius: 4px; }
+
+/* ——— Dual-tone brand layer (terracotta → sage), ported ——— */
+.dual-tone-bar { background: linear-gradient(120deg, var(--accent-a), var(--accent-b)); }
+.dual-tone-text {
+  background: linear-gradient(120deg, var(--accent-a), var(--accent-b));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* ——— Bronze utilities (theme-variable driven), ported ——— */
+.text-bronze { color: var(--bronze); }
+.bg-bronze { background-color: var(--bronze); }
+.border-bronze { border-color: var(--bronze); }
+
+/* Moving glow layer: the reference page's hero-glow fields
+   (var(--grad-glow)) as one layer over the wash, drifting slowly on
+   the same 26s loop. Oversized (inset -6%) so the drift never shows
+   an edge; purely decorative, pointer-events-none. */
+.dual-tone-backdrop {
+  position: absolute; inset: -6%; z-index: 0;
+  background: var(--grad-glow);
+  pointer-events: none;
+  will-change: transform;
+  animation: dualDrift 26s ease-in-out infinite alternate;
+}
+.dual-tone-backdrop-fixed { position: fixed; }
+@keyframes dualDrift {
+  from { transform: translate(0, 0) scale(1); }
+  to { transform: translate(3%, 4%) scale(1.08); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dual-tone-backdrop { animation: none; }
+}
+
+/* ——— Dark mode overrides for the plain-CSS surfaces, ported ——— */
+.dark body { background-color: #0d120a; color: #f4f2ee; }
+.dark ::selection { background: #38342e; }
+.dark * { scrollbar-color: #4a463f transparent; }
+.dark *::-webkit-scrollbar-thumb { background: #4a463f; }
 
 /* rendered assistant markdown */
 .prose-lex { font-size: 15px; line-height: 1.75; color: #1f1d1a; }

@@ -1,16 +1,85 @@
+import { useState } from 'react'
+import { Moon, Scale, Sun } from 'lucide-react'
+
+/**
+ * Piece 39: the brand mark, ported from the user app — the scales
+ * of justice centred in a bronze medallion ring (transparent fill).
+ * Bronze flips with the theme via --bronze in index.css.
+ */
+export function BrandMark({ size = 36 }: { size?: number }) {
+  return (
+    <span
+      aria-hidden="true"
+      className="inline-flex items-center justify-center rounded-full border-[1.5px] border-bronze text-bronze shrink-0"
+      style={{ width: size, height: size }}
+    >
+      <Scale size={Math.round(size * 0.52)} strokeWidth={1.8} />
+    </span>
+  )
+}
+
+/**
+ * Piece 39: dark-mode toggle, ported from the user app. The initial
+ * class is set pre-paint by the inline script in index.html (stored
+ * `jurisvault.theme` — shared with the user app on this origin —
+ * else the system preference); this button flips it and persists
+ * the choice.
+ */
+export function ThemeToggle({ className = '' }: { className?: string }) {
+  const [dark, setDark] = useState(
+    () => typeof document !== 'undefined' && document.documentElement.classList.contains('dark'),
+  )
+  function toggle() {
+    const next = !dark
+    setDark(next)
+    document.documentElement.classList.toggle('dark', next)
+    try {
+      localStorage.setItem('jurisvault.theme', next ? 'dark' : 'light')
+    } catch { /* storage unavailable — theme lasts for the session */ }
+  }
+  return (
+    <button
+      onClick={toggle}
+      title={dark ? 'Switch to light mode' : 'Switch to dark mode'}
+      aria-label="Toggle dark mode"
+      className={`p-2 rounded-lex text-stone-500 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-white/10 hover:text-ink transition-colors ${className}`}
+    >
+      {dark ? <Sun size={16} /> : <Moon size={16} />}
+    </button>
+  )
+}
+
+/**
+ * Piece 39: the moving glow layer, ported from the user app — the
+ * taste-skill page's hero-glow recipe (index.css: background
+ * var(--grad-glow)) drifting slowly over the page wash on the 26s
+ * dualDrift loop, stilled by reduced motion. Purely decorative.
+ * Default is absolutely positioned (parent must be relative +
+ * overflow-hidden); `fixed` pins it to the viewport, as in the
+ * shell where one instance glows behind the whole app.
+ */
+export function DualToneBackdrop({ fixed = false }: { fixed?: boolean }) {
+  return (
+    <div
+      aria-hidden="true"
+      className={`dual-tone-backdrop${fixed ? ' dual-tone-backdrop-fixed' : ''}`}
+    />
+  )
+}
+
 export function StatCard({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
   return (
-    <div className="rounded-lex-lg border border-stone-200 bg-white shadow-lex px-5 py-4">
-      <p className="text-meta uppercase tracking-wider text-stone-500 font-medium">{label}</p>
+    <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] px-5 py-4">
+      <p className="text-meta text-stone-500 dark:text-stone-400 font-medium">{label}</p>
       <p className="font-display text-3xl mt-1.5 tracking-tight">{value}</p>
-      {sub && <p className="text-meta text-stone-500 mt-1">{sub}</p>}
+      {sub && <p className="text-meta text-stone-500 dark:text-stone-400 mt-1">{sub}</p>}
     </div>
   )
 }
 
 export function Spinner({ label }: { label?: string }) {
   return (
-    <div className="flex items-center gap-3 text-stone-500 py-8 justify-center">
+    <div className="flex items-center gap-3 text-stone-500 dark:text-stone-400 py-8 justify-center">
       <span className="flex gap-1">
         <span className="dot-pulse w-1.5 h-1.5 rounded-full bg-stone-500 inline-block" />
         <span className="dot-pulse w-1.5 h-1.5 rounded-full bg-stone-500 inline-block" />
@@ -31,7 +100,7 @@ export function PageHead({ title, sub }: { title: string; sub: string }) {
   return (
     <>
       <h1 className="font-display text-[2rem] tracking-tight">{title}</h1>
-      <p className="text-stone-500 mt-1.5 text-[15px]">{sub}</p>
+      <p className="text-stone-500 dark:text-stone-400 mt-1.5 text-[15px]">{sub}</p>
     </>
   )
 }
@@ -53,7 +122,7 @@ export function BarChart({ data, height = 120 }: { data: { label: string; value:
               width={w * 0.64}
               height={h}
               rx={0.8}
-              className="fill-[#0f0e0d]"
+              className="fill-[#0f0e0d] dark:fill-[#f4f2ee]"
               opacity={d.value === 0 ? 0.12 : 0.88}
             >
               <title>{d.label}: {d.value}</title>
@@ -61,7 +130,7 @@ export function BarChart({ data, height = 120 }: { data: { label: string; value:
           )
         })}
       </svg>
-      <div className="flex justify-between text-[10.5px] text-stone-400 mt-1">
+      <div className="flex justify-between text-[10.5px] text-stone-400 dark:text-stone-500 mt-1">
         <span>{data[0]?.label}</span>
         <span>{data[data.length - 1]?.label}</span>
       </div>
@@ -98,16 +167,16 @@ export function Donut({ data }: { data: { label: string; value: number }[] }) {
             </circle>
           )
         })}
-        <text x="21" y="20" textAnchor="middle" className="fill-[#0f0e0d]" fontSize="8" fontWeight="600">
+        <text x="21" y="20" textAnchor="middle" className="fill-[#0f0e0d] dark:fill-[#f4f2ee]" fontSize="8" fontWeight="600">
           {data.reduce((s, d) => s + d.value, 0)}
         </text>
-        <text x="21" y="26.5" textAnchor="middle" className="fill-[#78716c]" fontSize="3.6">users</text>
+        <text x="21" y="26.5" textAnchor="middle" className="fill-[#78716c] dark:fill-[#a8a29e]" fontSize="3.6">users</text>
       </svg>
       <ul className="space-y-1.5 text-[13px]">
         {data.map((d, i) => (
           <li key={d.label} className="flex items-center gap-2">
             <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ background: DONUT_COLORS[i % DONUT_COLORS.length] }} />
-            {d.label} <span className="text-stone-400">· {d.value}</span>
+            {d.label} <span className="text-stone-400 dark:text-stone-500">· {d.value}</span>
           </li>
         ))}
       </ul>

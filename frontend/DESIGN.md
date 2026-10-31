@@ -4,8 +4,9 @@
 Piece 34 (31 Oct 2026) restyled the user app with the design-taste-frontend
 skill (tasteskill v2, app-screen run): direction *achromatic-ledger*,
 seed 1210974860, kind workspace, light — with the brand palette and type
-kept from the Harvey REA below. The admin Command Center keeps its own
-look and was not part of this pass.
+kept from the Harvey REA below. The admin Command Center kept its own
+look through Pieces 34–38; Piece 39 brought it onto this same system
+(see "Admin parity" below).
 
 ## The move
 
@@ -144,6 +145,27 @@ work are untouched.
   serif "L" — a remnant of the retired LexAgent name — survived on
   the Auth page (both lockups) and in the favicon. The favicon is
   now a bronze (`#593d3a`) square with an ivory serif "J".
+
+## Admin parity (Piece 39)
+
+The Command Center (`frontend/admin/`) now runs this same design
+system — JISHAN: "do make admin same". Its token layer is a 1:1
+port of the user app's `index.css` (the Piece 38 lightened light
+wash and glow; the dark wash, glow, accents and bronze unchanged),
+with `darkMode: 'class'` and the same radii (`lex` 6px, `lex-lg`
+8px). The pre-paint theme script is identical and shares the
+`jurisvault.theme` localStorage key — same origin, so one choice
+governs both apps. The admin sidebar is transparent over the wash
+(the old always-dark ink sidebar is gone); its lockup is the
+medallion + serif name + "Command Center" second line + bronze
+rule, the active nav item gains the bronze inset left bar, and the
+sign-in gate mirrors the user Auth nameplate with a ThemeToggle
+top-right (a second toggle sits in the shell footer). The ledger
+tells were swept through the admin pages too: no resting shadows,
+sentence-case labels, chrome buttons at `rounded-lex`. Known
+leftovers, same class as the user app's: tinted data pills keep
+their light tints in dark mode, and the shared ErrorBanner keeps
+its light red tint in both apps.
 
 ## Shell — recorded deviation
 

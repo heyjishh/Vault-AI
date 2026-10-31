@@ -15,8 +15,8 @@ const MODES: { id: string; label: string; hint: string }[] = [
   { id: 'bypass', label: 'Bypass', hint: 'No retrieval — the model answers from its own knowledge. Not grounded.' },
 ]
 
-const inputCls = 'w-full rounded-lex border border-stone-200 bg-ivory px-3 py-2 text-sm outline-none focus:border-stone-400'
-const labelCls = 'text-[12px] uppercase tracking-wider text-stone-400 font-medium'
+const inputCls = 'w-full rounded-lex border border-stone-200 dark:border-white/10 bg-ivory dark:bg-[#14120f] px-3 py-2 text-sm outline-none focus:border-stone-400'
+const labelCls = 'text-[12px] text-stone-400 dark:text-stone-500 font-medium'
 
 type Section = 'branding' | 'answering' | 'surfaces' | 'models' | 'tabs'
 
@@ -123,14 +123,14 @@ export default function CustomizePage() {
         <div className="flex items-center gap-2 flex-wrap">
           <span className={labelCls}>{label}</span>
           {custom ? (
-            <span className="text-[10.5px] font-semibold uppercase tracking-wide bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full px-2 py-0.5">Customized</span>
+            <span className="text-[10.5px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full px-2 py-0.5">Customized</span>
           ) : (
-            <span className="text-[10.5px] font-semibold uppercase tracking-wide bg-stone-100 text-stone-500 border border-stone-200 rounded-full px-2 py-0.5">{isText ? 'Built-in default' : 'No standing instructions'}</span>
+            <span className="text-[10.5px] font-semibold bg-stone-100 dark:bg-[#26281f] text-stone-500 dark:text-stone-400 border border-stone-200 dark:border-white/10 rounded-full px-2 py-0.5">{isText ? 'Built-in default' : 'No standing instructions'}</span>
           )}
           <button
             type="button"
             onClick={() => setPrompt(key, isText ? (defaults[key] ?? '') : '')}
-            className="ml-auto inline-flex items-center gap-1 text-[11.5px] text-stone-400 hover:text-ink transition-colors"
+            className="ml-auto inline-flex items-center gap-1 text-[11.5px] text-stone-400 dark:text-stone-500 hover:text-ink dark:hover:text-[#f4f2ee] transition-colors"
             title={isText ? 'Restore the built-in default text' : 'Clear standing instructions'}
           >
             <RotateCcw size={11} /> Reset
@@ -143,14 +143,14 @@ export default function CustomizePage() {
           placeholder={isText ? '' : 'Example: Always end with a one-line risk rating. Prefer Indian law references. Flag any clause missing a governing-law provision.'}
           onChange={(e) => setPrompt(key, e.target.value)}
         />
-        <p className="text-[12.5px] text-stone-500 mt-1">{hint}</p>
+        <p className="text-[12.5px] text-stone-500 dark:text-stone-400 mt-1">{hint}</p>
         {key === 'agent' && (
-          <div className="mt-3 rounded-lex border border-stone-150 border-stone-200 bg-stone-50 p-3.5 space-y-2.5">
-            <p className="text-[11px] uppercase tracking-wider text-stone-400 font-medium">Built-in workflow instructions (read-only)</p>
+          <div className="mt-3 rounded-lex border border-stone-150 border-stone-200 dark:border-white/10 bg-stone-50 dark:bg-white/5 p-3.5 space-y-2.5">
+            <p className="text-[11px] text-stone-400 dark:text-stone-500 font-medium">Built-in workflow instructions (read-only)</p>
             {data.agent_workflows.map((w) => (
               <div key={w.id}>
-                <p className="text-[12.5px] font-medium text-ink">{w.name}</p>
-                <p className="text-[12px] text-stone-500 leading-relaxed">{w.report_instruction}</p>
+                <p className="text-[12.5px] font-medium text-ink dark:text-[#f4f2ee]">{w.name}</p>
+                <p className="text-[12px] text-stone-500 dark:text-stone-400 leading-relaxed">{w.report_instruction}</p>
               </div>
             ))}
           </div>
@@ -169,30 +169,30 @@ export default function CustomizePage() {
 
       <div className="mt-8 flex gap-6 items-start">
         {/* Section tree */}
-        <nav className="w-56 flex-shrink-0 rounded-lex-lg border border-stone-200 bg-white shadow-lex-sm p-2 space-y-1 sticky top-6">
+        <nav className="w-56 flex-shrink-0 rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] p-2 space-y-1 sticky top-6">
           {SECTIONS.map(({ id, label, icon: Icon, blurb }) => (
             <button
               key={id}
               onClick={() => setSection(id)}
               className={`w-full text-left rounded-lex px-3 py-2.5 transition-colors ${
                 section === id
-                  ? 'bg-stone-100 shadow-[inset_0_0_0_1px_#e5e5e3]'
-                  : 'hover:bg-stone-100/70'
+                  ? 'bg-stone-100 dark:bg-[#26281f] shadow-[inset_0_0_0_1px_#e5e5e3] dark:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.10)]'
+                  : 'hover:bg-stone-100/70 dark:hover:bg-white/5'
               }`}
             >
-              <span className={`flex items-center gap-2 text-[13.5px] ${section === id ? 'text-ink font-medium' : 'text-stone-600'}`}>
+              <span className={`flex items-center gap-2 text-[13.5px] ${section === id ? 'text-ink dark:text-[#f4f2ee] font-medium' : 'text-stone-600 dark:text-stone-300'}`}>
                 <Icon size={15} strokeWidth={1.8} />
                 {label}
                 {sectionDirty[id] && <span className="ml-auto w-2 h-2 rounded-full bg-emerald-500" title="Customized" />}
               </span>
-              <span className="block text-[11.5px] text-stone-400 mt-0.5 pl-[23px]">{blurb}</span>
+              <span className="block text-[11.5px] text-stone-400 dark:text-stone-500 mt-0.5 pl-[23px]">{blurb}</span>
             </button>
           ))}
-          <div className="border-t border-stone-100 mt-2 pt-3 px-3 pb-2">
+          <div className="border-t border-stone-100 dark:border-white/10 mt-2 pt-3 px-3 pb-2">
             <button
               onClick={() => save.mutate(normalize(form))}
               disabled={save.isPending || !dirty}
-              className="w-full px-4 py-2.5 rounded-full bg-ink text-ivory text-[13px] font-medium hover:bg-ink-900 disabled:opacity-40 transition-colors"
+              className="w-full px-4 py-2.5 rounded-lex bg-ink text-ivory text-[13px] font-medium hover:bg-ink-900 disabled:opacity-40 transition-colors"
             >
               {save.isPending ? 'Saving…' : 'Save & apply'}
             </button>
@@ -202,7 +202,7 @@ export default function CustomizePage() {
         </nav>
 
         {/* Active section panel */}
-        <div className="flex-1 min-w-0 rounded-lex-lg border border-stone-200 bg-white shadow-lex-sm p-6">
+        <div className="flex-1 min-w-0 rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] p-6">
           {section === 'branding' && (
             <>
               <h2 className="font-display text-lg">Branding</h2>
@@ -218,7 +218,7 @@ export default function CustomizePage() {
                     onChange={(e) => set({ brand: { ...form.brand, tagline: e.target.value } })} />
                 </label>
               </div>
-              <p className="text-[12.5px] text-stone-500 mt-3">Shown in the user panel sidebar and browser title. Applies on the user's next page load.</p>
+              <p className="text-[12.5px] text-stone-500 dark:text-stone-400 mt-3">Shown in the user panel sidebar and browser title. Applies on the user's next page load.</p>
             </>
           )}
 
@@ -231,8 +231,8 @@ export default function CustomizePage() {
                   {MODES.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
                 </select>
               </label>
-              <p className="text-[12.5px] text-stone-500 mt-2">{MODES.find((m) => m.id === form.default_mode)?.hint}</p>
-              <div className="border-t border-stone-100 mt-6 pt-6">
+              <p className="text-[12.5px] text-stone-500 dark:text-stone-400 mt-2">{MODES.find((m) => m.id === form.default_mode)?.hint}</p>
+              <div className="border-t border-stone-100 dark:border-white/10 mt-6 pt-6">
                 {promptField({
                   key: 'ask',
                   label: 'Ask — answer prompt',
@@ -246,7 +246,7 @@ export default function CustomizePage() {
           {section === 'surfaces' && (
             <>
               <h2 className="font-display text-lg">Prompts — AI surfaces</h2>
-              <p className="text-[12.5px] text-stone-500 mt-1.5">
+              <p className="text-[12.5px] text-stone-500 dark:text-stone-400 mt-1.5">
                 Every editor is prefilled with the exact prompt currently in use — the built-in default,
                 or your saved customization. Edit and save to change it; Reset restores the built-in text.
               </p>
@@ -262,13 +262,13 @@ export default function CustomizePage() {
                   <span className={labelCls}>LLM model (live swap)</span>
                   <input className={`${inputCls} mt-1.5`} value={form.llm_model ?? ''} placeholder={eff.llm_model}
                     onChange={(e) => set({ llm_model: e.target.value || null })} />
-                  <span className="block text-[12.5px] text-stone-500 mt-1.5">In effect now: <span className="font-mono text-[12px]">{eff.llm_model}</span>. Saving swaps it immediately — no restart.</span>
+                  <span className="block text-[12.5px] text-stone-500 dark:text-stone-400 mt-1.5">In effect now: <span className="font-mono text-[12px]">{eff.llm_model}</span>. Saving swaps it immediately — no restart.</span>
                 </label>
                 <label className="block">
                   <span className={labelCls}>Embedding model (applies on restart)</span>
                   <input className={`${inputCls} mt-1.5`} value={form.embedding_model ?? ''} placeholder={eff.embedding_model}
                     onChange={(e) => set({ embedding_model: e.target.value || null })} />
-                  <span className="block text-[12.5px] text-stone-500 mt-1.5">In effect now: <span className="font-mono text-[12px]">{eff.embedding_model}</span>. Changing it requires a restart <em>and</em> re-indexing the corpus — stored vectors are not interchangeable between models.</span>
+                  <span className="block text-[12.5px] text-stone-500 dark:text-stone-400 mt-1.5">In effect now: <span className="font-mono text-[12px]">{eff.embedding_model}</span>. Changing it requires a restart <em>and</em> re-indexing the corpus — stored vectors are not interchangeable between models.</span>
                 </label>
               </div>
             </>
@@ -280,15 +280,15 @@ export default function CustomizePage() {
                 <h2 className="font-display text-lg">Sidebar tabs</h2>
                 <button
                   onClick={() => set({ tabs: [...form.tabs, { id: `tab-${Date.now()}`, label: 'New tab', kind: 'page', content: '', visible: true }] })}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-stone-200 px-3 py-1.5 text-[12.5px] text-stone-600 hover:text-ink hover:border-stone-300 transition-colors"
+                  className="inline-flex items-center gap-1.5 rounded-lex border border-stone-200 dark:border-white/10 px-3 py-1.5 text-[12.5px] text-stone-600 dark:text-stone-300 hover:text-ink dark:hover:text-[#f4f2ee] hover:border-stone-300 dark:hover:border-white/10 transition-colors"
                 >
                   <Plus size={13} /> Add tab
                 </button>
               </div>
-              <p className="text-[12.5px] text-stone-500 mt-2">Add your own pages (markdown — firm policies, chamber notices, help) or links (your DMS, court websites) to the user panel sidebar.</p>
+              <p className="text-[12.5px] text-stone-500 dark:text-stone-400 mt-2">Add your own pages (markdown — firm policies, chamber notices, help) or links (your DMS, court websites) to the user panel sidebar.</p>
               <div className="space-y-4 mt-4">
                 {form.tabs.map((t, i) => (
-                  <div key={t.id} className="rounded-lex border border-stone-200 p-4">
+                  <div key={t.id} className="rounded-lex border border-stone-200 dark:border-white/10 p-4">
                     <div className="flex gap-3 flex-wrap items-end">
                       <label className="block flex-1 min-w-[160px]">
                         <span className={labelCls}>Label</span>
@@ -301,10 +301,10 @@ export default function CustomizePage() {
                           <option value="link">External link</option>
                         </select>
                       </label>
-                      <label className="flex items-center gap-2 pb-2.5 text-[13px] text-stone-600">
+                      <label className="flex items-center gap-2 pb-2.5 text-[13px] text-stone-600 dark:text-stone-300">
                         <input type="checkbox" checked={t.visible} onChange={(e) => setTab(i, { visible: e.target.checked })} /> Visible
                       </label>
-                      <button onClick={() => set({ tabs: form.tabs.filter((_, j) => j !== i) })} className="pb-2 text-stone-400 hover:text-[#a02c2c]" title="Remove tab">
+                      <button onClick={() => set({ tabs: form.tabs.filter((_, j) => j !== i) })} className="pb-2 text-stone-400 dark:text-stone-500 hover:text-[#a02c2c]" title="Remove tab">
                         <Trash2 size={16} />
                       </button>
                     </div>
@@ -315,7 +315,7 @@ export default function CustomizePage() {
                     )}
                   </div>
                 ))}
-                {form.tabs.length === 0 && <p className="text-[13px] text-stone-400">No custom tabs yet.</p>}
+                {form.tabs.length === 0 && <p className="text-[13px] text-stone-400 dark:text-stone-500">No custom tabs yet.</p>}
               </div>
             </>
           )}

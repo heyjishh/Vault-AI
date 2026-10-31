@@ -22,15 +22,15 @@ const KIND_LABEL: Record<string, string> = {
 
 function ActivityLine({ e }: { e: ActivityEvent }) {
   return (
-    <div className="px-5 py-3 border-b border-stone-100 last:border-0">
-      <div className="flex items-baseline gap-2 text-[12px] text-stone-400">
-        <span className="font-medium uppercase tracking-wide">{KIND_LABEL[e.kind] ?? e.kind}</span>
+    <div className="px-5 py-3 border-b border-stone-100 dark:border-white/10 last:border-0">
+      <div className="flex items-baseline gap-2 text-[12px] text-stone-400 dark:text-stone-500">
+        <span className="font-medium">{KIND_LABEL[e.kind] ?? e.kind}</span>
         {e.detail && <span>· {e.detail}</span>}
         <span className="ml-auto shrink-0">{when(e.created_at)}</span>
       </div>
       <p className="text-[13.5px] font-medium mt-0.5">{e.title}</p>
-      {e.result_excerpt && <p className="text-[12.5px] text-stone-500 line-clamp-2 mt-0.5">{e.result_excerpt}</p>}
-      <p className="text-meta text-stone-400 mt-1">
+      {e.result_excerpt && <p className="text-[12.5px] text-stone-500 dark:text-stone-400 line-clamp-2 mt-0.5">{e.result_excerpt}</p>}
+      <p className="text-meta text-stone-400 dark:text-stone-500 mt-1">
         {e.tokens.toLocaleString('en-IN')} tokens{e.citations > 0 ? ` · ${e.citations} sources` : ''}
       </p>
     </div>
@@ -82,16 +82,16 @@ export default function InsightsPage() {
       </div>
 
       <div className="grid xl:grid-cols-3 gap-4 mt-5">
-        <div className="rounded-lex-lg border border-stone-200 bg-white shadow-lex px-5 py-4">
-          <p className="text-meta uppercase tracking-wider text-stone-500 font-medium">Activity — last 14 days</p>
+        <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] px-5 py-4">
+          <p className="text-meta text-stone-500 dark:text-stone-400 font-medium">Activity — last 14 days</p>
           <div className="mt-3"><BarChart data={eventBars} /></div>
         </div>
-        <div className="rounded-lex-lg border border-stone-200 bg-white shadow-lex px-5 py-4">
-          <p className="text-meta uppercase tracking-wider text-stone-500 font-medium">Tokens — last 14 days</p>
+        <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] px-5 py-4">
+          <p className="text-meta text-stone-500 dark:text-stone-400 font-medium">Tokens — last 14 days</p>
           <div className="mt-3"><BarChart data={tokenBars} /></div>
         </div>
-        <div className="rounded-lex-lg border border-stone-200 bg-white shadow-lex px-5 py-4">
-          <p className="text-meta uppercase tracking-wider text-stone-500 font-medium">Plan mix</p>
+        <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] px-5 py-4">
+          <p className="text-meta text-stone-500 dark:text-stone-400 font-medium">Plan mix</p>
           <div className="mt-3">
             <Donut data={d.plan_distribution.map((p) => ({ label: p.plan, value: p.users }))} />
           </div>
@@ -101,10 +101,10 @@ export default function InsightsPage() {
       <div className="grid xl:grid-cols-5 gap-6 mt-8">
         <div className="xl:col-span-3">
           <h2 className="font-display text-xl mb-3">Users — click to drill down</h2>
-          <div className="rounded-lex-lg border border-stone-200 bg-white shadow-lex overflow-hidden">
+          <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] overflow-hidden">
             <table className="w-full text-[13.5px]">
               <thead>
-                <tr className="text-left text-meta uppercase tracking-wider text-stone-500 border-b border-stone-200">
+                <tr className="text-left text-meta text-stone-500 dark:text-stone-400 border-b border-stone-200 dark:border-white/10">
                   <th className="px-5 py-3 font-medium">User</th>
                   <th className="px-5 py-3 font-medium">Plan</th>
                   <th className="px-5 py-3 font-medium">Activity</th>
@@ -119,14 +119,14 @@ export default function InsightsPage() {
                   <tr
                     key={u.user_id}
                     onClick={() => setSelected(u)}
-                    className={`cursor-pointer border-b border-stone-100 last:border-0 hover:bg-ivory ${selected?.user_id === u.user_id ? 'bg-ivory' : ''}`}
+                    className={`cursor-pointer border-b border-stone-100 dark:border-white/10 last:border-0 hover:bg-ivory dark:hover:bg-white/5 ${selected?.user_id === u.user_id ? 'bg-ivory dark:bg-[#14120f]' : ''}`}
                   >
                     <td className="px-5 py-3 font-medium">{u.email}</td>
                     <td className="px-5 py-3">{u.plan_name}</td>
-                    <td className="px-5 py-3">{u.events} <span className="text-stone-400">({u.queries}q · {u.researches}r)</span></td>
-                    <td className="px-5 py-3">{u.tokens_billed.toLocaleString('en-IN')} <span className="text-stone-400">/ {u.token_quota.toLocaleString('en-IN')}</span></td>
+                    <td className="px-5 py-3">{u.events} <span className="text-stone-400 dark:text-stone-500">({u.queries}q · {u.researches}r)</span></td>
+                    <td className="px-5 py-3">{u.tokens_billed.toLocaleString('en-IN')} <span className="text-stone-400 dark:text-stone-500">/ {u.token_quota.toLocaleString('en-IN')}</span></td>
                     <td className="px-5 py-3">{inr(u.spent_inr)}</td>
-                    <td className="px-5 py-3 text-stone-500">{when(u.last_active)}</td>
+                    <td className="px-5 py-3 text-stone-500 dark:text-stone-400">{when(u.last_active)}</td>
                     <td className="px-2 py-3 text-stone-300"><ChevronRight size={15} /></td>
                   </tr>
                 ))}
@@ -135,12 +135,12 @@ export default function InsightsPage() {
           </div>
 
           <h2 className="font-display text-xl mt-8 mb-3">Top questions</h2>
-          <div className="rounded-lex-lg border border-stone-200 bg-white shadow-lex overflow-hidden">
-            {d.top_queries.length === 0 && <p className="px-5 py-4 text-stone-500 text-[13.5px]">No questions captured yet.</p>}
+          <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] overflow-hidden">
+            {d.top_queries.length === 0 && <p className="px-5 py-4 text-stone-500 dark:text-stone-400 text-[13.5px]">No questions captured yet.</p>}
             {d.top_queries.map((q) => {
               const actId = activityIdFor(q.question)
               return (
-                <div key={q.question} className="px-5 py-3 flex items-center gap-3 border-b border-stone-100 last:border-0">
+                <div key={q.question} className="px-5 py-3 flex items-center gap-3 border-b border-stone-100 dark:border-white/10 last:border-0">
                   <span className="rounded-full bg-ink text-ivory text-[11.5px] px-2 py-0.5 font-medium shrink-0">×{q.count}</span>
                   <span className="text-[13.5px] flex-1 min-w-0 truncate" title={q.question}>{q.question}</span>
                   {actId && (
@@ -150,7 +150,7 @@ export default function InsightsPage() {
                       <button
                         onClick={() => promote.mutate(actId)}
                         disabled={promote.isPending}
-                        className="text-[12px] shrink-0 inline-flex items-center gap-1 rounded-full border border-stone-300 px-2.5 py-1 hover:border-ink disabled:opacity-50"
+                        className="text-[12px] shrink-0 inline-flex items-center gap-1 rounded-lex border border-stone-300 dark:border-white/10 px-2.5 py-1 hover:border-ink disabled:opacity-50"
                       >
                         <Sparkles size={12} /> Make golden rule
                       </button>
@@ -164,20 +164,20 @@ export default function InsightsPage() {
 
         <div className="xl:col-span-2">
           {selected ? (
-            <div className="rounded-lex-lg border border-ink bg-white shadow-lex overflow-hidden sticky top-4">
-              <div className="px-5 py-4 border-b border-stone-200 flex items-start justify-between">
+            <div className="rounded-lex-lg border border-ink bg-white dark:bg-[#1d1f19] overflow-hidden sticky top-4">
+              <div className="px-5 py-4 border-b border-stone-200 dark:border-white/10 flex items-start justify-between">
                 <div>
                   <h2 className="font-display text-lg leading-tight">{selected.email}</h2>
-                  <p className="text-meta text-stone-500 mt-0.5">
+                  <p className="text-meta text-stone-500 dark:text-stone-400 mt-0.5">
                     {selected.plan_name} · {selected.events} activities · spent {inr(selected.spent_inr)}
                   </p>
                 </div>
-                <button onClick={() => setSelected(null)} className="text-stone-400 hover:text-ink"><X size={17} /></button>
+                <button onClick={() => setSelected(null)} className="text-stone-400 dark:text-stone-500 hover:text-ink dark:hover:text-[#f4f2ee]"><X size={17} /></button>
               </div>
               <div className="max-h-[560px] overflow-y-auto">
                 {drill.isLoading && <Spinner label="Loading activity…" />}
                 {drill.data && drill.data.length === 0 && (
-                  <p className="px-5 py-4 text-stone-500 text-[13.5px]">No activity captured for this user yet.</p>
+                  <p className="px-5 py-4 text-stone-500 dark:text-stone-400 text-[13.5px]">No activity captured for this user yet.</p>
                 )}
                 {drill.data?.map((e) => <ActivityLine key={e.id} e={e} />)}
               </div>
@@ -185,18 +185,18 @@ export default function InsightsPage() {
           ) : (
             <>
               <h2 className="font-display text-xl mb-3">Live activity</h2>
-              <div className="rounded-lex-lg border border-stone-200 bg-white shadow-lex overflow-hidden">
+              <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] overflow-hidden">
                 {d.recent_activity.length === 0 && (
-                  <p className="px-5 py-4 text-stone-500 text-[13.5px]">Nothing yet — user questions will stream in here.</p>
+                  <p className="px-5 py-4 text-stone-500 dark:text-stone-400 text-[13.5px]">Nothing yet — user questions will stream in here.</p>
                 )}
                 {d.recent_activity.slice(0, 12).map((e) => (
                   <div key={e.id}>
-                    <p className="px-5 pt-2.5 text-[11.5px] text-stone-400">{e.user_email}</p>
+                    <p className="px-5 pt-2.5 text-[11.5px] text-stone-400 dark:text-stone-500">{e.user_email}</p>
                     <ActivityLine e={e} />
                   </div>
                 ))}
               </div>
-              <p className="text-meta text-stone-400 mt-3">Select any user on the left to see everything they've asked, researched, and drafted.</p>
+              <p className="text-meta text-stone-400 dark:text-stone-500 mt-3">Select any user on the left to see everything they've asked, researched, and drafted.</p>
             </>
           )}
         </div>

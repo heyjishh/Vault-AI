@@ -6,7 +6,7 @@ import { ErrorBanner, PageHead, Spinner, StatCard } from '../ui'
 
 function ResultBadge({ rule }: { rule: GoldenRule }) {
   const r = rule.last_result
-  if (!r) return <span className="rounded-full bg-stone-100 text-stone-500 px-2 py-0.5 text-[12px]">not run yet</span>
+  if (!r) return <span className="rounded-full bg-stone-100 dark:bg-[#26281f] text-stone-500 dark:text-stone-400 px-2 py-0.5 text-[12px]">not run yet</span>
   return r.passed ? (
     <span className="rounded-full bg-[#e7f4e4] text-[#2f6b2f] px-2 py-0.5 text-[12px]">passing</span>
   ) : (
@@ -96,7 +96,7 @@ export default function GoldenPage() {
         <StatCard label="Rules" value={list.length} sub={`${list.filter((r) => r.source === 'captured').length} promoted from real queries`} />
         <StatCard label="Passing" value={last_run ? `${passing} / ${list.length}` : '—'} sub={last_run ? `last run ${new Date(last_run.ran_at).toLocaleString('en-IN')}` : 'run the set to score it'} />
         <StatCard label="Pass rate" value={last_run && last_run.total > 0 ? `${Math.round((last_run.passed / last_run.total) * 100)}%` : '—'} sub="of the last full run" />
-        <div className="rounded-lex-lg border border-stone-200 bg-white shadow-lex px-5 py-4 flex flex-col justify-center">
+        <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] px-5 py-4 flex flex-col justify-center">
           <button
             onClick={() => run.mutate()}
             disabled={run.isPending || list.length === 0}
@@ -104,30 +104,30 @@ export default function GoldenPage() {
           >
             <Play size={14} /> {run.isPending ? 'Running evaluation…' : 'Run evaluation'}
           </button>
-          <p className="text-meta text-stone-400 mt-2 text-center">Runs every rule against the live RAG (mix mode). Cost is billed to your admin account.</p>
+          <p className="text-meta text-stone-400 dark:text-stone-500 mt-2 text-center">Runs every rule against the live RAG (mix mode). Cost is billed to your admin account.</p>
         </div>
       </div>
       {runError && <div className="mt-4"><ErrorBanner message={runError} /></div>}
       {add.isError && <div className="mt-4"><ErrorBanner message={(add.error as Error).message} /></div>}
       {update.isError && <div className="mt-4"><ErrorBanner message={(update.error as Error).message} /></div>}
       {editing && (
-        <div className="rounded-lex-lg border border-stone-200 bg-white shadow-lex px-6 py-5 grid gap-3.5 mt-9">
+        <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] px-6 py-5 grid gap-3.5 mt-9">
           <h2 className="font-display text-xl">Edit rule</h2>
           <label className="block">
-            <span className="text-meta uppercase tracking-wider text-stone-500 font-medium">Question</span>
-            <input value={editQuestion} onChange={(e) => setEditQuestion(e.target.value)} className="mt-1.5 w-full rounded-lex border border-stone-300 px-3 py-2 text-[14px]" />
+            <span className="text-meta text-stone-500 dark:text-stone-400 font-medium">Question</span>
+            <input value={editQuestion} onChange={(e) => setEditQuestion(e.target.value)} className="mt-1.5 w-full rounded-lex border border-stone-300 dark:border-white/10 px-3 py-2 text-[14px]" />
           </label>
           <label className="block">
-            <span className="text-meta uppercase tracking-wider text-stone-500 font-medium">Expected terms (comma-separated)</span>
-            <input value={editTerms} onChange={(e) => setEditTerms(e.target.value)} className="mt-1.5 w-full rounded-lex border border-stone-300 px-3 py-2 text-[14px]" />
+            <span className="text-meta text-stone-500 dark:text-stone-400 font-medium">Expected terms (comma-separated)</span>
+            <input value={editTerms} onChange={(e) => setEditTerms(e.target.value)} className="mt-1.5 w-full rounded-lex border border-stone-300 dark:border-white/10 px-3 py-2 text-[14px]" />
           </label>
           <label className="block">
-            <span className="text-meta uppercase tracking-wider text-stone-500 font-medium">Expected sources (comma-separated)</span>
-            <input value={editSources} onChange={(e) => setEditSources(e.target.value)} className="mt-1.5 w-full rounded-lex border border-stone-300 px-3 py-2 text-[14px]" />
+            <span className="text-meta text-stone-500 dark:text-stone-400 font-medium">Expected sources (comma-separated)</span>
+            <input value={editSources} onChange={(e) => setEditSources(e.target.value)} className="mt-1.5 w-full rounded-lex border border-stone-300 dark:border-white/10 px-3 py-2 text-[14px]" />
           </label>
           <label className="block">
-            <span className="text-meta uppercase tracking-wider text-stone-500 font-medium">Notes</span>
-            <input value={editNotes} onChange={(e) => setEditNotes(e.target.value)} className="mt-1.5 w-full rounded-lex border border-stone-300 px-3 py-2 text-[14px]" />
+            <span className="text-meta text-stone-500 dark:text-stone-400 font-medium">Notes</span>
+            <input value={editNotes} onChange={(e) => setEditNotes(e.target.value)} className="mt-1.5 w-full rounded-lex border border-stone-300 dark:border-white/10 px-3 py-2 text-[14px]" />
           </label>
           <div className="flex gap-3">
             <button
@@ -139,24 +139,24 @@ export default function GoldenPage() {
             </button>
             <button
               onClick={() => setEditing(null)}
-              className="rounded-lex border border-stone-300 px-4 py-2.5 text-[13.5px] font-medium"
+              className="rounded-lex border border-stone-300 dark:border-white/10 px-4 py-2.5 text-[13.5px] font-medium"
             >
               Cancel
             </button>
           </div>
-          <p className="text-meta text-stone-400">Editing keeps the rule's run history — only the fields above change.</p>
+          <p className="text-meta text-stone-400 dark:text-stone-500">Editing keeps the rule's run history — only the fields above change.</p>
         </div>
       )}
 
       {/* Rules table */}
       <h2 className="font-display text-xl mt-9 mb-3">Rules</h2>
       {list.length === 0 ? (
-        <p className="text-stone-500 text-[13.5px]">No rules yet — add one below, or promote a captured question.</p>
+        <p className="text-stone-500 dark:text-stone-400 text-[13.5px]">No rules yet — add one below, or promote a captured question.</p>
       ) : (
-        <div className="rounded-lex-lg border border-stone-200 bg-white shadow-lex overflow-hidden">
+        <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] overflow-hidden">
           <table className="w-full text-[13.5px]">
             <thead>
-              <tr className="text-left text-meta uppercase tracking-wider text-stone-500 border-b border-stone-200">
+              <tr className="text-left text-meta text-stone-500 dark:text-stone-400 border-b border-stone-200 dark:border-white/10">
                 <th className="px-5 py-3 font-medium w-[38%]">Question</th>
                 <th className="px-5 py-3 font-medium">Expected terms</th>
                 <th className="px-5 py-3 font-medium">Expected sources</th>
@@ -167,16 +167,16 @@ export default function GoldenPage() {
             </thead>
             <tbody>
               {list.map((r) => (
-                <tr key={r.id} className="border-b border-stone-100 last:border-0 align-top">
+                <tr key={r.id} className="border-b border-stone-100 dark:border-white/10 last:border-0 align-top">
                   <td className="px-5 py-3">
                     <span className="font-medium">{r.question}</span>
-                    <span className="block text-meta text-stone-400 mt-0.5">
+                    <span className="block text-meta text-stone-400 dark:text-stone-500 mt-0.5">
                       {r.source === 'captured' ? 'promoted from a user query' : 'written by admin'}
                       {r.notes ? ` · ${r.notes}` : ''}
                     </span>
                   </td>
-                  <td className="px-5 py-3 text-stone-600">{r.expected_terms.join(', ') || '—'}</td>
-                  <td className="px-5 py-3 text-stone-600">{r.expected_sources.join(', ') || '—'}</td>
+                  <td className="px-5 py-3 text-stone-600 dark:text-stone-300">{r.expected_terms.join(', ') || '—'}</td>
+                  <td className="px-5 py-3 text-stone-600 dark:text-stone-300">{r.expected_sources.join(', ') || '—'}</td>
                   <td className="px-5 py-3">
                     <ResultBadge rule={r} />
                     {r.last_result && !r.last_result.passed && (
@@ -186,11 +186,11 @@ export default function GoldenPage() {
                       </span>
                     )}
                   </td>
-                  <td className="px-5 py-3 text-stone-500 max-w-[260px]">
+                  <td className="px-5 py-3 text-stone-500 dark:text-stone-400 max-w-[260px]">
                     <span className="line-clamp-3">{r.last_result?.answer_excerpt ?? '—'}</span>
                   </td>
                   <td className="px-3 py-3">
-                    <button onClick={() => startEdit(r)} className="text-stone-300 hover:text-ink mr-2" title="Edit rule">
+                    <button onClick={() => startEdit(r)} className="text-stone-300 hover:text-ink dark:hover:text-[#f4f2ee] mr-2" title="Edit rule">
                       <Pencil size={15} />
                     </button>
                     <button onClick={() => remove.mutate(r.id)} className="text-stone-300 hover:text-[#a02c2c]" title="Delete rule">
@@ -208,22 +208,22 @@ export default function GoldenPage() {
         {/* Add rule */}
         <div>
           <h2 className="font-display text-xl mb-3">Add a rule</h2>
-          <div className="rounded-lex-lg border border-stone-200 bg-white shadow-lex px-6 py-5 grid gap-3.5">
+          <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] px-6 py-5 grid gap-3.5">
             <label className="block">
-              <span className="text-meta uppercase tracking-wider text-stone-500 font-medium">Question</span>
-              <input value={question} onChange={(e) => setQuestion(e.target.value)} className="mt-1.5 w-full rounded-lex border border-stone-300 px-3 py-2 text-[14px]" placeholder="What does Section 86 of the IT Act deal with?" />
+              <span className="text-meta text-stone-500 dark:text-stone-400 font-medium">Question</span>
+              <input value={question} onChange={(e) => setQuestion(e.target.value)} className="mt-1.5 w-full rounded-lex border border-stone-300 dark:border-white/10 px-3 py-2 text-[14px]" placeholder="What does Section 86 of the IT Act deal with?" />
             </label>
             <label className="block">
-              <span className="text-meta uppercase tracking-wider text-stone-500 font-medium">Expected terms (comma-separated)</span>
-              <input value={terms} onChange={(e) => setTerms(e.target.value)} className="mt-1.5 w-full rounded-lex border border-stone-300 px-3 py-2 text-[14px]" placeholder="section 86, cert-in" />
+              <span className="text-meta text-stone-500 dark:text-stone-400 font-medium">Expected terms (comma-separated)</span>
+              <input value={terms} onChange={(e) => setTerms(e.target.value)} className="mt-1.5 w-full rounded-lex border border-stone-300 dark:border-white/10 px-3 py-2 text-[14px]" placeholder="section 86, cert-in" />
             </label>
             <label className="block">
-              <span className="text-meta uppercase tracking-wider text-stone-500 font-medium">Expected sources (comma-separated)</span>
-              <input value={sources} onChange={(e) => setSources(e.target.value)} className="mt-1.5 w-full rounded-lex border border-stone-300 px-3 py-2 text-[14px]" placeholder="Section 86 IT Act" />
+              <span className="text-meta text-stone-500 dark:text-stone-400 font-medium">Expected sources (comma-separated)</span>
+              <input value={sources} onChange={(e) => setSources(e.target.value)} className="mt-1.5 w-full rounded-lex border border-stone-300 dark:border-white/10 px-3 py-2 text-[14px]" placeholder="Section 86 IT Act" />
             </label>
             <label className="block">
-              <span className="text-meta uppercase tracking-wider text-stone-500 font-medium">Notes</span>
-              <input value={notes} onChange={(e) => setNotes(e.target.value)} className="mt-1.5 w-full rounded-lex border border-stone-300 px-3 py-2 text-[14px]" placeholder="Why this rule matters" />
+              <span className="text-meta text-stone-500 dark:text-stone-400 font-medium">Notes</span>
+              <input value={notes} onChange={(e) => setNotes(e.target.value)} className="mt-1.5 w-full rounded-lex border border-stone-300 dark:border-white/10 px-3 py-2 text-[14px]" placeholder="Why this rule matters" />
             </label>
             <button
               onClick={() => add.mutate()}
@@ -238,27 +238,27 @@ export default function GoldenPage() {
         {/* Promote captured queries */}
         <div>
           <h2 className="font-display text-xl mb-3">Promote a captured query</h2>
-          <div className="rounded-lex-lg border border-stone-200 bg-white shadow-lex overflow-hidden">
+          <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] overflow-hidden">
             {captured.length === 0 && (
-              <p className="px-5 py-4 text-stone-500 text-[13.5px]">No captured questions yet — they appear as users ask.</p>
+              <p className="px-5 py-4 text-stone-500 dark:text-stone-400 text-[13.5px]">No captured questions yet — they appear as users ask.</p>
             )}
             {captured.slice(0, 8).map((e) => (
-              <div key={e.id} className="px-5 py-3 flex items-center gap-3 border-b border-stone-100 last:border-0">
+              <div key={e.id} className="px-5 py-3 flex items-center gap-3 border-b border-stone-100 dark:border-white/10 last:border-0">
                 <span className="min-w-0 flex-1">
                   <span className="block text-[13.5px] font-medium truncate">{e.title}</span>
-                  <span className="block text-meta text-stone-400">{e.user_email} · {new Date(e.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</span>
+                  <span className="block text-meta text-stone-400 dark:text-stone-500">{e.user_email} · {new Date(e.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</span>
                 </span>
                 <button
                   onClick={() => promote.mutate(e.id)}
                   disabled={promote.isPending}
-                  className="text-[12px] shrink-0 rounded-full border border-stone-300 px-2.5 py-1 hover:border-ink disabled:opacity-50"
+                  className="text-[12px] shrink-0 rounded-lex border border-stone-300 dark:border-white/10 px-2.5 py-1 hover:border-ink disabled:opacity-50"
                 >
                   Make golden rule
                 </button>
               </div>
             ))}
           </div>
-          <p className="text-meta text-stone-400 mt-3">
+          <p className="text-meta text-stone-400 dark:text-stone-500 mt-3">
             Promoted rules start with no expectations — use the pencil icon on a rule to add or fix its terms and sources.
           </p>
         </div>

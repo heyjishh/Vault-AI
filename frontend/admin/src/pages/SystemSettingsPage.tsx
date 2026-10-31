@@ -21,7 +21,7 @@ const STAGE_LABELS: Record<string, string> = {
 
 function OnOff({ on }: { on: boolean }) {
   return (
-    <span className={`rounded-full px-2 py-px text-[11px] font-semibold ${on ? 'bg-[#e7f4e4] text-[#2f6b2f]' : 'bg-stone-100 text-stone-400'}`}>
+    <span className={`rounded-full px-2 py-px text-[11px] font-semibold ${on ? 'bg-[#e7f4e4] text-[#2f6b2f]' : 'bg-stone-100 dark:bg-[#26281f] text-stone-400 dark:text-stone-500'}`}>
       {on ? 'ON' : 'OFF'}
     </span>
   )
@@ -57,29 +57,29 @@ function StackCard() {
         <StatCard label="Keyword engine" value={s.bm25_engine} sub={s.bm25_enabled ? 'BM25 leg active in fusion' : 'BM25 leg disabled'} />
         <StatCard label="Late interaction" value={s.late_interaction ? 'ColBERT on' : 'off'} sub="MaxSim blend after reranking" />
       </div>
-      <div className="rounded-lex-lg border border-stone-200 bg-white shadow-lex divide-y divide-stone-200 mt-3">
+      <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] divide-y divide-stone-200 dark:divide-white/10 mt-3">
         {features.map(([k, on, v]) => (
           <div key={k} className="flex items-center gap-4 px-5 py-3">
             <span className="w-52 flex-shrink-0 text-[13px] font-medium">{k}</span>
             <OnOff on={on} />
-            <span className="text-[13px] text-stone-600">{v}</span>
+            <span className="text-[13px] text-stone-600 dark:text-stone-300">{v}</span>
           </div>
         ))}
       </div>
 
       <h2 className="font-display text-xl tracking-tight mt-10 mb-3">MCP server</h2>
-      <div className="rounded-lex-lg border border-stone-200 bg-white shadow-lex p-5">
+      <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] p-5">
         <div className="flex items-center gap-3 flex-wrap">
           <p className="text-[14px] font-medium">Model Context Protocol — external clients connect as a user, with that user's access and quota.</p>
           <OnOff on={mcp?.enabled ?? s.mcp_enabled} />
         </div>
-        <p className="text-[13px] text-stone-500 mt-1.5">
-          Endpoint <code className="bg-stone-100 rounded px-1.5 py-0.5 text-[12.5px]">POST {mcp?.endpoint ?? '/mcp'}</code> ·
+        <p className="text-[13px] text-stone-500 dark:text-stone-400 mt-1.5">
+          Endpoint <code className="bg-stone-100 dark:bg-[#26281f] rounded px-1.5 py-0.5 text-[12.5px]">POST {mcp?.endpoint ?? '/mcp'}</code> ·
           transport {mcp?.transport ?? 'streamable-http'} · protocol {mcp?.protocol_version ?? '2024-11-05'}
         </p>
         <div className="flex flex-wrap gap-1.5 mt-3">
           {(mcp?.tools ?? []).map((t) => (
-            <span key={t.name} title={t.description} className="rounded-full border border-stone-200 bg-[#fcfbf9] px-2.5 py-1 text-[12px] font-medium text-stone-600">
+            <span key={t.name} title={t.description} className="rounded-full border border-stone-200 dark:border-white/10 bg-[#fcfbf9] px-2.5 py-1 text-[12px] font-medium text-stone-600 dark:text-stone-300">
               {t.name}
             </span>
           ))}
@@ -106,11 +106,11 @@ function HitTestCard() {
     onSuccess: setReport,
   })
   return (
-    <div className="rounded-lex-lg border border-stone-200 bg-white shadow-lex p-5">
+    <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] p-5">
       <h3 className="font-display text-lg tracking-tight flex items-center gap-2">
         <Crosshair size={17} /> Hit testing
       </h3>
-      <p className="text-[13px] text-stone-500 mt-1">
+      <p className="text-[13px] text-stone-500 dark:text-stone-400 mt-1">
         Run one question through every retrieval stage and compare the rankings — no answer is generated.
         Scores: cosine for vector, BM25 weight for keywords, the vector scale after fusion.
       </p>
@@ -120,7 +120,7 @@ function HitTestCard() {
           onChange={(e) => setQuestion(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && question.trim() && run.mutate()}
           placeholder="e.g. What does Section 86 of the Income Tax Act deal with?"
-          className="flex-1 rounded-lex border border-stone-300 px-3 py-2 text-[14px] focus:outline-none focus:border-ink"
+          className="flex-1 rounded-lex border border-stone-300 dark:border-white/10 px-3 py-2 text-[14px] focus:outline-none focus:border-ink"
         />
         <button
           onClick={() => run.mutate()}
@@ -134,22 +134,22 @@ function HitTestCard() {
       {report && (
         <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-3 mt-4">
           {report.stages.map((stage) => (
-            <div key={stage.name} className="rounded-lex border border-stone-200 overflow-hidden">
-              <p className="bg-stone-50 px-3 py-2 text-[12px] font-semibold uppercase tracking-wide text-stone-500">
+            <div key={stage.name} className="rounded-lex border border-stone-200 dark:border-white/10 overflow-hidden">
+              <p className="bg-stone-50 dark:bg-white/5 px-3 py-2 text-[12px] font-semibold text-stone-500 dark:text-stone-400">
                 {STAGE_LABELS[stage.name] ?? stage.name}
               </p>
               {stage.hits.length === 0 && (
-                <p className="px-3 py-2 text-[13px] text-stone-400">no hits</p>
+                <p className="px-3 py-2 text-[13px] text-stone-400 dark:text-stone-500">no hits</p>
               )}
               <ol>
                 {stage.hits.map((h, i) => (
-                  <li key={h.chunk_id} className="px-3 py-2 border-t border-stone-100">
-                    <p className="text-[12px] text-stone-500">
-                      <span className="font-semibold text-ink">#{i + 1}</span>{' '}
+                  <li key={h.chunk_id} className="px-3 py-2 border-t border-stone-100 dark:border-white/10">
+                    <p className="text-[12px] text-stone-500 dark:text-stone-400">
+                      <span className="font-semibold text-ink dark:text-[#f4f2ee]">#{i + 1}</span>{' '}
                       {h.score.toFixed(stage.name === 'bm25' ? 1 : 3)} · {h.doc_title ?? h.doc_id}
-                      {h.is_child && <span className="ml-1 rounded bg-stone-100 px-1 py-px text-[10.5px]">child</span>}
+                      {h.is_child && <span className="ml-1 rounded bg-stone-100 dark:bg-[#26281f] px-1 py-px text-[10.5px]">child</span>}
                     </p>
-                    <p className="text-[12.5px] text-stone-600 leading-snug mt-0.5 line-clamp-3">{h.snippet}</p>
+                    <p className="text-[12.5px] text-stone-600 dark:text-stone-300 leading-snug mt-0.5 line-clamp-3">{h.snippet}</p>
                   </li>
                 ))}
               </ol>
@@ -186,7 +186,7 @@ export default function SystemSettingsPage() {
       <HitTestCard />
 
       <h2 className="font-display text-xl tracking-tight mt-10 mb-3">Pipeline</h2>
-      <div className="rounded-lex-lg border border-stone-200 bg-white shadow-lex divide-y divide-stone-200">
+      <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] divide-y divide-stone-200 dark:divide-white/10">
         {[
           ['LLM provider', 'Cloudflare Workers AI — llama-3.3-70b-instruct (OpenAI-compatible endpoint)'],
           ['Embeddings', 'Cloudflare Workers AI — bge-m3 (1024-dim, multilingual)'],
@@ -200,7 +200,7 @@ export default function SystemSettingsPage() {
         ].map(([k, v]) => (
           <div key={k} className="flex gap-6 px-5 py-3.5">
             <span className="w-36 flex-shrink-0 text-[13px] font-medium">{k}</span>
-            <span className="text-[13px] text-stone-600">{v}</span>
+            <span className="text-[13px] text-stone-600 dark:text-stone-300">{v}</span>
           </div>
         ))}
       </div>
@@ -211,10 +211,10 @@ export default function SystemSettingsPage() {
       ) : (
         <div className="grid md:grid-cols-3 gap-3">
           {(workflows ?? []).map((w) => (
-            <div key={w.id} className="rounded-lex-lg border border-stone-200 bg-white shadow-lex p-5">
+            <div key={w.id} className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] p-5">
               <p className="font-display text-lg tracking-tight">{w.name}</p>
-              <p className="text-[13px] text-stone-500 mt-1.5 leading-relaxed">{w.description}</p>
-              <p className="text-[12px] text-stone-400 mt-3">{w.steps.length} steps: {w.steps.map((s) => s.name).join(' → ')}</p>
+              <p className="text-[13px] text-stone-500 dark:text-stone-400 mt-1.5 leading-relaxed">{w.description}</p>
+              <p className="text-[12px] text-stone-400 dark:text-stone-500 mt-3">{w.steps.length} steps: {w.steps.map((s) => s.name).join(' → ')}</p>
             </div>
           ))}
         </div>

@@ -14,7 +14,7 @@ function AnnotationRow({ a, currentFp }: { a: AnnotationRecord; currentFp: strin
   })
   const stale = a.corpus_fp !== currentFp
   return (
-    <div className="rounded-lex border border-stone-200 bg-white p-4">
+    <div className="rounded-lex border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] p-4">
       <div className="flex items-start justify-between gap-3">
         <p className="font-medium text-[15px] leading-snug">{a.question}</p>
         <div className="flex items-center gap-1.5 flex-shrink-0">
@@ -23,29 +23,29 @@ function AnnotationRow({ a, currentFp }: { a: AnnotationRecord; currentFp: strin
           ) : a.enabled ? (
             <span className="rounded-full bg-[#e7f4e4] text-[#2f6b2f] px-2 py-0.5 text-[12px]">serving</span>
           ) : (
-            <span className="rounded-full bg-stone-100 text-stone-500 px-2 py-0.5 text-[12px]">paused</span>
+            <span className="rounded-full bg-stone-100 dark:bg-[#26281f] text-stone-500 dark:text-stone-400 px-2 py-0.5 text-[12px]">paused</span>
           )}
-          <span className="rounded-full bg-stone-100 text-stone-500 px-2 py-0.5 text-[12px]">
+          <span className="rounded-full bg-stone-100 dark:bg-[#26281f] text-stone-500 dark:text-stone-400 px-2 py-0.5 text-[12px]">
             {a.scope_doc_ids ? `brief · ${a.scope_doc_ids.length} docs` : 'all unscoped'}
           </span>
         </div>
       </div>
-      <p className="text-[14px] text-stone-600 mt-2 leading-relaxed line-clamp-3">{a.answer}</p>
+      <p className="text-[14px] text-stone-600 dark:text-stone-300 mt-2 leading-relaxed line-clamp-3">{a.answer}</p>
       <div className="flex items-center justify-between mt-3">
-        <p className="text-[12px] text-stone-400">
+        <p className="text-[12px] text-stone-400 dark:text-stone-500">
           {a.citations.length} source{a.citations.length === 1 ? '' : 's'} · {a.source} · by {a.created_by} ·{' '}
           {new Date(a.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
         </p>
         <div className="flex items-center gap-2">
           <button
             onClick={() => toggle.mutate(!a.enabled)}
-            className="text-[13px] font-medium text-stone-600 hover:text-ink border border-stone-200 rounded-lex px-2.5 py-1"
+            className="text-[13px] font-medium text-stone-600 dark:text-stone-300 hover:text-ink dark:hover:text-[#f4f2ee] border border-stone-200 dark:border-white/10 rounded-lex px-2.5 py-1"
           >
             {a.enabled ? 'Pause' : 'Resume'}
           </button>
           <button
             onClick={() => del.mutate()}
-            className="text-stone-400 hover:text-[#a02c2c] p-1"
+            className="text-stone-400 dark:text-stone-500 hover:text-[#a02c2c] p-1"
             title="Delete annotation"
           >
             <Trash2 size={15} />
@@ -101,15 +101,15 @@ export default function AnnotationsPage() {
       {data.isError && <ErrorBanner message={(data.error as Error).message} />}
 
       {/* Promote a captured question */}
-      <div className="rounded-lex border border-stone-200 bg-white p-5 mt-2">
+      <div className="rounded-lex border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] p-5 mt-2">
         <h2 className="font-display text-lg tracking-tight flex items-center gap-2">
           <BadgeCheck size={17} className="text-[#2f6b2f]" /> Verify a captured answer
         </h2>
-        <p className="text-[13px] text-stone-500 mt-1">
+        <p className="text-[13px] text-stone-500 dark:text-stone-400 mt-1">
           Pick a real question a user asked, then serve either the captured answer as-is or your corrected version.
         </p>
         {captured.length === 0 ? (
-          <p className="text-[14px] text-stone-400 mt-3">No captured questions yet.</p>
+          <p className="text-[14px] text-stone-400 dark:text-stone-500 mt-3">No captured questions yet.</p>
         ) : (
           <div className="mt-3 space-y-2 max-h-56 overflow-y-auto pr-1">
             {captured.map((e) => (
@@ -122,12 +122,12 @@ export default function AnnotationsPage() {
                 }}
                 className={`w-full text-left rounded-lex border px-3 py-2 transition-colors ${
                   pickedId === e.id
-                    ? 'border-ink bg-stone-50'
-                    : 'border-stone-200 hover:border-stone-300'
+                    ? 'border-ink bg-stone-50 dark:bg-white/5'
+                    : 'border-stone-200 dark:border-white/10 hover:border-stone-300 dark:hover:border-white/10'
                 }`}
               >
                 <p className="text-[14px] font-medium leading-snug">{e.title}</p>
-                <p className="text-[12px] text-stone-400 mt-0.5">
+                <p className="text-[12px] text-stone-400 dark:text-stone-500 mt-0.5">
                   {e.user_email} · {new Date(e.created_at).toLocaleString('en-IN')}
                 </p>
               </button>
@@ -136,17 +136,17 @@ export default function AnnotationsPage() {
         )}
         {picked && (
           <div className="mt-4">
-            <label className="text-[13px] font-medium text-stone-600">
+            <label className="text-[13px] font-medium text-stone-600 dark:text-stone-300">
               Corrected answer (excerpt shown — edit to serve your version instead)
             </label>
             <textarea
               value={edited}
               onChange={(e) => { setEdited(e.target.value); setUseEdited(true) }}
               rows={5}
-              className="mt-1 w-full rounded-lex border border-stone-300 px-3 py-2 text-[14px] leading-relaxed focus:outline-none focus:border-ink"
+              className="mt-1 w-full rounded-lex border border-stone-300 dark:border-white/10 px-3 py-2 text-[14px] leading-relaxed focus:outline-none focus:border-ink"
             />
             <div className="flex items-center justify-between mt-2">
-              <p className="text-[12px] text-stone-400">
+              <p className="text-[12px] text-stone-400 dark:text-stone-500">
                 {useEdited
                   ? 'Will serve: your edited text above.'
                   : 'Will serve: the full captured answer, exactly as generated.'}
@@ -164,7 +164,7 @@ export default function AnnotationsPage() {
       </div>
 
       {/* Manual annotation */}
-      <div className="rounded-lex border border-stone-200 bg-white p-5 mt-4">
+      <div className="rounded-lex border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] p-5 mt-4">
         <h2 className="font-display text-lg tracking-tight flex items-center gap-2">
           <Plus size={17} /> Write a verified answer
         </h2>
@@ -173,14 +173,14 @@ export default function AnnotationsPage() {
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
             placeholder="Question users ask, e.g. What does Section 86 of the Income Tax Act deal with?"
-            className="w-full rounded-lex border border-stone-300 px-3 py-2 text-[14px] focus:outline-none focus:border-ink"
+            className="w-full rounded-lex border border-stone-300 dark:border-white/10 px-3 py-2 text-[14px] focus:outline-none focus:border-ink"
           />
           <textarea
             value={answer}
             onChange={(e) => setAnswer(e.target.value)}
             rows={4}
             placeholder="The verified answer, served verbatim…"
-            className="w-full rounded-lex border border-stone-300 px-3 py-2 text-[14px] leading-relaxed focus:outline-none focus:border-ink"
+            className="w-full rounded-lex border border-stone-300 dark:border-white/10 px-3 py-2 text-[14px] leading-relaxed focus:outline-none focus:border-ink"
           />
           <div className="flex justify-end">
             <button
@@ -201,7 +201,7 @@ export default function AnnotationsPage() {
         Serving set · {data.data?.annotations.length ?? 0}
       </h2>
       {data.data && data.data.annotations.length === 0 && (
-        <p className="text-[14px] text-stone-400">Nothing verified yet — answers come from retrieval alone.</p>
+        <p className="text-[14px] text-stone-400 dark:text-stone-500">Nothing verified yet — answers come from retrieval alone.</p>
       )}
       <div className="space-y-3">
         {data.data?.annotations.map((a) => (

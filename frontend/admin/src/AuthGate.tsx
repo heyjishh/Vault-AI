@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { adminApi, errMsg, type Me } from './api'
+import { BrandMark, DualToneBackdrop, ThemeToggle } from './ui'
 
 export default function AuthGate({ onAuthed }: { onAuthed: (u: Me) => void }) {
   const [email, setEmail] = useState('')
@@ -22,44 +23,50 @@ export default function AuthGate({ onAuthed }: { onAuthed: (u: Me) => void }) {
   }
 
   return (
-    <div className="min-h-screen bg-ink flex items-center justify-center p-6">
-      <div className="w-full max-w-sm fade-up">
-        <div className="flex items-center gap-2.5 mb-2">
-          <div className="w-9 h-9 rounded-lg bg-ivory flex items-center justify-center">
-            <span className="font-display text-ink text-xl leading-none pt-0.5">L</span>
+    <div className="min-h-screen app-wash relative overflow-hidden flex items-center justify-center p-6">
+      {/* The moving glow layer over the page wash + theme toggle */}
+      <DualToneBackdrop />
+      <div className="absolute top-4 right-4 z-20">
+        <ThemeToggle />
+      </div>
+      <div className="relative z-10 w-full max-w-sm fade-up">
+        <div>
+          <div className="flex items-center gap-3">
+            <BrandMark size={40} />
+            <span className="font-display text-2xl tracking-tight">Juris Vault AI</span>
           </div>
-          <span className="font-display text-2xl tracking-tight text-ivory">Juris Vault AI</span>
+          <div className="mt-3 h-[2px] w-[44px] bg-bronze" />
         </div>
-        <p className="text-ivory/50 text-meta mb-8 uppercase tracking-widest">Command Center · Admin sign-in</p>
+        <p className="text-stone-500 dark:text-stone-400 text-meta mt-4 mb-8">Command Center · Admin sign-in</p>
         <form onSubmit={submit} className="space-y-4">
           <div>
-            <label className="block text-meta font-medium text-ivory/60 mb-1.5">Admin email</label>
+            <label className="block text-meta font-medium text-stone-600 dark:text-stone-300 mb-1.5">Admin email</label>
             <input
               type="email" required value={email} onChange={(e) => setEmail(e.target.value)}
               autoComplete="email" placeholder="admin@firm.com"
-              className="w-full rounded-lex border border-ivory/25 bg-ink-900 text-ivory px-3.5 py-2.5 text-[15px] outline-none focus:border-ivory placeholder:text-ivory/30"
+              className="w-full rounded-lex border border-stone-300 dark:border-white/10 bg-white dark:bg-[#1d1f19] px-3.5 py-2.5 text-[15px] outline-none focus:border-ink focus:ring-1 focus:ring-ink placeholder:text-stone-400"
             />
           </div>
           <div>
-            <label className="block text-meta font-medium text-ivory/60 mb-1.5">Password</label>
+            <label className="block text-meta font-medium text-stone-600 dark:text-stone-300 mb-1.5">Password</label>
             <input
               type="password" required value={password} onChange={(e) => setPassword(e.target.value)}
               autoComplete="current-password" placeholder="••••••••"
-              className="w-full rounded-lex border border-ivory/25 bg-ink-900 text-ivory px-3.5 py-2.5 text-[15px] outline-none focus:border-ivory placeholder:text-ivory/30"
+              className="w-full rounded-lex border border-stone-300 dark:border-white/10 bg-white dark:bg-[#1d1f19] px-3.5 py-2.5 text-[15px] outline-none focus:border-ink focus:ring-1 focus:ring-ink placeholder:text-stone-400"
             />
           </div>
           {error && (
-            <div className="rounded-lex border border-brand-red/40 bg-[#3d1518] px-3.5 py-2.5 text-meta2 text-red-200">{error}</div>
+            <div className="rounded-lex border border-brand-red/30 bg-[#feeaea] px-3.5 py-2.5 text-meta2 text-[#a02c2c]">{error}</div>
           )}
           <button
             type="submit" disabled={loading}
-            className="w-full rounded-lex bg-ivory text-ink py-2.5 text-[15px] font-medium hover:bg-white transition-colors disabled:opacity-50"
+            className="w-full rounded-lex bg-ink text-ivory py-2.5 text-[15px] font-medium hover:bg-ink-900 transition-colors disabled:opacity-50"
           >
             {loading ? 'Signing in…' : 'Sign in to Command Center'}
           </button>
         </form>
-        <p className="mt-6 text-center text-meta text-ivory/40">
-          Not an admin? <a href="/" className="text-ivory/70 underline underline-offset-2">Open the Juris Vault AI app</a>
+        <p className="mt-6 text-center text-meta text-stone-500 dark:text-stone-400">
+          Not an admin? <a href="/" className="text-ink dark:text-[#f4f2ee] font-medium underline underline-offset-2">Open the Juris Vault AI app</a>
         </p>
       </div>
     </div>

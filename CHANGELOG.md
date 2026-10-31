@@ -15,6 +15,26 @@ live**, what is **built but unverified**, and what is **roadmap**.
 ## [Unreleased]
 
 ### Added
+- **Admin Command Center on the same design system (31 Oct 2026,
+  Piece 39).** JISHAN: "do make admin same" — the admin app, which
+  still wore the old Harvey look (flat ivory, always-dark ink
+  sidebar, no dark mode), now runs the user app's system 1:1. The
+  token layer is ported into `frontend/admin/src/index.css` (the
+  Piece 38 lightened light wash/glow; dark values unchanged),
+  `darkMode: 'class'` is on, and the identical pre-paint script
+  shares the `jurisvault.theme` key, so one theme choice governs
+  both apps on the origin. The sidebar is transparent over the
+  wash with the medallion lockup, "Command Center" second line,
+  bronze rule and bronze active-nav bar; the sign-in gate mirrors
+  the user Auth nameplate; ThemeToggle sits top-right on the gate
+  and in the shell footer. The dark sweep and ledger tells were
+  applied across all admin pages (313 `dark:` variants in admin
+  src; no resting shadows, no uppercase labels, chrome buttons at
+  `rounded-lex`). Presentation only — no routes, text, logic or
+  API behaviour changed. Admin build clean; every distinct `dark:`
+  utility used in src verified compiled in the served CSS. Known
+  leftovers (same class as the user app's): tinted data pills and
+  the ErrorBanner keep their light tints in dark mode.
 - **Lighter light-theme background (31 Oct 2026, Piece 38).**
   JISHAN: "make it more light background" — dark mode approved
   as-is and left untouched. The light page wash keeps its 155°

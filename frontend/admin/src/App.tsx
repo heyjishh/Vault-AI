@@ -25,18 +25,18 @@ export default function App() {
 
 function NonAdmin({ user }: { user: Me }) {
   return (
-    <div className="min-h-screen bg-ivory flex items-center justify-center p-6">
+    <div className="min-h-screen bg-ivory dark:bg-[#14120f] flex items-center justify-center p-6">
       <div className="max-w-sm text-center">
         <h1 className="font-display text-3xl tracking-tight">Command Center is admin-only</h1>
-        <p className="text-stone-500 mt-3 text-[15px]">
-          Signed in as <span className="font-medium text-ink">{user.email}</span> (role: {user.role}).
+        <p className="text-stone-500 dark:text-stone-400 mt-3 text-[15px]">
+          Signed in as <span className="font-medium text-ink dark:text-[#f4f2ee]">{user.email}</span> (role: {user.role}).
           Ask an administrator to grant you access, or return to the app.
         </p>
         <div className="mt-6 flex gap-3 justify-center">
           <a href="/" className="rounded-lex bg-ink text-ivory px-4 py-2 text-[15px] font-medium">Open Juris Vault AI</a>
           <button
             onClick={() => { tokens.clear(); window.location.reload() }}
-            className="rounded-lex border border-stone-300 px-4 py-2 text-[15px] font-medium"
+            className="rounded-lex border border-stone-300 dark:border-white/10 px-4 py-2 text-[15px] font-medium"
           >
             Sign out
           </button>

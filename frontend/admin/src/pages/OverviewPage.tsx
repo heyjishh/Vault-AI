@@ -38,16 +38,16 @@ export default function OverviewPage() {
       {!docs ? (
         <Spinner />
       ) : recent.length === 0 ? (
-        <p className="text-[15px] text-stone-500">No documents yet. Ingest from Corpus &amp; Vault.</p>
+        <p className="text-[15px] text-stone-500 dark:text-stone-400">No documents yet. Ingest from Corpus &amp; Vault.</p>
       ) : (
-        <div className="rounded-lex-lg border border-stone-200 bg-white shadow-lex overflow-hidden">
+        <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] overflow-hidden">
           {recent.map((d, i) => (
-            <div key={d.id} className={`flex items-center justify-between px-5 py-3 ${i > 0 ? 'border-t border-stone-200' : ''}`}>
+            <div key={d.id} className={`flex items-center justify-between px-5 py-3 ${i > 0 ? 'border-t border-stone-200 dark:border-white/10' : ''}`}>
               <div className="min-w-0">
                 <p className="text-[14px] font-medium truncate">{d.title}</p>
-                <p className="text-[12px] text-stone-500">{d.chunks} chunks · {d.chars.toLocaleString()} chars</p>
+                <p className="text-[12px] text-stone-500 dark:text-stone-400">{d.chunks} chunks · {d.chars.toLocaleString()} chars</p>
               </div>
-              <span className="text-[12px] text-stone-400 flex-shrink-0">
+              <span className="text-[12px] text-stone-400 dark:text-stone-500 flex-shrink-0">
                 {new Date(d.ingested_at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
               </span>
             </div>

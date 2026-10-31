@@ -33,7 +33,7 @@ function PurgePanel({ user, onClose }: { user: AdminUser; onClose: () => void })
             {receipt.brief_filings_removed} brief filings) and <strong>{receipt.history_entries_removed}</strong> history
             entries. The account, feedback, Private Vault and payment data were not touched.
           </p>
-          <button onClick={onClose} className="mt-4 rounded-lex border border-stone-300 bg-white px-3 py-1.5 text-[13px] font-medium">
+          <button onClick={onClose} className="mt-4 rounded-lex border border-stone-300 dark:border-white/10 bg-white dark:bg-[#1d1f19] px-3 py-1.5 text-[13px] font-medium">
             Close
           </button>
         </>
@@ -46,17 +46,17 @@ function PurgePanel({ user, onClose }: { user: AdminUser; onClose: () => void })
             filed in their Briefs, removed from the corpus, vectors, graph and brief filings — and{' '}
             <strong>{summary.data.history_entries} history entries</strong>. It cannot be undone.
           </p>
-          <p className="text-[13px] text-stone-500 mt-1.5">
+          <p className="text-[13px] text-stone-500 dark:text-stone-400 mt-1.5">
             Preserved: the account itself, their feedback, Private Vault, payment and usage records, and everyone else's data.
           </p>
           <label className="block mt-4">
-            <span className="text-[12px] uppercase tracking-wider text-stone-500 font-medium">
+            <span className="text-[12px] text-stone-500 dark:text-stone-400 font-medium">
               Type {user.email} to confirm
             </span>
             <input
               value={typed}
               onChange={(e) => setTyped(e.target.value)}
-              className="mt-1.5 w-full max-w-md rounded-lex border border-stone-300 bg-white px-3 py-2 text-[14px]"
+              className="mt-1.5 w-full max-w-md rounded-lex border border-stone-300 dark:border-white/10 bg-white dark:bg-[#1d1f19] px-3 py-2 text-[14px]"
               placeholder={user.email}
             />
           </label>
@@ -68,7 +68,7 @@ function PurgePanel({ user, onClose }: { user: AdminUser; onClose: () => void })
             >
               {purge.isPending ? 'Deleting…' : 'Permanently delete this data'}
             </button>
-            <button onClick={onClose} className="rounded-lex border border-stone-300 bg-white px-3 py-2 text-[13px] font-medium">
+            <button onClick={onClose} className="rounded-lex border border-stone-300 dark:border-white/10 bg-white dark:bg-[#1d1f19] px-3 py-2 text-[13px] font-medium">
               Cancel
             </button>
           </div>
@@ -105,10 +105,10 @@ export default function UsersPage({ me }: { me: Me }) {
       {isLoading ? (
         <Spinner label="Loading users…" />
       ) : (
-        <div className="mt-6 rounded-lex-lg border border-stone-200 bg-white shadow-lex overflow-hidden">
+        <div className="mt-6 rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] overflow-hidden">
           <table className="w-full text-left">
             <thead>
-              <tr className="border-b border-stone-200 bg-stone-100/60 text-[12px] uppercase tracking-wider text-stone-500">
+              <tr className="border-b border-stone-200 dark:border-white/10 bg-stone-100/60 dark:bg-[#26281f]/60 text-[12px] text-stone-500 dark:text-stone-400">
                 <th className="px-5 py-3 font-medium">User</th>
                 <th className="px-5 py-3 font-medium">Role</th>
                 <th className="px-5 py-3 font-medium">Joined</th>
@@ -117,26 +117,26 @@ export default function UsersPage({ me }: { me: Me }) {
             </thead>
             <tbody>
               {(users ?? []).map((u) => (
-                <tr key={u.id} className="border-b border-stone-200 last:border-0 hover:bg-stone-100/40">
+                <tr key={u.id} className="border-b border-stone-200 dark:border-white/10 last:border-0 hover:bg-stone-100/40 dark:hover:bg-white/5">
                   <td className="px-5 py-3.5">
                     <div className="flex items-center gap-3">
-                      <span className="w-8 h-8 rounded-full bg-stone-100 border border-stone-200 flex items-center justify-center text-stone-500">
+                      <span className="w-8 h-8 rounded-full bg-stone-100 dark:bg-[#26281f] border border-stone-200 dark:border-white/10 flex items-center justify-center text-stone-500 dark:text-stone-400">
                         {u.role === 'admin' ? <ShieldCheck size={15} /> : <UserIcon size={15} />}
                       </span>
                       <div>
                         <p className="text-[14px] font-medium">{u.email}</p>
-                        {u.id === me.id && <p className="text-[11px] text-stone-400">This is you</p>}
+                        {u.id === me.id && <p className="text-[11px] text-stone-400 dark:text-stone-500">This is you</p>}
                       </div>
                     </div>
                   </td>
                   <td className="px-5 py-3.5">
-                    <span className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${
-                      u.role === 'admin' ? 'bg-ink text-ivory border-ink' : 'bg-stone-100 text-stone-600 border-stone-200'
+                    <span className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] font-semibold ${
+                      u.role === 'admin' ? 'bg-ink text-ivory border-ink' : 'bg-stone-100 dark:bg-[#26281f] text-stone-600 dark:text-stone-300 border-stone-200 dark:border-white/10'
                     }`}>
                       {u.role}
                     </span>
                   </td>
-                  <td className="px-5 py-3.5 text-[13px] text-stone-500">
+                  <td className="px-5 py-3.5 text-[13px] text-stone-500 dark:text-stone-400">
                     {new Date(u.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
                   </td>
                   <td className="px-5 py-3.5">
@@ -144,14 +144,14 @@ export default function UsersPage({ me }: { me: Me }) {
                       <button
                         onClick={() => role.mutate({ id: u.id, role: u.role === 'admin' ? 'user' : 'admin' })}
                         disabled={role.isPending}
-                        className="rounded-lex border border-stone-300 px-2.5 py-1.5 text-[12px] font-medium hover:bg-stone-100 disabled:opacity-50"
+                        className="rounded-lex border border-stone-300 dark:border-white/10 px-2.5 py-1.5 text-[12px] font-medium hover:bg-stone-100 dark:hover:bg-white/10 disabled:opacity-50"
                       >
                         {u.role === 'admin' ? 'Demote to user' : 'Make admin'}
                       </button>
                       <button
                         onClick={() => setPurgeFor(u)}
                         title="Permanently delete this user's uploaded documents and history (account stays)"
-                        className="inline-flex items-center gap-1 rounded-lex border border-stone-300 px-2.5 py-1.5 text-[12px] font-medium text-[#a02c2c] hover:bg-[#feeaea]"
+                        className="inline-flex items-center gap-1 rounded-lex border border-stone-300 dark:border-white/10 px-2.5 py-1.5 text-[12px] font-medium text-[#a02c2c] hover:bg-[#feeaea]"
                       >
                         <Eraser size={13} /> Delete data
                       </button>
@@ -159,7 +159,7 @@ export default function UsersPage({ me }: { me: Me }) {
                         onClick={() => { if (confirm(`Delete ${u.email}? This cannot be undone.`)) del.mutate(u.id) }}
                         disabled={u.id === me.id || del.isPending}
                         title={u.id === me.id ? 'You cannot delete yourself' : 'Delete user'}
-                        className="p-1.5 rounded-lex text-stone-400 hover:text-[#a02c2c] hover:bg-[#feeaea] disabled:opacity-30 transition-colors"
+                        className="p-1.5 rounded-lex text-stone-400 dark:text-stone-500 hover:text-[#a02c2c] hover:bg-[#feeaea] disabled:opacity-30 transition-colors"
                       >
                         <Trash2 size={15} />
                       </button>
@@ -172,7 +172,7 @@ export default function UsersPage({ me }: { me: Me }) {
         </div>
       )}
       {purgeFor && <PurgePanel user={purgeFor} onClose={() => setPurgeFor(null)} />}
-      <p className="text-[12px] text-stone-400 mt-4">
+      <p className="text-[12px] text-stone-400 dark:text-stone-500 mt-4">
         Users self-register in the app. Emails listed in the server's <code className="font-mono">LEGAL_RAG_ADMIN_EMAILS</code> are promoted to admin automatically at sign-in.
       </p>
     </div>

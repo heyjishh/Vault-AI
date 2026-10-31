@@ -3,6 +3,7 @@ import {
   LayoutDashboard, Users, FolderOpen, Settings2, LogOut, ArrowLeft, IndianRupee, Activity, Target, Palette, BadgeCheck,
 } from 'lucide-react'
 import type { Me } from './api'
+import { BrandMark, DualToneBackdrop, ThemeToggle } from './ui'
 import OverviewPage from './pages/OverviewPage'
 import UsersPage from './pages/UsersPage'
 import CorpusPage from './pages/CorpusPage'
@@ -31,17 +32,21 @@ export default function Shell({ user, onLogout }: { user: Me; onLogout: () => vo
   const [view, setView] = useState<View>('overview')
 
   return (
-    <div className="h-screen flex bg-ivory text-ink overflow-hidden">
-      {/* Dark ink sidebar — visually distinct from the user app */}
-      <aside className="w-60 flex-shrink-0 bg-ink text-ivory flex flex-col">
-        <div className="h-[4.5rem] flex items-center gap-2.5 px-5 border-b border-ivory/10">
-          <div className="w-8 h-8 rounded-lg bg-ivory flex items-center justify-center">
-            <span className="font-display text-ink text-lg leading-none pt-0.5">L</span>
+    <div className="h-screen flex relative app-wash text-ink dark:text-[#f4f2ee] overflow-hidden">
+      {/* Piece 39: one glow layer fixed behind the whole app, over the
+          page wash — the same background system as the user app. */}
+      <DualToneBackdrop fixed />
+      {/* Sidebar — transparent over the wash, hairline right border */}
+      <aside className="relative z-10 w-60 flex-shrink-0 border-r border-stone-200 dark:border-white/10 flex flex-col">
+        <div className="px-5 py-4 border-b border-stone-200 dark:border-white/10">
+          <div className="flex items-center gap-3">
+            <BrandMark size={36} />
+            <div className="min-w-0">
+              <p className="font-display text-[21px] leading-tight tracking-tight truncate">Juris Vault AI</p>
+              <p className="text-[11.5px] text-stone-500 dark:text-stone-400 leading-tight mt-0.5 truncate">Command Center</p>
+            </div>
           </div>
-          <div>
-            <p className="font-display text-lg leading-none tracking-tight">Juris Vault AI</p>
-            <p className="text-[10px] uppercase tracking-[0.18em] text-ivory/50 mt-1">Command Center</p>
-          </div>
+          <div className="mt-3 h-[2px] w-[44px] bg-bronze" />
         </div>
 
         <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
@@ -51,18 +56,18 @@ export default function Shell({ user, onLogout }: { user: Me; onLogout: () => vo
               onClick={() => setView(id)}
               className={`w-full flex items-center gap-3 rounded-lex px-3 py-2 text-[14px] transition-colors ${
                 view === id
-                  ? 'bg-ivory/15 text-ivory font-medium'
-                  : 'text-ivory/60 hover:bg-ivory/10 hover:text-ivory'
+                  ? 'bg-stone-100 dark:bg-[#26281f] text-ink dark:text-[#f4f2ee] font-medium shadow-[inset_2px_0_0_var(--bronze)]'
+                  : 'text-stone-600 dark:text-stone-300 hover:bg-stone-100/70 dark:hover:bg-white/5 hover:text-ink'
               }`}
             >
               <Icon size={16} strokeWidth={1.8} />
               {label}
             </button>
           ))}
-          <div className="pt-4 mt-2 border-t border-ivory/10">
+          <div className="pt-4 mt-2 border-t border-stone-200 dark:border-white/10">
             <a
               href="/"
-              className="w-full flex items-center gap-3 rounded-lex px-3 py-2 text-[14px] text-ivory/60 hover:bg-ivory/10 hover:text-ivory transition-colors"
+              className="w-full flex items-center gap-3 rounded-lex px-3 py-2 text-[14px] text-stone-600 dark:text-stone-300 hover:bg-stone-100/70 dark:hover:bg-white/5 hover:text-ink transition-colors"
             >
               <ArrowLeft size={16} strokeWidth={1.8} />
               Back to app
@@ -70,18 +75,21 @@ export default function Shell({ user, onLogout }: { user: Me; onLogout: () => vo
           </div>
         </nav>
 
-        <div className="border-t border-ivory/10 px-4 py-3.5 flex items-center justify-between">
+        <div className="border-t border-stone-200 dark:border-white/10 px-4 py-3.5 flex items-center justify-between">
           <div className="min-w-0">
-            <p className="text-meta2 font-medium truncate text-ivory">{user.email}</p>
-            <p className="text-[11px] text-ivory/40">Administrator</p>
+            <p className="text-[13px] font-medium truncate">{user.email}</p>
+            <p className="text-[11px] text-stone-400 dark:text-stone-500">Administrator</p>
           </div>
-          <button onClick={onLogout} title="Sign out" className="p-2 rounded-lex text-ivory/60 hover:bg-ivory/10 hover:text-ivory transition-colors">
-            <LogOut size={16} />
-          </button>
+          <span className="flex items-center gap-0.5 shrink-0">
+            <ThemeToggle />
+            <button onClick={onLogout} title="Sign out" className="p-2 rounded-lex text-stone-500 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-white/10 hover:text-ink transition-colors">
+              <LogOut size={16} />
+            </button>
+          </span>
         </div>
       </aside>
 
-      <main className="flex-1 min-w-0 overflow-y-auto">
+      <main className="relative z-10 flex-1 min-w-0 overflow-y-auto">
         {view === 'overview' && <OverviewPage />}
         {view === 'users' && <UsersPage me={user} />}
         {view === 'corpus' && <CorpusPage />}
