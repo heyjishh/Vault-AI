@@ -11,6 +11,7 @@ import AssistantAvatar from './AssistantAvatar'
 import { RefineControls, useRefine, type RefineCtl } from './RefineControls'
 import { SourceModal, citeMarkdownComponents, linkifyCitations } from './SourceModal'
 import { ResponseDownload, exportCitations } from './ResponseDownload'
+import { DocInsightButton } from './DocInsight'
 import type { Citation, CitationAudit, QueryMode } from '../api/types'
 import { useSession } from '../stores/session'
 import { useMatter } from '../stores/matter'
@@ -550,6 +551,7 @@ function SourcesSidebar({ turn, selectedChunkId, onClose, go, onOpenSource }: {
               )}
               {isDoc && (
                 <div className="mt-3 flex flex-col gap-2 border-t border-stone-100 pt-2.5">
+                  <DocInsightButton citation={c} />
                   <button
                     onClick={(e) => { e.stopPropagation(); void openOriginal() }}
                     className="flex items-center gap-1.5 text-[12.5px] font-medium text-ink hover:underline underline-offset-2"

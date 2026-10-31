@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import type { Citation } from '../api/types'
 import { SourceModal } from './SourceModal'
+import { DocInsightButton } from './DocInsight'
 
 /** Answer text with inline [doc:N] / [web:N] refs rendered as clickable chips (Harvey style). */
 export function AnswerText({
@@ -71,6 +72,11 @@ export function CitationCard({ citation, active, go }: {
           </p>
         </div>
       </div>
+      {citation.doc_id.startsWith('doc:') && !citation.source_url && (
+        <div className="border-t border-stone-100 px-4 py-2">
+          <DocInsightButton citation={citation} />
+        </div>
+      )}
       {modalOpen && (
         <SourceModal citation={citation} onClose={() => setModalOpen(false)} go={go} />
       )}

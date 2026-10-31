@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { ExternalLink, Loader2, Lock, PanelRight, X } from 'lucide-react'
 import { openOriginalDocument, ragApi } from '../api/client'
 import type { Citation, SourceDocument } from '../api/types'
+import { DocInsightButton } from './DocInsight'
 
 /** Collapse whitespace runs to single spaces, keeping a map from each
  *  normalized index back to its original index — a passage found in
@@ -231,6 +232,14 @@ export function SourceModal({ citation: c, onClose, go }: {
             </a>
           ) : isDoc ? (
             <span className="inline-flex items-center gap-4">
+              {doc?.document_id && (
+                <DocInsightButton
+                  documentId={doc.document_id}
+                  title={doc.title ?? c.doc_title ?? doc.document_id}
+                  label="Insight"
+                  className="inline-flex items-center gap-1.5 text-[12.5px] font-medium text-ink hover:underline underline-offset-2 disabled:opacity-40"
+                />
+              )}
               <button
                 onClick={() => void openOriginal()}
                 disabled={!doc?.document_id}

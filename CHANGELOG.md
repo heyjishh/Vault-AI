@@ -15,6 +15,31 @@ live**, what is **built but unverified**, and what is **roadmap**.
 ## [Unreleased]
 
 ### Added
+- **Insight button on document sources (31 Oct 2026, Piece 31).**
+  Every vault-document source now carries an **Insight** button that
+  summarises the source document itself: the Ask Sources panel cards,
+  the source viewer (SourceModal) footer, and the shared citation
+  cards used by Research, Agents, and Draft. Clicking it resolves the
+  citation's chunk to its document (the Piece 29 source-document
+  path) and runs the Interact analyst over the document's full text.
+  The Insight modal opens on **Summary** (Parties & Subject, Key
+  Terms / Obligations, Important Dates, Outcomes or Demands,
+  Anything Unusual) and offers **Key clauses**, **Risks**, and
+  **Chronology** as tabs over the same document, with Copy and the
+  Piece 28/30 Download (PDF / RTF, with or without citations) for
+  the open view. Results are cached per document + view for the
+  page session, so reopening an Insight never re-runs or re-bills
+  the model. Scope is deliberate: vault documents only — web sources
+  have no vault document to analyse, and Confidential Vault text is
+  never fetched into this view, so web and Private sources show no
+  Insight button. Frontend-only over the existing Interact endpoint;
+  the shared dist serves prod and test immediately. Verified live
+  on :3001 through the button's exact call path: Ask → citation
+  chunk → resolved to the Kankar Mines Lease document → Summary
+  returned its parties, the Rs 310/tonne quarterly royalty, and the
+  20-year term from 2018; the Risks tab returned a severity-ranked
+  review; the served bundle is the new build on test, prod, and
+  the public site.
 - **Download with or without citations (31 Oct 2026, Piece 30).**
   The response Download menu (Piece 28) now asks the citation
   question as well as the format question: four choices grouped as
