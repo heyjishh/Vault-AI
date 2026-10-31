@@ -53,6 +53,11 @@ export function ConfirmDialog({
   onConfirm: () => void
   onCancel: () => void
 }) {
+  /* Piece 47: typed confirmation — the delete button stays disabled
+     until the user types DELETE, so a permanent delete can never
+     happen on a stray click. */
+  const [typed, setTyped] = useState('')
+  const armed = typed.trim() === 'DELETE'
   return createPortal(
     <div
       className="fixed inset-0 z-[80] bg-ink/40 flex items-center justify-center p-4"
@@ -79,6 +84,24 @@ export function ConfirmDialog({
             <X size={16} />
           </button>
         </div>
+        <div className="px-6 pt-4">
+          <label className="block">
+            <span className="text-[12.5px] font-medium text-stone-500 dark:text-stone-400">
+              Type <span className="font-bold text-[#a02c2c] tracking-wide">DELETE</span> to confirm
+            </span>
+            <input
+              type="text"
+              value={typed}
+              onChange={(e) => setTyped(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter' && armed && !busy) onConfirm() }}
+              placeholder="DELETE"
+              autoFocus
+              autoComplete="off"
+              spellCheck={false}
+              className="mt-1.5 w-full rounded-lex border border-stone-300 dark:border-white/15 bg-transparent px-3 py-2 text-[13.5px] font-medium tracking-[0.18em] outline-none placeholder:text-stone-300 dark:placeholder:text-stone-600 focus:border-[#a02c2c]"
+            />
+          </label>
+        </div>
         <div className="flex justify-end gap-2 px-6 py-4 mt-2 bg-ivory dark:bg-[#14120f] border-t border-stone-100 dark:border-white/10">
           <button
             onClick={() => !busy && onCancel()}
@@ -88,7 +111,7 @@ export function ConfirmDialog({
           </button>
           <button
             onClick={onConfirm}
-            disabled={busy}
+            disabled={busy || !armed}
             className="rounded-lex bg-[#a02c2c] px-4 py-1.5 text-[13px] font-semibold text-white hover:bg-[#8c2626] disabled:opacity-50 transition-colors"
           >
             {busy ? 'Deleting…' : confirmLabel}
