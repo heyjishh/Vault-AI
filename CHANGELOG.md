@@ -15,6 +15,20 @@ live**, what is **built but unverified**, and what is **roadmap**.
 ## [Unreleased]
 
 ### Added
+- **Running border everywhere (1 Nov 2026, Piece 54).** JISHAN:
+  the green inline border was still on the Dashboard and the
+  running border wasn't there — "do same everywhere". The
+  Dashboard hero "Ask Clause" box had neither treatment (its
+  input still took the global green `:focus-visible` outline).
+  `.running-border` now also wraps: the Dashboard hero ask box,
+  the Search page query box, the Research question box, the
+  Draft instructions box, and both Agents boxes (workflow input +
+  autonomous goal) — eight prompt boxes in total with Ask +
+  Interact. The Piece 51 outline-kill gained self-variants for
+  boxes that ARE the textarea (Draft, Agents). Form fields inside
+  modals/panels and the Brief notes editor keep standard focus
+  styling. Verified: build clean, all eight boxes present in the
+  shipped bundle, live on test + public.
 - **Card shadow toned down + sidebar raised + admin parity
   (1 Nov 2026, Piece 53).** JISHAN on Piece 52: "its too much
   shadow, make a little bit low, and do same visual effect in

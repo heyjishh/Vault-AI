@@ -90,7 +90,7 @@ export default function DraftPage({ matterId: fixedMatterId, go }: { matterId?: 
           onChange={(e) => setInstructions(e.target.value)}
           rows={5}
           placeholder={'Describe what you need. E.g. "Notice to a tenant at 14 MG Road, Bengaluru for 3 months’ unpaid rent of ₹45,000/month, demanding payment within 15 days and vacation on default."'}
-          className="mt-4 w-full rounded-lex border border-stone-300 dark:border-white/10 px-3.5 py-3 text-[14.5px] leading-relaxed"
+          className="running-border mt-4 w-full rounded-lex border border-stone-300 dark:border-white/10 px-3.5 py-3 text-[14.5px] leading-relaxed"
         />
         <div className="flex items-center justify-between mt-3 flex-wrap gap-3">
           <div className="flex items-center gap-3 flex-wrap">

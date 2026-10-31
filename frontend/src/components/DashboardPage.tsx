@@ -215,7 +215,7 @@ export default function DashboardPage({ go, openMatter }: { go: (v: View) => voi
               Ask me anything across your briefs and vault — every answer cited to its source.
             </p>
             <form
-              className="mt-4 flex items-center gap-2 rounded-lex border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] pl-4 pr-1.5 py-1.5 focus-within:border-stone-400 transition-colors"
+              className="running-border mt-4 flex items-center gap-2 rounded-lex border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] pl-4 pr-1.5 py-1.5 transition-colors"
               onSubmit={(e) => { e.preventDefault(); askNow(heroQ) }}
             >
               <Sparkles size={15} className="text-stone-400 dark:text-stone-500 shrink-0" />

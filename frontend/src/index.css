@@ -86,7 +86,9 @@ html.dark .running-border { --rb-surface: #0a1a12; }
    Kill it inside the composers only; keyboard focus rings stay
    everywhere else in the app. */
 .running-border textarea:focus-visible,
-.running-border input:focus-visible { outline: none; }
+.running-border input:focus-visible,
+textarea.running-border:focus-visible,
+input.running-border:focus-visible { outline: none; }
 
 /* Piece 52: white cards, prominent. JISHAN: "make all white cards
    more prominent and more knownable" — flat white on a near-white

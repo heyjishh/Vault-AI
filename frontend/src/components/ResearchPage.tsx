@@ -48,7 +48,7 @@ export default function ResearchPage({ go }: { go?: (view: string) => void } = {
         Deep research runs an epistemic loop: frame hypotheses, gather cited evidence for each, then adjudicate.
       </p>
 
-      <div className="mt-6 rounded-lex-lg border border-stone-300 dark:border-white/10 bg-white dark:bg-[#0a1a12] p-4">
+      <div className="running-border mt-6 rounded-lex-lg border border-stone-300 dark:border-white/10 bg-white dark:bg-[#0a1a12] p-4">
         <textarea
           value={q} onChange={(e) => setQ(e.target.value)} rows={3}
           placeholder="State the legal question to investigate…"

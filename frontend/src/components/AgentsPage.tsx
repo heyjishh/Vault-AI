@@ -106,7 +106,7 @@ export default function AgentsPage({ go }: { go?: (view: string) => void } = {})
           <textarea
             value={input} onChange={(e) => setInput(e.target.value)} rows={4}
             placeholder="Paste the contract text, deal summary, or legal question…"
-            className="w-full rounded-lex border border-stone-300 dark:border-white/10 px-3 py-2.5 text-[15px] outline-none focus:border-ink placeholder:text-stone-400 resize-y"
+            className="running-border w-full rounded-lex border border-stone-300 dark:border-white/10 px-3 py-2.5 text-[15px] outline-none placeholder:text-stone-400 resize-y"
           />
           <div className="flex items-center justify-between mt-3">
             <div className="flex items-center gap-3">
@@ -133,7 +133,7 @@ export default function AgentsPage({ go }: { go?: (view: string) => void } = {})
         <textarea
           value={goal} onChange={(e) => setGoal(e.target.value)} rows={3}
           placeholder="e.g. What does the vault say about compensation for delayed possession, and what is the current law on the web?"
-          className="w-full mt-3 rounded-lex border border-stone-300 dark:border-white/10 px-3 py-2.5 text-[15px] outline-none focus:border-ink placeholder:text-stone-400 resize-y"
+          className="running-border w-full mt-3 rounded-lex border border-stone-300 dark:border-white/10 px-3 py-2.5 text-[15px] outline-none placeholder:text-stone-400 resize-y"
         />
         <div className="flex flex-wrap items-center gap-3 mt-3">
           <select value={autoMatter} onChange={(e) => setAutoMatter(e.target.value)}
