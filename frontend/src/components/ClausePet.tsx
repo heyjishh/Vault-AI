@@ -567,7 +567,7 @@ export default function ClausePet({ view, go, askQuestion, startNewChat }: Claus
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 4, scale: 0.97 }}
             transition={{ duration: 0.18 }}
-            className="mb-1 mr-1 w-[268px] rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1e1c19] shadow-lex-md px-3.5 py-2.5 relative"
+            className="mb-1 mr-1 w-[268px] rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] shadow-lex-md px-3.5 py-2.5 relative"
           >
             <p className="text-[10px] font-semibold uppercase tracking-wider text-stone-400 dark:text-stone-500">
               Clause · {page.name}
@@ -623,7 +623,7 @@ export default function ClausePet({ view, go, askQuestion, startNewChat }: Claus
                 </button>
               </div>
             )}
-            <span className="absolute -bottom-[5px] right-8 w-2.5 h-2.5 rotate-45 bg-white dark:bg-[#1e1c19] border-b border-r border-stone-200 dark:border-white/10" />
+            <span className="absolute -bottom-[5px] right-8 w-2.5 h-2.5 rotate-45 bg-white dark:bg-[#1d1f19] border-b border-r border-stone-200 dark:border-white/10" />
           </motion.div>
         )}
       </AnimatePresence>

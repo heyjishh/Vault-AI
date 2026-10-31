@@ -72,7 +72,7 @@ export default function DraftPage({ matterId: fixedMatterId, go }: { matterId?: 
         Generate a structured first draft. Facts you don't supply become [BRACKETED PLACEHOLDERS] — the drafter never invents citations.
       </p>
 
-      <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1e1c19] px-6 py-5 mt-6">
+      <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] px-6 py-5 mt-6">
         <div className="flex flex-wrap gap-2">
           {KINDS.map((k) => (
             <button
@@ -113,7 +113,7 @@ export default function DraftPage({ matterId: fixedMatterId, go }: { matterId?: 
       {run.isPending && <Spinner label="Drafting…" />}
       {!run.isPending && result && (
         <div className="mt-5">
-          <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1e1c19] px-6 py-5">
+          <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] px-6 py-5">
             <div className="flex items-center justify-between gap-3 flex-wrap">
               <h2 className="font-display text-xl">{KINDS.find((k) => k.id === result.kind)?.label} — draft</h2>
               <div className="flex gap-2">

@@ -15,6 +15,29 @@ live**, what is **built but unverified**, and what is **roadmap**.
 ## [Unreleased]
 
 ### Added
+- **Theme aligned 1:1 to the taste-skill page (31 Oct 2026,
+  Piece 36).** Piece 35's brand layer used approximated values and
+  confined the wash to two screens; JISHAN compared the two side by
+  side and called it — the colours were not the reference's. The
+  theme tokens are now taken **1:1 from the taste-skill page's own
+  CSS variables** (verified against its source). (1) **The whole app
+  background is the dual-tone page wash**, both themes — light
+  `linear-gradient(155deg,#f7eedd,#f3efe0,#e9ecda,#dde5cd)`, dark
+  `linear-gradient(155deg,#221a12,#191a13,#12150d,#0d120a)` —
+  painted viewport-fixed on the AppShell and Auth roots and on
+  `body`, with the sidebar transparent over it. (2) **The moving
+  background is the reference's glow recipe** (`--grad-glow`: peach
+  and sage radial fields), one layer fixed behind the whole app on
+  the same 26s drift (Dashboard's local copy removed);
+  `prefers-reduced-motion` stills it. (3) **Accents are the
+  reference's variables** — terracotta `#b4552d` → sage `#5c7350`
+  in light, flipping to `#e08a5f` → `#9db488` in dark — driving the
+  usage bars, the Dashboard ring (SVG stops read the variables) and
+  the Auth wordmark through the shared `linear-gradient(120deg,…)`
+  recipe. (4) **Dark surfaces match the reference exactly**: cards
+  `#1d1f19`, raised/chip surfaces `#26281f`. Piece 35's `#c4664a` /
+  `#8fa382` and its invented backdrop fields are gone (zero
+  occurrences). Frontend-only; no behaviour, text, or API change.
 - **Dual-tone brand layer, moving backdrop, and dark mode (31 Oct 2026,
   Piece 35).** At JISHAN's direction, the brand treatment he chose for
   the taste-skill page now sits on top of Piece 34's achromatic-ledger

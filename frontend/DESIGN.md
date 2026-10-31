@@ -35,46 +35,71 @@ look and was not part of this pass.
   no letter-tracking. **Figures are tabular** (`tabular-nums`) in the
   sans at medium weight — KPIs are bare type in one hairline-divided
   strip, never tiled cards.
-- **The face is legal paper.** The ground stays the warm ivory
-  `#fafaf9` with white cards. The product's signature element is its
-  own: verdict-first answers with citation chips — kept, and quieter
-  (borderless stone-100 chips that invert to ink on hover).
+- **The face is legal paper.** Cards stay warm near-white
+  (`#fffef9`-family) and the ground is the dual-tone page wash (see
+  the brand layer below; Piece 36). The product's signature element
+  is its own: verdict-first answers with citation chips — kept, and
+  quieter (borderless stone-100 chips that invert to ink on hover).
 
-## Brand layer (user-directed, Piece 35)
+## Brand layer (user-directed, Pieces 35–36)
 
 Added 31 Oct 2026 at the user's own direction, on top of the ledger
 system above. These are the user's brand choices, carried over from
-the taste-skill page he had built the same day.
+the taste-skill page he had built the same day. **Piece 36: theme
+tokens are taken 1:1 from the taste-skill page (the user's
+reference); Piece 35's approximated values were superseded.** The
+whole page background IS the dual-tone wash, in both themes, with
+the reference's glow fields drifting over it and its accent
+variables flipping with the theme.
 
-- **The dual tone: terracotta `#c4664a` → sage `#8fa382`** (Tailwind
-  tokens `terra` / `sage`). It appears in exactly three places, always
-  soft — tints and washes, never saturated blocks:
-  1. the token-usage data element (`.dual-tone-bar` fills in the
-     sidebar plan block and Plans; an SVG gradient on the Dashboard
-     usage ring). The ≥90%/exhausted state still turns the fill
-     `#a02c2c` — the data signal beats the brand;
-  2. the moving backdrop (below);
-  3. one gradient wordmark (`.dual-tone-text`) — the product name on
-     the Auth page. Gradient text is allowed nowhere else.
-- **Moving background.** `DualToneBackdrop` (ui.tsx): two large
-  blurred radial fields — terracotta top-left, sage bottom-right —
+| Token | Light | Dark |
+|---|---|---|
+| Page wash (`--grad-page`) | `linear-gradient(155deg,#f7eedd 0%,#f3efe0 34%,#e9ecda 68%,#dde5cd 100%)` | `linear-gradient(155deg,#221a12 0%,#191a13 38%,#12150d 70%,#0d120a 100%)` |
+| Glow (`--grad-glow`) | peach `rgba(240,190,120,.50)` at 12% 0% + sage `rgba(146,168,120,.45)` at 92% 8% | terracotta `rgba(214,130,70,.28)` at 12% 0% + sage `rgba(120,150,95,.26)` at 92% 8% |
+| Card | `#fffef9` (the app keeps `bg-white` — negligibly different) | `#1d1f19` |
+| Raised / chip | `#efece0` (stone-100 fills) | `#26281f` |
+| Ink | `#16150f` | `#f0eee3` |
+| Accent A (`--accent-a`, terracotta) | `#b4552d` | `#e08a5f` |
+| Accent B (`--accent-b`, sage) | `#5c7350` | `#9db488` |
+
+(The glow alphas sit where the reference source puts them: the
+stronger glow belongs to its light theme, the softer one to dark.)
+
+- **The page wash.** `.app-wash` (index.css) paints
+  `var(--grad-page)` with `background-attachment: fixed` on the
+  AppShell and Auth roots, and `body` carries the same gradient so
+  overscroll matches (fallback end-stops `#dde5cd` / `#0d120a`).
+  The sidebar paints no background of its own — it sits transparent
+  over the wash behind its hairline.
+- **Moving background.** `DualToneBackdrop` (ui.tsx) renders the
+  glow recipe as one layer (`background: var(--grad-glow)`)
   drifting on a 26s ease-in-out alternate loop (`dualDrift` in
-  index.css), at ~0.16 alpha in light mode and ~0.22 in dark.
-  Placed only twice: full-screen behind the Auth card, and clipped
-  inside the Dashboard greeting hero. It is pointer-events-none and
+  index.css). One instance is fixed behind the whole app in
+  AppShell; Auth keeps its own. It is pointer-events-none and
   decoration only; `prefers-reduced-motion` stills it.
+- **The dual tone on data.** `.dual-tone-bar` and `.dual-tone-text`
+  are the reference's CTA recipe — `linear-gradient(120deg,
+  var(--accent-a), var(--accent-b))` — so they flip with the theme:
+  the usage-bar fills (sidebar plan block, Plans), and the one
+  gradient wordmark (the product name on the Auth page; gradient
+  text is allowed nowhere else). The Dashboard usage ring's SVG
+  stops read the same variables. The ≥90%/exhausted state still
+  turns the fill `#a02c2c` — the data signal beats the brand.
+  Tailwind tokens `terra` / `sage` hold the light values.
 - **Dark mode.** Class strategy (`darkMode: 'class'`): a pre-paint
   inline script in `index.html` adds `.dark` to `<html>` from the
   stored choice (`localStorage` key `jurisvault.theme` =
   `'dark' | 'light'`) or, with no stored choice, the system
   `prefers-color-scheme`. `ThemeToggle` (sidebar footer, Auth
-  top-right) flips the class and persists the choice. The mapping is
-  fixed: ivory ground → `#14120f`; white surface → `#1e1c19`;
-  stone-100/50 fills and hovers → `white/5`–`white/10`; stone borders
-  and dividers → `white/10`; ink text → `#f4f2ee` (ink-800/900 →
-  `#e8e5e0`); stone-600/500/400 text → stone-300/400/500. `bg-ink`
-  fills stay ink in both themes. The plain-CSS surfaces (prose,
-  citation chips, scrollbars) have `.dark` overrides in index.css.
+  top-right) flips the class and persists the choice. The mapping:
+  the ground is the dark wash (above); white surface → `#1d1f19`
+  (the reference card); stone-100 fills → `#26281f` (the reference
+  raised/chip); stone-50 and white/50 washes and hovers →
+  `white/5`–`white/10`; stone borders and dividers → `white/10`;
+  ink text → `#f4f2ee` (ink-800/900 → `#e8e5e0`); stone-600/500/400
+  text → stone-300/400/500. `bg-ink` fills stay ink in both themes.
+  The plain-CSS surfaces (prose, citation chips, scrollbars) have
+  `.dark` overrides in index.css.
 
 **Recorded exception.** The taste skill's house style bans gradients
 outright. That ban is **overridden here by the user's own brand
@@ -112,8 +137,8 @@ is the serif product name alone, with no icon tile.
 | `--color-red` | `#a02c2c` | Negative signal (dot/word; delete action) |
 | `--color-amber` | `#b7791f` | Notice signal (dot/word only) |
 | `--color-ledger` | `#1d5fbf` | Piece 34's data hue — retained as a token; usage bars moved to the dual tone in Piece 35 |
-| `--color-terra` | `#c4664a` | Dual tone, warm end (Piece 35 — washes, usage gradient, Auth wordmark only) |
-| `--color-sage` | `#8fa382` | Dual tone, cool end (Piece 35 — same restricted placements) |
+| `--color-terra` | `#b4552d` | Dual tone, warm end — the taste-skill page's `--accent-a` (Piece 36; light value, dark flips via the CSS variables) |
+| `--color-sage` | `#5c7350` | Dual tone, cool end — the taste-skill page's `--accent-b` (Piece 36; same note) |
 | `--color-dark-bronze` | `#593d3a` | Rare accent |
 
 (The old `#f6f202` highlighter is retired: text selection is now the
@@ -131,7 +156,7 @@ neutral `#e5e5e3`.)
 - Left sidebar navigation: Dashboard · Briefs · Ask · Interact · Draft ·
   Research · Agents · Vault · Search documents · Private Vault ·
   Knowledge · Plans & Billing
-- Ivory sidebar, hairline divider, serif product wordmark
+- Sidebar transparent over the page wash, hairline divider, serif product wordmark
 - Assistant = home: greeting + composer, verdict-first answers,
   citation chips `[doc:1]` expanding to snippet cards
 - Primary actions = ink-black buttons with white text; destructive =

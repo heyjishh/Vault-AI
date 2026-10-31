@@ -209,7 +209,7 @@ export default function PrivateVaultPage() {
       {status.isLoading || !st ? (
         <Spinner label="Checking your vault…" />
       ) : !st.has_password ? (
-        <section className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1e1c19] p-6">
+        <section className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] p-6">
           <div className="flex items-center gap-2.5">
             <ShieldCheck size={18} className="text-stone-500 dark:text-stone-400" />
             <h2 className="font-display text-lg">Set your vault password</h2>
@@ -237,7 +237,7 @@ export default function PrivateVaultPage() {
           </div>
         </section>
       ) : !st.unlocked ? (
-        <section className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1e1c19] p-6">
+        <section className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] p-6">
           <div className="flex items-center gap-2.5">
             <Lock size={18} className="text-stone-500 dark:text-stone-400" />
             <h2 className="font-display text-lg">Vault locked</h2>
@@ -289,7 +289,7 @@ export default function PrivateVaultPage() {
           </div>
 
           {showChange && (
-            <section className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1e1c19] p-5 mb-6">
+            <section className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] p-5 mb-6">
               <h3 className="font-display text-[15px]">Change vault password</h3>
               <p className="text-[13px] text-stone-500 dark:text-stone-400 mt-1">Every sealed document is re-encrypted under the new key.</p>
               <div className="flex flex-col sm:flex-row gap-2 mt-3">
@@ -302,7 +302,7 @@ export default function PrivateVaultPage() {
             </section>
           )}
 
-          <section className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1e1c19] p-5 mb-6">
+          <section className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] p-5 mb-6">
             <h3 className="font-display text-[15px]">Seal a document</h3>
             <div className="flex items-center gap-3 mt-3 flex-wrap">
               <input
@@ -378,7 +378,7 @@ export default function PrivateVaultPage() {
           ) : (
             <div className="space-y-2.5">
               {(docs.data ?? []).map((d: PrivateDocMeta) => (
-                <div key={d.id} className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1e1c19] px-4 py-3 flex items-center gap-3">
+                <div key={d.id} className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] px-4 py-3 flex items-center gap-3">
                   <Lock size={15} className="text-stone-400 dark:text-stone-500 shrink-0" />
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-[14px] truncate">{d.title}</p>

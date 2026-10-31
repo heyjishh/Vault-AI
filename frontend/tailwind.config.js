@@ -35,11 +35,14 @@ export default {
         // the token-usage bars to the dual tone, so ledger is retained
         // only as a defined token — no longer the usage-bar fill.
         ledger: '#1d5fbf',
-        // Piece 35 (user-directed brand layer): the dual tone. Appears
-        // only as soft washes, the usage-bar gradient and one gradient
-        // wordmark — never as chrome fills. See DESIGN.md.
-        terra: '#c4664a',
-        sage: '#8fa382',
+        // Dual tone (user-directed brand layer, Pieces 35–36): values
+        // taken 1:1 from the taste-skill page — the page wash, the
+        // usage-bar gradient and one gradient wordmark. The live theme
+        // runs on the --accent-a/--accent-b CSS variables in index.css
+        // (they flip lighter in dark); these tokens hold the light
+        // values. See DESIGN.md.
+        terra: '#b4552d',
+        sage: '#5c7350',
         'app-bg': '#fafaf9',
         'surface': '#FFFFFF',
         'surface-2': '#f2f1f0',

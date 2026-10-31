@@ -88,7 +88,7 @@ export default function AgentsPage({ go }: { go?: (view: string) => void } = {})
             <button
               key={w.id}
               onClick={() => { setSelected(w); setRun(null); setError(null) }}
-              className={`text-left rounded-lex-lg border bg-white dark:bg-[#1e1c19] p-5 transition-colors ${
+              className={`text-left rounded-lex-lg border bg-white dark:bg-[#1d1f19] p-5 transition-colors ${
                 selected?.id === w.id ? 'border-ink' : 'border-stone-200 dark:border-white/10 hover:border-stone-300'
               }`}
             >
@@ -101,7 +101,7 @@ export default function AgentsPage({ go }: { go?: (view: string) => void } = {})
       )}
 
       {selected && (
-        <div className="mt-6 rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1e1c19] p-5 fade-up">
+        <div className="mt-6 rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] p-5 fade-up">
           <label className="block text-meta font-medium text-stone-600 dark:text-stone-300 mb-1.5">{selected.input_label}</label>
           <textarea
             value={input} onChange={(e) => setInput(e.target.value)} rows={4}
@@ -123,7 +123,7 @@ export default function AgentsPage({ go }: { go?: (view: string) => void } = {})
         </div>
       )}
 
-      <div className="mt-8 rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1e1c19] p-5">
+      <div className="mt-8 rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] p-5">
         <h2 className="font-display text-xl tracking-tight flex items-center gap-2">
           <Compass size={18} className="text-stone-500 dark:text-stone-400" /> Autonomous research
         </h2>
@@ -137,7 +137,7 @@ export default function AgentsPage({ go }: { go?: (view: string) => void } = {})
         />
         <div className="flex flex-wrap items-center gap-3 mt-3">
           <select value={autoMatter} onChange={(e) => setAutoMatter(e.target.value)}
-            className="rounded-lex border border-stone-300 dark:border-white/10 px-2.5 py-2 text-meta2 bg-white dark:bg-[#1e1c19] outline-none focus:border-ink max-w-[220px]">
+            className="rounded-lex border border-stone-300 dark:border-white/10 px-2.5 py-2 text-meta2 bg-white dark:bg-[#1d1f19] outline-none focus:border-ink max-w-[220px]">
             <option value="">Whole vault</option>
             {(matters.data ?? []).map((m) => <option key={m.id} value={m.id}>{m.title}</option>)}
           </select>
@@ -223,7 +223,7 @@ export default function AgentsPage({ go }: { go?: (view: string) => void } = {})
       {run && !start.isPending && (
         <div className="mt-8 fade-up">
           <h2 className="font-display text-2xl tracking-tight">{run.workflow_name}</h2>
-          <div className="mt-4 rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1e1c19] p-6">
+          <div className="mt-4 rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] p-6">
             <div className="prose-lex">
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
@@ -237,7 +237,7 @@ export default function AgentsPage({ go }: { go?: (view: string) => void } = {})
           <h3 className="font-display text-xl tracking-tight mt-8 mb-3">Step findings</h3>
           <div className="space-y-2">
             {run.steps.map((s, i) => (
-              <div key={s.step_id} className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1e1c19] overflow-hidden">
+              <div key={s.step_id} className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] overflow-hidden">
                 <button
                   onClick={() => setOpenStep(openStep === i ? null : i)}
                   className="w-full flex items-center justify-between px-5 py-3.5 text-left"

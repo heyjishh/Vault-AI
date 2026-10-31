@@ -8,7 +8,7 @@ import { useAuth } from '../stores/auth'
 import { useSession } from '../stores/session'
 import type { View } from './AppShell'
 import AssistantAvatar from './AssistantAvatar'
-import { ConfirmDialog, DateChips, dateInRange, DualToneBackdrop, EmptyState, Pager, Spinner, usePagination, type DateRange } from './ui'
+import { ConfirmDialog, DateChips, dateInRange, EmptyState, Pager, Spinner, usePagination, type DateRange } from './ui'
 
 const KIND_META: Record<string, { label: string; icon: React.ElementType; view: View }> = {
   query: { label: 'Asked', icon: MessageSquare, view: 'assistant' },
@@ -138,7 +138,9 @@ function UsageRing({ pct }: { pct: number }) {
   const r = 34
   const c = 2 * Math.PI * r
   // Piece 34: the ring is a token-usage bar, so it takes the one data
-  // colour; Piece 35: that colour is now the dual-tone gradient.
+  // colour; Piece 35: that colour is now the dual-tone gradient;
+  // Piece 36: the stops read the --accent-a/--accent-b variables, so
+  // the ring flips lighter in dark like the reference page's accents.
   // Red stays the ≥90% data signal.
   const over = pct >= 90
   return (
@@ -146,8 +148,8 @@ function UsageRing({ pct }: { pct: number }) {
       <svg viewBox="0 0 84 84" className="w-full h-full -rotate-90">
         <defs>
           <linearGradient id="usage-ring-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="#c4664a" />
-            <stop offset="100%" stopColor="#8fa382" />
+            <stop offset="0%" style={{ stopColor: 'var(--accent-a)' }} />
+            <stop offset="100%" style={{ stopColor: 'var(--accent-b)' }} />
           </linearGradient>
         </defs>
         <circle cx="42" cy="42" r={r} fill="none" stroke="#eeece7" strokeWidth="8" className="usage-ring-track" />
@@ -191,9 +193,9 @@ export default function DashboardPage({ go, openMatter }: { go: (v: View) => voi
   return (
     <div className="w-full px-6 py-8">
       {/* ——— Clause hero ——— */}
-      <div className="relative overflow-hidden rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1e1c19] px-6 py-6 sm:px-8">
-        {/* Piece 35: the moving dual-tone backdrop, clipped to the hero */}
-        <DualToneBackdrop />
+      <div className="relative overflow-hidden rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] px-6 py-6 sm:px-8">
+        {/* Piece 36: no local glow here — AppShell's fixed layer glows
+            behind the whole app, this card included. */}
         <div className="relative flex items-start gap-5">
           <AssistantAvatar size={76} />
           <div className="min-w-0 flex-1">
@@ -208,7 +210,7 @@ export default function DashboardPage({ go, openMatter }: { go: (v: View) => voi
               Ask me anything across your briefs and vault — every answer cited to its source.
             </p>
             <form
-              className="mt-4 flex items-center gap-2 rounded-lex border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1e1c19] pl-4 pr-1.5 py-1.5 focus-within:border-stone-400 transition-colors"
+              className="mt-4 flex items-center gap-2 rounded-lex border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] pl-4 pr-1.5 py-1.5 focus-within:border-stone-400 transition-colors"
               onSubmit={(e) => { e.preventDefault(); askNow(heroQ) }}
             >
               <Sparkles size={15} className="text-stone-400 dark:text-stone-500 shrink-0" />
@@ -244,7 +246,7 @@ export default function DashboardPage({ go, openMatter }: { go: (v: View) => voi
 
       {/* ——— Subscription & activity ——— */}
       <div className="grid lg:grid-cols-5 gap-4 mt-5">
-        <div className="lg:col-span-3 rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1e1c19] px-6 py-5 flex items-center gap-6">
+        <div className="lg:col-span-3 rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] px-6 py-5 flex items-center gap-6">
           <UsageRing pct={pct} />
           <div className="min-w-0">
             <p className="flex items-center gap-2">
@@ -265,7 +267,7 @@ export default function DashboardPage({ go, openMatter }: { go: (v: View) => voi
             </button>
           </div>
         </div>
-        <div className="lg:col-span-2 rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1e1c19] px-6 py-5">
+        <div className="lg:col-span-2 rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] px-6 py-5">
           <p className="text-[13px] text-stone-500 dark:text-stone-400 font-medium">This period with Clause</p>
           <div className="grid grid-cols-2 gap-x-4 gap-y-4 mt-4">
             {[
@@ -290,7 +292,7 @@ export default function DashboardPage({ go, openMatter }: { go: (v: View) => voi
           <button
             key={c.view}
             onClick={() => go(c.view)}
-            className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1e1c19] px-5 py-4 text-left hover:border-ink transition-colors group"
+            className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] px-5 py-4 text-left hover:border-ink transition-colors group"
           >
             <span className="flex items-center justify-between">
               <c.icon size={18} className="text-stone-500 dark:text-stone-400 group-hover:text-ink transition-colors" />
@@ -315,7 +317,7 @@ export default function DashboardPage({ go, openMatter }: { go: (v: View) => voi
             <EmptyState title="Nothing in this period" hint="Try a wider date range — your older work is still here." />
           ) : (
             <>
-              <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1e1c19] overflow-hidden">
+              <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] overflow-hidden">
                 {act.pageItems.map((e) => <ActivityRow key={e.id} e={e} go={go} />)}
               </div>
               <Pager page={act.page} pages={act.pages} from={act.from} to={act.to} total={act.total} onPage={act.setPage} />
@@ -332,7 +334,7 @@ export default function DashboardPage({ go, openMatter }: { go: (v: View) => voi
           {(matters.data ?? []).length === 0 ? (
             <EmptyState title="No briefs yet" hint="Briefs keep each matter's documents, memory, and history together." />
           ) : (
-            <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1e1c19] overflow-hidden">
+            <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] overflow-hidden">
               {(matters.data ?? []).slice(0, 3).map((m) => (
                 <button
                   key={m.id}

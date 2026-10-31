@@ -89,7 +89,7 @@ export default function MattersPage({ open }: { open: (id: string) => void }) {
       </div>
 
       {creating && (
-        <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1e1c19] px-6 py-5 mt-6">
+        <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] px-6 py-5 mt-6">
           <div className="grid sm:grid-cols-2 gap-4">
             <label className="block">
               <span className="text-[12.5px] text-stone-400 dark:text-stone-500 font-medium">Brief title</span>
@@ -111,7 +111,7 @@ export default function MattersPage({ open }: { open: (id: string) => void }) {
               <span className="text-[12.5px] text-stone-400 dark:text-stone-500 font-medium">Type</span>
               <select
                 value={kind} onChange={(e) => setKind(e.target.value)}
-                className="mt-1.5 w-full rounded-lex border border-stone-200 dark:border-white/10 px-3 py-2 text-[14px] bg-white dark:bg-[#1e1c19] outline-none focus:border-stone-400"
+                className="mt-1.5 w-full rounded-lex border border-stone-200 dark:border-white/10 px-3 py-2 text-[14px] bg-white dark:bg-[#1d1f19] outline-none focus:border-stone-400"
               >
                 {KINDS.map((k) => <option key={k}>{k}</option>)}
               </select>
@@ -128,7 +128,7 @@ export default function MattersPage({ open }: { open: (id: string) => void }) {
               <span className="text-[12.5px] text-stone-400 dark:text-stone-500 font-medium">Space</span>
               <select
                 value={spaceId} onChange={(e) => setSpaceId(e.target.value)}
-                className="mt-1.5 w-full rounded-lex border border-stone-200 dark:border-white/10 px-3 py-2 text-[14px] bg-white dark:bg-[#1e1c19] outline-none focus:border-stone-400"
+                className="mt-1.5 w-full rounded-lex border border-stone-200 dark:border-white/10 px-3 py-2 text-[14px] bg-white dark:bg-[#1d1f19] outline-none focus:border-stone-400"
               >
                 <option value="">No space — visible to everyone signed in</option>
                 {(spaces ?? []).map((s) => <option key={s.id} value={s.id}>{s.name} — members only</option>)}
@@ -153,7 +153,7 @@ export default function MattersPage({ open }: { open: (id: string) => void }) {
               value={briefQuery}
               onChange={(e) => setBriefQuery(e.target.value)}
               placeholder="Search briefs…"
-              className="rounded-lex border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1e1c19] px-3.5 py-1.5 text-[13px] outline-none focus:border-stone-400 w-56"
+              className="rounded-lex border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] px-3.5 py-1.5 text-[13px] outline-none focus:border-stone-400 w-56"
             />
           </div>
         )}
@@ -245,7 +245,7 @@ function SpacesPanel({ spaces, myId }: { spaces: Space[]; myId?: string }) {
     onError: (e) => toast('error', (e as Error).message),
   })
 
-  const inputCls = 'rounded-lex border border-stone-200 dark:border-white/10 px-3 py-2 text-[14px] outline-none focus:border-stone-400 bg-white dark:bg-[#1e1c19]'
+  const inputCls = 'rounded-lex border border-stone-200 dark:border-white/10 px-3 py-2 text-[14px] outline-none focus:border-stone-400 bg-white dark:bg-[#1d1f19]'
   return (
     <div className="mt-12">
       <h2 className="font-display text-xl tracking-tight">Spaces</h2>
@@ -273,9 +273,9 @@ function SpacesPanel({ spaces, myId }: { spaces: Space[]; myId?: string }) {
           const iOwn = s.owner_id === myId
           const expanded = openId === s.id
           return (
-            <div key={s.id} className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1e1c19] px-5 py-4">
+            <div key={s.id} className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] px-5 py-4">
               <div className="flex items-center gap-3 flex-wrap">
-                <span className="w-8 h-8 rounded-lex bg-stone-100 dark:bg-white/5 flex items-center justify-center">
+                <span className="w-8 h-8 rounded-lex bg-stone-100 dark:bg-[#26281f] flex items-center justify-center">
                   <Users size={14} className="text-stone-500 dark:text-stone-400" />
                 </span>
                 <p className="font-medium text-[15px]">{s.name}</p>
@@ -328,7 +328,7 @@ function SpacesPanel({ spaces, myId }: { spaces: Space[]; myId?: string }) {
                       />
                       <select
                         value={memberRole} onChange={(e) => setMemberRole(e.target.value)}
-                        className="rounded-lex border border-stone-200 dark:border-white/10 px-2 py-1.5 text-[13px] bg-white dark:bg-[#1e1c19] outline-none"
+                        className="rounded-lex border border-stone-200 dark:border-white/10 px-2 py-1.5 text-[13px] bg-white dark:bg-[#1d1f19] outline-none"
                       >
                         <option value="viewer">Viewer — read + ask</option>
                         <option value="editor">Editor — + upload & edit</option>
@@ -362,10 +362,10 @@ function MatterCard({ matter: m, spaceName, onOpen, onDelete }: { matter: Matter
   return (
     <div
       onClick={onOpen}
-      className="text-left rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1e1c19] px-5 py-4 hover:border-stone-300 transition-all cursor-pointer group"
+      className="text-left rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] px-5 py-4 hover:border-stone-300 transition-all cursor-pointer group"
     >
       <div className="flex items-start gap-3">
-        <div className="w-9 h-9 rounded-lex bg-stone-100 dark:bg-white/5 flex items-center justify-center flex-shrink-0">
+        <div className="w-9 h-9 rounded-lex bg-stone-100 dark:bg-[#26281f] flex items-center justify-center flex-shrink-0">
           <Briefcase size={16} className="text-stone-500 dark:text-stone-400" />
         </div>
         <div className="min-w-0 flex-1">

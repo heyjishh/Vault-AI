@@ -59,7 +59,7 @@ export function ConfirmDialog({
       onClick={() => !busy && onCancel()}
     >
       <div
-        className="w-full max-w-md rounded-lex-lg bg-white dark:bg-[#1e1c19] shadow-lex-lg overflow-hidden"
+        className="w-full max-w-md rounded-lex-lg bg-white dark:bg-[#1d1f19] shadow-lex-lg overflow-hidden"
         onClick={(e) => e.stopPropagation()}
         role="alertdialog"
         aria-modal="true"
@@ -108,7 +108,7 @@ export function CitationCard({ citation, active, go }: {
   const [modalOpen, setModalOpen] = useState(false)
   return (
     <div
-      className={`rounded-lex-lg border bg-white dark:bg-[#1e1c19] transition-colors cursor-pointer ${active ? 'border-ink' : 'border-stone-200 dark:border-white/10 hover:border-stone-300'}`}
+      className={`rounded-lex-lg border bg-white dark:bg-[#1d1f19] transition-colors cursor-pointer ${active ? 'border-ink' : 'border-stone-200 dark:border-white/10 hover:border-stone-300'}`}
       onClick={() => setModalOpen(true)}
       title="View the full document"
     >
@@ -215,7 +215,7 @@ export function Pager({
   page: number; pages: number; from: number; to: number; total: number; onPage: (p: number) => void
 }) {
   if (pages <= 1) return null
-  const btn = 'inline-flex items-center gap-1 rounded-lex border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1e1c19] px-3 py-1.5 text-[12.5px] text-stone-600 dark:text-stone-300 hover:text-ink hover:border-stone-300 disabled:opacity-40 disabled:hover:text-stone-600 transition-colors'
+  const btn = 'inline-flex items-center gap-1 rounded-lex border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] px-3 py-1.5 text-[12.5px] text-stone-600 dark:text-stone-300 hover:text-ink hover:border-stone-300 disabled:opacity-40 disabled:hover:text-stone-600 transition-colors'
   return (
     <div className="flex items-center gap-3 mt-3">
       <span className="text-[12.5px] text-stone-400 dark:text-stone-500">Showing {from}–{to} of {total}</span>
@@ -257,7 +257,7 @@ export function DateChips({ value, onChange }: { value: DateRange; onChange: (r:
           key={o.id}
           onClick={() => onChange(o.id)}
           className={`rounded-lex px-3 py-1.5 text-[12.5px] font-medium transition-colors ${
-            value === o.id ? 'bg-ink text-ivory' : 'border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1e1c19] text-stone-500 dark:text-stone-400 hover:text-ink hover:border-stone-300'
+            value === o.id ? 'bg-ink text-ivory' : 'border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] text-stone-500 dark:text-stone-400 hover:text-ink hover:border-stone-300'
           }`}
         >
           {o.label}
@@ -298,18 +298,19 @@ export function ThemeToggle({ className = '' }: { className?: string }) {
 }
 
 /**
- * Piece 35: the moving dual-tone backdrop — two large blurred radial
- * fields (terracotta top-left, sage bottom-right) drifting slowly
- * over the ground. Purely decorative; the CSS lives in index.css
- * (.dual-tone-backdrop / .dual-field) and honours reduced motion.
- * Absolutely positioned: the parent must be relative + overflow-hidden.
+ * Piece 36: the moving glow layer — the taste-skill page's hero-glow
+ * recipe (index.css: background var(--grad-glow)) drifting slowly over
+ * the page wash on the 26s dualDrift loop, stilled by reduced motion.
+ * Purely decorative. Default is absolutely positioned (parent must be
+ * relative + overflow-hidden); `fixed` pins it to the viewport, as in
+ * AppShell where one instance glows behind the whole app.
  */
-export function DualToneBackdrop() {
+export function DualToneBackdrop({ fixed = false }: { fixed?: boolean }) {
   return (
-    <div aria-hidden="true" className="dual-tone-backdrop">
-      <div className="dual-field dual-field-terra" />
-      <div className="dual-field dual-field-sage" />
-    </div>
+    <div
+      aria-hidden="true"
+      className={`dual-tone-backdrop${fixed ? ' dual-tone-backdrop-fixed' : ''}`}
+    />
   )
 }
 

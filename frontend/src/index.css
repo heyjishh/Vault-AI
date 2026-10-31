@@ -7,6 +7,29 @@
   --paper: #fafaf9;
   --ink: #0f0e0d;
   --hairline: #e5e5e3;
+  /* Piece 36: theme tokens taken 1:1 from the taste-skill page — the
+     whole page background IS the dual-tone wash, in both themes, and
+     the accents flip lighter in dark. --grad-glow is the reference
+     page's --grad-hero recipe (values as they appear in its source:
+     the stronger peach/sage glow belongs to the light theme). */
+  --accent-a: #b4552d;
+  --accent-b: #5c7350;
+  --grad-page: linear-gradient(155deg,#f7eedd 0%,#f3efe0 34%,#e9ecda 68%,#dde5cd 100%);
+  --grad-glow: radial-gradient(58% 46% at 12% 0%,rgba(240,190,120,.50),transparent 70%),radial-gradient(52% 50% at 92% 8%,rgba(146,168,120,.45),transparent 70%);
+}
+
+html.dark {
+  --accent-a: #e08a5f;
+  --accent-b: #9db488;
+  --grad-page: linear-gradient(155deg,#221a12 0%,#191a13 38%,#12150d 70%,#0d120a 100%);
+  --grad-glow: radial-gradient(58% 46% at 12% 0%,rgba(214,130,70,.28),transparent 70%),radial-gradient(52% 50% at 92% 8%,rgba(120,150,95,.26),transparent 70%);
+}
+
+/* The page wash: the dual-tone gradient as the app ground, fixed to
+   the viewport exactly as on the reference page's body. */
+.app-wash {
+  background: var(--grad-page);
+  background-attachment: fixed;
 }
 
 html, body, #root {
@@ -14,7 +37,9 @@ html, body, #root {
 }
 
 body {
-  background: var(--paper);
+  background: #dde5cd;
+  background: var(--grad-page);
+  background-attachment: fixed;
   color: var(--ink);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
@@ -54,43 +79,41 @@ body {
 }
 .cite-chip:hover { background: #0f0e0d; color: #fafaf9; }
 
-/* ——— Piece 35: dual-tone brand layer (terracotta → sage) ———
+/* ——— Dual-tone brand layer (terracotta → sage) ———
    User-directed exception to the taste skill's no-gradients rule.
-   Kept soft: washes, one data gradient, one gradient wordmark. */
-.dual-tone-bar { background: linear-gradient(90deg, #c4664a, #8fa382); }
+   Piece 36: the gradient is the reference page's CTA recipe —
+   linear-gradient(120deg, var(--accent-a), var(--accent-b)) — so the
+   accents flip with the theme via the variables above. */
+.dual-tone-bar { background: linear-gradient(120deg, var(--accent-a), var(--accent-b)); }
 .dual-tone-text {
-  background: linear-gradient(90deg, #c4664a, #8fa382);
+  background: linear-gradient(120deg, var(--accent-a), var(--accent-b));
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
 }
 
-/* Moving backdrop: two blurred radial fields drifting slowly over
-   the ground. Terracotta top-left, sage bottom-right. */
-.dual-tone-backdrop { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
-.dual-field { position: absolute; border-radius: 9999px; filter: blur(70px); will-change: transform; }
-.dual-field-terra {
-  width: 55%; height: 60%; top: -20%; left: -12%;
-  background: radial-gradient(circle at center, rgba(196, 102, 74, .16), rgba(196, 102, 74, 0) 70%);
+/* Moving glow layer: the reference page's hero-glow fields
+   (var(--grad-glow)) as one layer over the wash, drifting slowly on
+   the same 26s loop. Oversized (inset -6%) so the drift never shows
+   an edge; purely decorative, pointer-events-none. */
+.dual-tone-backdrop {
+  position: absolute; inset: -6%; z-index: 0;
+  background: var(--grad-glow);
+  pointer-events: none;
+  will-change: transform;
   animation: dualDrift 26s ease-in-out infinite alternate;
 }
-.dual-field-sage {
-  width: 60%; height: 65%; bottom: -25%; right: -14%;
-  background: radial-gradient(circle at center, rgba(143, 163, 130, .16), rgba(143, 163, 130, 0) 70%);
-  animation: dualDrift 26s ease-in-out infinite alternate-reverse;
-}
-.dark .dual-field-terra { background: radial-gradient(circle at center, rgba(196, 102, 74, .22), rgba(196, 102, 74, 0) 70%); }
-.dark .dual-field-sage { background: radial-gradient(circle at center, rgba(143, 163, 130, .22), rgba(143, 163, 130, 0) 70%); }
+.dual-tone-backdrop-fixed { position: fixed; }
 @keyframes dualDrift {
   from { transform: translate(0, 0) scale(1); }
-  to { transform: translate(6%, 9%) scale(1.15); }
+  to { transform: translate(3%, 4%) scale(1.08); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .dual-field { animation: none; }
+  .dual-tone-backdrop { animation: none; }
 }
 
 /* ——— Piece 35: dark mode overrides for the plain-CSS surfaces ——— */
-.dark body { background: #14120f; color: #f4f2ee; }
+.dark body { background-color: #0d120a; color: #f4f2ee; }
 .dark ::selection { background: #38342e; }
 .dark * { scrollbar-color: #4a463f transparent; }
 .dark *::-webkit-scrollbar-thumb { background: #4a463f; }

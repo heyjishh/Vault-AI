@@ -21,8 +21,8 @@ export default function AuthPage() {
   }
 
   return (
-    <div className="min-h-screen bg-ivory dark:bg-[#14120f] flex relative overflow-hidden">
-      {/* Piece 35: the moving dual-tone backdrop + theme toggle */}
+    <div className="min-h-screen app-wash flex relative overflow-hidden">
+      {/* The moving glow layer over the page wash + theme toggle */}
       <DualToneBackdrop />
       <div className="absolute top-4 right-4 z-20">
         <ThemeToggle />
@@ -82,7 +82,7 @@ export default function AuthPage() {
               <input
                 type="email" required value={email} onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@firm.com" autoComplete="email"
-                className="w-full rounded-lex border border-stone-300 dark:border-white/10 bg-white dark:bg-[#1e1c19] px-3.5 py-2.5 text-[15px] outline-none focus:border-ink focus:ring-1 focus:ring-ink placeholder:text-stone-400"
+                className="w-full rounded-lex border border-stone-300 dark:border-white/10 bg-white dark:bg-[#1d1f19] px-3.5 py-2.5 text-[15px] outline-none focus:border-ink focus:ring-1 focus:ring-ink placeholder:text-stone-400"
               />
             </div>
             <div>
@@ -90,7 +90,7 @@ export default function AuthPage() {
               <input
                 type="password" required value={password} onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••" autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
-                className="w-full rounded-lex border border-stone-300 dark:border-white/10 bg-white dark:bg-[#1e1c19] px-3.5 py-2.5 text-[15px] outline-none focus:border-ink focus:ring-1 focus:ring-ink placeholder:text-stone-400"
+                className="w-full rounded-lex border border-stone-300 dark:border-white/10 bg-white dark:bg-[#1d1f19] px-3.5 py-2.5 text-[15px] outline-none focus:border-ink focus:ring-1 focus:ring-ink placeholder:text-stone-400"
               />
             </div>
             {error && (
@@ -109,7 +109,7 @@ export default function AuthPage() {
           <div className="mt-5 text-center">
             <a
               href="/api/v1/auth/oidc/login"
-              className="inline-block w-full rounded-lex border border-stone-300 dark:border-white/10 bg-white dark:bg-[#1e1c19] py-2.5 text-[15px] font-medium text-ink dark:text-[#f4f2ee] hover:bg-stone-100 dark:hover:bg-white/10 transition-colors"
+              className="inline-block w-full rounded-lex border border-stone-300 dark:border-white/10 bg-white dark:bg-[#1d1f19] py-2.5 text-[15px] font-medium text-ink dark:text-[#f4f2ee] hover:bg-stone-100 dark:hover:bg-white/10 transition-colors"
             >
               Continue with SSO
             </a>

@@ -71,7 +71,7 @@ export default function GraphPage() {
             key={k}
             onClick={() => setKindFilter(k)}
             className={`rounded-lex px-3 py-1 text-meta font-medium border transition-colors ${
-              kindFilter === k ? 'bg-ink text-ivory border-ink' : 'border-stone-200 dark:border-white/10 bg-white dark:bg-[#1e1c19] text-stone-500 dark:text-stone-400 hover:text-ink'
+              kindFilter === k ? 'bg-ink text-ivory border-ink' : 'border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] text-stone-500 dark:text-stone-400 hover:text-ink'
             }`}
           >
             {k}
@@ -85,7 +85,7 @@ export default function GraphPage() {
         <div className="mt-6"><EmptyState title="Graph is empty" hint="Ingest documents in the Vault to extract entities and relations." /></div>
       ) : (
         <div className="mt-4 grid lg:grid-cols-[1fr_300px] gap-4">
-          <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1e1c19] overflow-hidden">
+          <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] overflow-hidden">
             <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto block">
               {rels.map((r, i) => {
                 const a = positions.get(r.from), b = positions.get(r.to)
@@ -108,7 +108,7 @@ export default function GraphPage() {
             </svg>
           </div>
 
-          <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1e1c19] p-5 h-fit">
+          <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] p-5 h-fit">
             {selected ? (
               <>
                 <p className="text-[13px] font-medium" style={{ color: colorFor(selected.kind) }}>{selected.kind}</p>

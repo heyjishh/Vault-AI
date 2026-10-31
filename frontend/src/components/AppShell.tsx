@@ -9,7 +9,7 @@ import { useAuth } from '../stores/auth'
 import { useSession } from '../stores/session'
 import { useMatter } from '../stores/matter'
 import { dashboardApi, mattersApi, publicSettingsApi } from '../api/client'
-import { ConfirmDialog, ThemeToggle } from './ui'
+import { ConfirmDialog, DualToneBackdrop, ThemeToggle } from './ui'
 import AssistantPage from './AssistantPage'
 import ResearchPage from './ResearchPage'
 import AgentsPage from './AgentsPage'
@@ -134,9 +134,12 @@ export default function AppShell() {
   }, [])
 
   return (
-    <div className="h-screen flex bg-ivory dark:bg-[#14120f] text-ink dark:text-[#f4f2ee] overflow-hidden">
-      {/* Sidebar — ivory, hairline right border (Harvey) */}
-      <aside className="w-64 flex-shrink-0 border-r border-stone-200 dark:border-white/10 flex flex-col">
+    <div className="h-screen flex relative app-wash text-ink dark:text-[#f4f2ee] overflow-hidden">
+      {/* Piece 36: one glow layer fixed behind the whole app, over the
+          page wash — the taste-skill page's background system. */}
+      <DualToneBackdrop fixed />
+      {/* Sidebar — transparent over the wash, hairline right border */}
+      <aside className="relative z-10 w-64 flex-shrink-0 border-r border-stone-200 dark:border-white/10 flex flex-col">
         <div className="h-[4.5rem] flex items-center px-5 border-b border-stone-200 dark:border-white/10">
           <span className="font-display text-xl tracking-tight">{brand.product_name}</span>
         </div>
@@ -159,7 +162,7 @@ export default function AppShell() {
             <select
               value={effectiveMatterId ?? ''}
               onChange={(e) => setCurrentMatter(e.target.value)}
-              className="mt-1.5 w-full rounded-lex border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1e1c19] px-2.5 py-2 text-[13px] outline-none focus:border-stone-400"
+              className="mt-1.5 w-full rounded-lex border border-stone-200 dark:border-white/10 bg-white dark:bg-[#1d1f19] px-2.5 py-2 text-[13px] outline-none focus:border-stone-400"
             >
               {(mattersList ?? []).map((m) => (
                 <option key={m.id} value={m.id}>{m.title}</option>
@@ -183,7 +186,7 @@ export default function AppShell() {
               onClick={() => { setActiveTabId(null); setView(id) }}
               className={`w-full flex items-center gap-3 rounded-lex px-3 py-2 text-[14px] transition-colors ${
                 view === id || (id === 'matters' && view === 'matter')
-                  ? 'bg-stone-100 dark:bg-white/5 text-ink dark:text-[#f4f2ee] font-medium'
+                  ? 'bg-stone-100 dark:bg-[#26281f] text-ink dark:text-[#f4f2ee] font-medium'
                   : 'text-stone-600 dark:text-stone-300 hover:bg-stone-100/70 dark:hover:bg-white/5 hover:text-ink'
               }`}
             >
@@ -221,7 +224,7 @@ export default function AppShell() {
                 onClick={() => { setActiveTabId(t.id); setView('tab') }}
                 className={`w-full flex items-center gap-3 rounded-lex px-3 py-2 text-[14px] transition-colors ${
                   view === 'tab' && activeTabId === t.id
-                    ? 'bg-stone-100 dark:bg-white/5 text-ink dark:text-[#f4f2ee] font-medium'
+                    ? 'bg-stone-100 dark:bg-[#26281f] text-ink dark:text-[#f4f2ee] font-medium'
                     : 'text-stone-600 dark:text-stone-300 hover:bg-stone-100/70 dark:hover:bg-white/5 hover:text-ink'
                 }`}
               >
@@ -292,7 +295,7 @@ export default function AppShell() {
                 {Math.max(0, dash.token_quota - dash.tokens_used).toLocaleString('en-IN')}
                 <span className="text-[12.5px] text-stone-500 dark:text-stone-400 font-normal"> tokens left</span>
               </span>
-              <span className="block h-1.5 rounded-full bg-stone-100 dark:bg-white/5 mt-2 overflow-hidden">
+              <span className="block h-1.5 rounded-full bg-stone-100 dark:bg-[#26281f] mt-2 overflow-hidden">
                 <span
                   className={`block h-full rounded-full ${Math.round((dash.tokens_used / Math.max(1, dash.token_quota)) * 100) >= 90 ? 'bg-[#a02c2c]' : 'dual-tone-bar'}`}
                   style={{ width: `${Math.min(100, Math.round((dash.tokens_used / Math.max(1, dash.token_quota)) * 100))}%` }}
@@ -324,7 +327,7 @@ export default function AppShell() {
       </aside>
 
       {/* Main */}
-      <main className="flex-1 min-w-0 overflow-y-auto relative">
+      <main className="flex-1 min-w-0 overflow-y-auto relative z-10">
         <ErrorBoundary>
           <AnimatePresence mode="wait">
             <motion.div
