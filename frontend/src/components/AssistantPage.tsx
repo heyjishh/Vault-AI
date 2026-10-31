@@ -920,7 +920,7 @@ function Composer(props: {
           </button>
         )}
       </div>
-      <div className="border-t border-stone-200 dark:border-white/10 bg-stone-100/60 px-3 py-2 flex rounded-b-lex-lg">
+      <div className="border-t border-stone-200 dark:border-white/10 bg-stone-100/60 dark:bg-white/5 px-3 py-2 flex rounded-b-lex-lg">
         <span className="ml-auto hidden sm:block text-[11px] text-stone-400 dark:text-stone-500 self-center">Enter to ask · Shift+Enter for a new line</span>
       </div>
     </div>

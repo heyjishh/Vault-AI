@@ -15,6 +15,13 @@ live**, what is **built but unverified**, and what is **roadmap**.
 ## [Unreleased]
 
 ### Added
+- **Composer footer strip darkened (1 Nov 2026, Piece 57).**
+  JISHAN: "still grey color of below input box is there" — the
+  strip under the Ask/Interact composers ("Enter to ask · …")
+  used `bg-stone-100/60` with no dark variant, so a light grey
+  band sat under the dark box. Both composers now use
+  `dark:bg-white/5`. Verified: build clean, variant present in
+  the shipped bundle, live on test + public.
 - **Sources panel dark-mode visuals fixed (1 Nov 2026,
   Piece 56).** JISHAN's screenshot: the Ask Sources panel
   rendered on a white shell in dark mode, its question echo

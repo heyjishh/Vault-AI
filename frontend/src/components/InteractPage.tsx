@@ -621,7 +621,7 @@ export default function InteractPage({ matterId, go }: { matterId?: string; go?:
             <ArrowUp size={16} />
           </button>
         </div>
-        <div className="border-t border-stone-200 dark:border-white/10 bg-stone-100/60 px-3 py-2 flex rounded-b-lex-lg">
+        <div className="border-t border-stone-200 dark:border-white/10 bg-stone-100/60 dark:bg-white/5 px-3 py-2 flex rounded-b-lex-lg">
           <span className="text-[11px] text-stone-400 dark:text-stone-500 self-center">
             {source === 'private'
               ? 'Private answers are never cached or saved to history'
