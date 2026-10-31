@@ -15,6 +15,26 @@ live**, what is **built but unverified**, and what is **roadmap**.
 ## [Unreleased]
 
 ### Added
+- **Download with or without citations (31 Oct 2026, Piece 30).**
+  The response Download menu (Piece 28) now asks the citation
+  question as well as the format question: four choices grouped as
+  **With citations** (PDF / RTF) and **Without citations**
+  (PDF / RTF). With citations is the Piece 28 document unchanged —
+  inline `[doc:N]` / `[web:N]` / `[private:N]` markers plus the
+  Sources list. Without citations is a clean copy for sharing:
+  `stripCitations` removes every inline marker (single, combined
+  `[doc:0, web:1]`, and the doubled `[[doc:0]]` form the Research
+  export builds), tidies the gaps (no space before punctuation, no
+  doubled spaces), omits the Sources section entirely, and the
+  file is named with a `-no-citations` suffix so the two versions
+  never get confused. A response with no citations shows a note
+  that both versions are identical. Frontend-only; the shared dist
+  means prod and test serve it immediately. Verified: frontend
+  build clean; the export module compiled standalone — 6/6 strip
+  cases pass, the with-citations PDF (pdftotext) carries markers +
+  Sources, the without-citations PDF/RTF carry neither (0 markers,
+  0 Sources), punctuation clean; the served bundle on prod, test,
+  and the public site is the new build.
 - **Open the original source document (31 Oct 2026, Piece 29).**
   Clicking a source could only ever show extracted text: the
   uploaded file itself was never retained. Now `run_upload` (the

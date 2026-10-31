@@ -1,14 +1,18 @@
 /**
  * Piece 28: export one Q&A response as a real PDF or an RTF file —
  * dependency-free, generated entirely in the browser.
+ * Piece 30: the user chooses With citations or Without citations.
  *
  * Both documents share one shape:
  *   Juris Vault AI header (plus an optional context title)
  *   Question — the exact user question
  *   Response — the answer, keeping its markdown structure
  *              (headings, paragraphs, bullet/numbered lists, tables)
- *   Sources  — the cited documents, when any
+ *   Sources  — the cited documents, when any (With citations only)
  *   Footer   — product line + generation date
+ *
+ * Without citations means a clean copy: no Sources section and no
+ * inline [doc:N] / [web:N] / [private:N] markers in the answer text.
  *
  * A single markdown → blocks parser feeds both writers, so the two
  * formats never drift apart in content.
@@ -26,7 +30,31 @@ export interface ExportInput {
   title?: string
   answerMarkdown: string
   citations?: ExportCitation[]
+  /** Piece 30: true (default) keeps inline citation markers and the
+   *  Sources section; false produces a clean copy with neither. */
+  includeCitations?: boolean
   generatedAt?: Date
+}
+
+/** Piece 30: remove every inline citation marker from markdown text —
+ *  [doc:N], [web:N], [private:N], combined forms like
+ *  [doc:0, web:1], and the doubled [[doc:0]] form the Research
+ *  export builds — then tidy the gaps they leave: no space before
+ *  punctuation, no doubled spaces, no empty [] left behind. */
+export function stripCitations(text: string): string {
+  return (text ?? '')
+    .split('\n')
+    .map((line) =>
+      line
+        .replace(/\[\[(?:doc|web|private):[^\]]*\]\]/g, '')
+        .replace(/\[(?:doc|web|private):[^\]]*\]/g, '')
+        .replace(/\[\s*\]/g, '')
+        .replace(/[ \t]{2,}/g, ' ')
+        .replace(/\s+([.,;:!?%)\]])/g, '$1')
+        .replace(/([(\[])\s+/g, '$1')
+        .trimEnd(),
+    )
+    .join('\n')
 }
 
 // ---------------------------------------------------------------- blocks
@@ -157,11 +185,15 @@ interface DocSection {
 }
 
 function documentSections(input: ExportInput): DocSection[] {
+  const withCitations = input.includeCitations !== false
+  const answer = withCitations ? input.answerMarkdown : stripCitations(input.answerMarkdown)
   const sections: DocSection[] = [
     { heading: 'Question', blocks: parseMarkdown(input.question) },
-    { heading: 'Response', blocks: parseMarkdown(input.answerMarkdown) },
+    { heading: 'Response', blocks: parseMarkdown(answer) },
   ]
-  const citations = (input.citations ?? []).filter((c) => c.title || c.label)
+  const citations = withCitations
+    ? (input.citations ?? []).filter((c) => c.title || c.label)
+    : []
   if (citations.length > 0) {
     sections.push({
       heading: 'Sources',
@@ -181,7 +213,9 @@ function dateLine(input: ExportInput): string {
   })
 }
 
-/** Filename base: the question, slugified, capped at ~60 chars. */
+/** Filename base: the question, slugified, capped at ~60 chars.
+ *  A without-citations download gets a `-no-citations` suffix so it
+ *  never silently overwrites / gets confused with the cited version. */
 export function exportFileBase(input: ExportInput): string {
   const slug = input.question
     .toLowerCase()
@@ -191,7 +225,8 @@ export function exportFileBase(input: ExportInput): string {
     .replace(/^-+|-+$/g, '')
     .slice(0, 60)
     .replace(/-+$/g, '')
-  return slug || 'juris-vault-response'
+  const base = slug || 'juris-vault-response'
+  return input.includeCitations === false ? `${base}-no-citations` : base
 }
 
 // ---------------------------------------------------------------- PDF

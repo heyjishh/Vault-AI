@@ -5,11 +5,14 @@ import { useSession } from '../stores/session'
 
 /**
  * Piece 28: download one completed response as a formatted document.
- * The button opens a small menu — PDF or RTF, the user's choice —
- * and each file carries the exact question first, then the response
- * with its structure, then its sources. Generation is entirely
- * client-side (lib/exportResponse), so it works for restored history
- * turns exactly as for fresh ones.
+ * Piece 30: the user also chooses With citations or Without citations.
+ *
+ * The button opens a small menu grouped by citation choice — each
+ * group offers PDF and RTF. With citations keeps the inline
+ * [doc:N] / [web:N] / [private:N] markers and the Sources list;
+ * Without citations is a clean copy with neither. Generation is
+ * entirely client-side (lib/exportResponse), so it works for restored
+ * history turns exactly as for fresh ones.
  */
 export function ResponseDownload({ question, title, answerMarkdown, citations }: {
   question: string
@@ -34,12 +37,12 @@ export function ResponseDownload({ question, title, answerMarkdown, citations }:
       document.removeEventListener('mousedown', onDocClick)
       document.removeEventListener('keydown', onKey)
     }
-  }, [open ])
+  }, [open])
 
-  const save = (format: 'pdf' | 'rtf') => {
+  const save = (format: 'pdf' | 'rtf', includeCitations: boolean) => {
     setOpen(false)
     try {
-      const input = { question, title, answerMarkdown, citations, generatedAt: new Date() }
+      const input = { question, title, answerMarkdown, citations, includeCitations, generatedAt: new Date() }
       const blob = format === 'pdf' ? buildPdf(input) : buildRtf(input)
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
@@ -47,11 +50,13 @@ export function ResponseDownload({ question, title, answerMarkdown, citations }:
       a.download = `${exportFileBase(input)}.${format}`
       a.click()
       URL.revokeObjectURL(url)
-      toast('success', `Downloading ${format.toUpperCase()}`)
+      toast('success', `Downloading ${format.toUpperCase()} ${includeCitations ? 'with citations' : 'without citations'}`)
     } catch (e) {
       toast('error', `Could not build the ${format.toUpperCase()} file: ${(e as Error).message}`)
     }
   }
+
+  const hasCitations = (citations?.length ?? 0) > 0
 
   return (
     <div className="relative" ref={rootRef}>
@@ -63,21 +68,47 @@ export function ResponseDownload({ question, title, answerMarkdown, citations }:
         <Download size={13} /> Download <ChevronDown size={12} />
       </button>
       {open && (
-        <div className="absolute left-0 top-full z-20 mt-1.5 w-44 overflow-hidden rounded-lex-lg border border-stone-200 bg-white py-1 shadow-lex-md">
+        <div className="absolute left-0 top-full z-20 mt-1.5 w-60 overflow-hidden rounded-lex-lg border border-stone-200 bg-white py-1 shadow-lex-md">
+          <p className="px-3 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-stone-400">
+            With citations
+          </p>
           <button
-            onClick={() => save('pdf')}
+            onClick={() => save('pdf', true)}
             className="block w-full px-3 py-2 text-left text-[13px] hover:bg-stone-100"
           >
             Download PDF
-            <span className="block text-[11px] text-stone-400">Formatted, ready to share or print</span>
+            <span className="block text-[11px] text-stone-400">Citations in the text + Sources list</span>
           </button>
           <button
-            onClick={() => save('rtf')}
+            onClick={() => save('rtf', true)}
             className="block w-full px-3 py-2 text-left text-[13px] hover:bg-stone-100"
           >
             Download RTF
-            <span className="block text-[11px] text-stone-400">Opens in Word and other editors</span>
+            <span className="block text-[11px] text-stone-400">Citations in the text + Sources list</span>
           </button>
+          <div className="my-1 border-t border-stone-100" />
+          <p className="px-3 pt-1 pb-1 text-[11px] font-semibold uppercase tracking-wide text-stone-400">
+            Without citations
+          </p>
+          <button
+            onClick={() => save('pdf', false)}
+            className="block w-full px-3 py-2 text-left text-[13px] hover:bg-stone-100"
+          >
+            Download PDF
+            <span className="block text-[11px] text-stone-400">Clean copy — no citation markers, no Sources list</span>
+          </button>
+          <button
+            onClick={() => save('rtf', false)}
+            className="block w-full px-3 py-2 text-left text-[13px] hover:bg-stone-100"
+          >
+            Download RTF
+            <span className="block text-[11px] text-stone-400">Clean copy — no citation markers, no Sources list</span>
+          </button>
+          {!hasCitations && (
+            <p className="px-3 py-2 text-[11px] text-stone-400 border-t border-stone-100 mt-1">
+              This response has no citations, so both versions are the same content.
+            </p>
+          )}
         </div>
       )}
     </div>
