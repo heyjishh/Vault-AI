@@ -15,6 +15,24 @@ live**, what is **built but unverified**, and what is **roadmap**.
 ## [Unreleased]
 
 ### Added
+- **Lighter still, a running gradient, professional finish — both
+  apps (31 Oct 2026, Piece 40).** JISHAN: "make more light and
+  running gradiant, etc.. but do more light, make professional".
+  The light page wash is lightened a second time in both apps
+  (`#fefcf8 → #fcfaf6 → #f9faf3 → #f4f7ec`, same 155° direction)
+  and the glow softens with it; the dark-theme colours are
+  byte-identical to Pieces 36–39. The architecture changed so
+  the wash itself flows: the `DualToneBackdrop` layer now carries
+  both the glow (held at position `0 0`) and the wash painted at
+  175% size, panned diagonally by a 34s ease-in-out alternate
+  `washRun` loop — a slow, continuous running gradient in both
+  themes, stilled by `prefers-reduced-motion`. Roots now paint
+  only the solid end-stop fallback (no double gradient paint).
+  Professional finish: one bronze `:focus-visible` ring app-wide
+  and a branded bronze selection tint replacing the flat grey.
+  CSS + docs only — no component, text or behaviour changes.
+  Both builds clean; the new stops and `washRun` verified present
+  in both built bundles and the Piece 38 stops verified gone.
 - **Admin Command Center on the same design system (31 Oct 2026,
   Piece 39).** JISHAN: "do make admin same" — the admin app, which
   still wore the old Harvey look (flat ivory, always-dark ink

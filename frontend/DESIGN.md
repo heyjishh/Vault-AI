@@ -6,7 +6,8 @@ skill (tasteskill v2, app-screen run): direction *achromatic-ledger*,
 seed 1210974860, kind workspace, light — with the brand palette and type
 kept from the Harvey REA below. The admin Command Center kept its own
 look through Pieces 34–38; Piece 39 brought it onto this same system
-(see "Admin parity" below).
+(see "Admin parity" below), and Piece 40 (lighter still, the running
+gradient, the professional finish) applies to both apps identically.
 
 ## The move
 
@@ -42,7 +43,7 @@ look through Pieces 34–38; Piece 39 brought it onto this same system
   is its own: verdict-first answers with citation chips — kept, and
   quieter (borderless stone-100 chips that invert to ink on hover).
 
-## Brand layer (user-directed, Pieces 35–36, 38)
+## Brand layer (user-directed, Pieces 35–36, 38, 40)
 
 Added 31 Oct 2026 at the user's own direction, on top of the ledger
 system above. These are the user's brand choices, carried over from
@@ -55,8 +56,8 @@ variables flipping with the theme.
 
 | Token | Light | Dark |
 |---|---|---|
-| Page wash (`--grad-page`) | `linear-gradient(155deg,#fcf9f1 0%,#f9f7f0 34%,#f4f6ec 68%,#ecf1e0 100%)` | `linear-gradient(155deg,#221a12 0%,#191a13 38%,#12150d 70%,#0d120a 100%)` |
-| Glow (`--grad-glow`) | peach `rgba(240,190,120,.36)` at 12% 0% + sage `rgba(146,168,120,.32)` at 92% 8% | terracotta `rgba(214,130,70,.28)` at 12% 0% + sage `rgba(120,150,95,.26)` at 92% 8% |
+| Page wash (`--grad-page`) | `linear-gradient(155deg,#fefcf8 0%,#fcfaf6 34%,#f9faf3 68%,#f4f7ec 100%)` | `linear-gradient(155deg,#221a12 0%,#191a13 38%,#12150d 70%,#0d120a 100%)` |
+| Glow (`--grad-glow`) | peach `rgba(240,190,120,.26)` at 12% 0% + sage `rgba(146,168,120,.24)` at 92% 8% | terracotta `rgba(214,130,70,.28)` at 12% 0% + sage `rgba(120,150,95,.26)` at 92% 8% |
 | Card | `#fffef9` (the app keeps `bg-white` — negligibly different) | `#1d1f19` |
 | Raised / chip | `#efece0` (stone-100 fills) | `#26281f` |
 | Ink | `#16150f` | `#f0eee3` |
@@ -72,18 +73,40 @@ the table are lightened toward white at the user's direction
 stop positions, paler values. The dark stops remain 1:1 with the
 taste-skill reference, untouched.
 
-- **The page wash.** `.app-wash` (index.css) paints
-  `var(--grad-page)` with `background-attachment: fixed` on the
-  AppShell and Auth roots, and `body` carries the same gradient so
-  overscroll matches (fallback end-stops `#ecf1e0` / `#0d120a`).
-  The sidebar paints no background of its own — it sits transparent
-  over the wash behind its hairline.
-- **Moving background.** `DualToneBackdrop` (ui.tsx) renders the
-  glow recipe as one layer (`background: var(--grad-glow)`)
-  drifting on a 26s ease-in-out alternate loop (`dualDrift` in
-  index.css). One instance is fixed behind the whole app in
-  AppShell; Auth keeps its own. It is pointer-events-none and
-  decoration only; `prefers-reduced-motion` stills it.
+**Piece 40 (user-directed).** "Make more light and running
+gradiant… but do more light, make professional." Three changes,
+applied identically to both apps. (1) The light wash and glow are
+lightened a second time (the table above carries the current
+values); the dark colours are again untouched — only the motion
+below is shared. (2) **The running gradient:** the architecture
+changed so the wash itself flows — see "The page wash" and
+"Moving background" below. (3) **The professional finish:** one
+consistent focus treatment app-wide, `:focus-visible` with a 2px
+bronze outline at 2px offset (a floor under components' own focus
+utilities), and a branded selection tint — bronze at 16% on light,
+pale bronze at 28% on dark — instead of the flat grey.
+
+- **The page wash.** The wash is painted by the
+  `DualToneBackdrop` layer (below), not by the roots: `.app-wash`
+  on the AppShell and Auth roots now carries only the solid
+  end-stop fallback (`#f4f7ec` light / `#0d120a` dark), and `body`
+  carries the same fallback so overscroll matches — no double
+  gradient paint anywhere. The sidebar paints no background of
+  its own — it sits transparent over the wash behind its hairline.
+- **Moving background — the running gradient.** `DualToneBackdrop`
+  (ui.tsx) renders ONE layer carrying both backgrounds:
+  `background-image: var(--grad-glow), var(--grad-page)` with the
+  glow held at size `auto`, position `0 0`, and the wash painted
+  oversized at `175% 175%`. The `washRun` loop (index.css, 34s
+  ease-in-out infinite alternate) pans the wash layer's
+  `background-position` from `0% 0%` to `100% 100%`, so the whole
+  gradient travels diagonally — a slow, continuous flow, in dark
+  mode too (same stops; the animation is motion, not colour).
+  One instance is fixed behind the whole app in AppShell; Auth
+  keeps its own. It is pointer-events-none and decoration only;
+  `prefers-reduced-motion` stills it. (Pieces 36–39 instead
+  drifted the glow layer alone by transform over a static wash;
+  Piece 40 supersedes that.)
 - **The dual tone on data.** `.dual-tone-bar` and `.dual-tone-text`
   are the reference's CTA recipe — `linear-gradient(120deg,
   var(--accent-a), var(--accent-b))` — so they flip with the theme:
@@ -151,7 +174,10 @@ work are untouched.
 The Command Center (`frontend/admin/`) now runs this same design
 system — JISHAN: "do make admin same". Its token layer is a 1:1
 port of the user app's `index.css` (the Piece 38 lightened light
-wash and glow; the dark wash, glow, accents and bronze unchanged),
+wash and glow — and, since Piece 40, the second lightening, the
+running-gradient architecture and the focus/selection finish,
+kept identical in both apps; the dark wash, glow, accents and
+bronze unchanged),
 with `darkMode: 'class'` and the same radii (`lex` 6px, `lex-lg`
 8px). The pre-paint theme script is identical and shares the
 `jurisvault.theme` localStorage key — same origin, so one choice

@@ -20,9 +20,11 @@
   --bronze: #593d3a;
   /* Piece 38 (user-directed): the light stops are lightened toward
      white at the same 155° direction; the dark stops in html.dark
-     below stay 1:1 with the reference page. */
-  --grad-page: linear-gradient(155deg,#fcf9f1 0%,#f9f7f0 34%,#f4f6ec 68%,#ecf1e0 100%);
-  --grad-glow: radial-gradient(58% 46% at 12% 0%,rgba(240,190,120,.36),transparent 70%),radial-gradient(52% 50% at 92% 8%,rgba(146,168,120,.32),transparent 70%);
+     below stay 1:1 with the reference page.
+     Piece 40 (user-directed): lightened a second time, same 155°
+     direction and stop positions; dark stops still untouched. */
+  --grad-page: linear-gradient(155deg,#fefcf8 0%,#fcfaf6 34%,#f9faf3 68%,#f4f7ec 100%);
+  --grad-glow: radial-gradient(58% 46% at 12% 0%,rgba(240,190,120,.26),transparent 70%),radial-gradient(52% 50% at 92% 8%,rgba(146,168,120,.24),transparent 70%);
 }
 
 html.dark {
@@ -33,11 +35,16 @@ html.dark {
   --grad-glow: radial-gradient(58% 46% at 12% 0%,rgba(214,130,70,.28),transparent 70%),radial-gradient(52% 50% at 92% 8%,rgba(120,150,95,.26),transparent 70%);
 }
 
-/* The page wash: the dual-tone gradient as the app ground, fixed to
-   the viewport exactly as on the reference page's body. */
+/* Piece 40 — the running-gradient architecture: the animated wash
+   itself lives on the .dual-tone-backdrop layer (below), which
+   renders behind every root. Roots that carry .app-wash therefore
+   paint ONLY the solid end-stop fallback, so there is no double
+   gradient paint; body carries the same fallback for overscroll. */
 .app-wash {
-  background: var(--grad-page);
-  background-attachment: fixed;
+  background: #f4f7ec;
+}
+html.dark .app-wash {
+  background: #0d120a;
 }
 
 html, body, #root {
@@ -45,16 +52,18 @@ html, body, #root {
 }
 
 body {
-  background: #ecf1e0;
-  background: var(--grad-page);
-  background-attachment: fixed;
+  background: #f4f7ec;
   color: var(--ink);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
 
-::selection { background: #e5e5e3; }
+/* Piece 40: branded selection tint + one consistent bronze focus
+   ring as the professional floor for anything without its own
+   focus utility. */
+::selection { background: rgba(89,61,58,.16); }
+:focus-visible { outline: 2px solid var(--bronze); outline-offset: 2px; border-radius: 4px; }
 
 /* thin scrollbars */
 * { scrollbar-width: thin; scrollbar-color: #cccac6 transparent; }
@@ -105,21 +114,26 @@ body {
 .bg-bronze { background-color: var(--bronze); }
 .border-bronze { border-color: var(--bronze); }
 
-/* Moving glow layer: the reference page's hero-glow fields
-   (var(--grad-glow)) as one layer over the wash, drifting slowly on
-   the same 26s loop. Oversized (inset -6%) so the drift never shows
-   an edge; purely decorative, pointer-events-none. */
+/* Piece 40 — the running gradient: this layer carries BOTH the
+   reference page's hero-glow fields (var(--grad-glow), held still at
+   position 0 0) and the page wash itself (var(--grad-page)), painted
+   oversized at 175% so the washRun loop can pan its background
+   position diagonally — the wash visibly flows, slowly and
+   continuously, in both themes (the dark stops are the same values,
+   only the motion is shared). One motion only; purely decorative,
+   pointer-events-none; prefers-reduced-motion stills it. */
 .dual-tone-backdrop {
-  position: absolute; inset: -6%; z-index: 0;
-  background: var(--grad-glow);
+  position: absolute; inset: 0; z-index: 0;
+  background-image: var(--grad-glow), var(--grad-page);
+  background-size: auto, 175% 175%;
+  background-repeat: no-repeat;
   pointer-events: none;
-  will-change: transform;
-  animation: dualDrift 26s ease-in-out infinite alternate;
+  animation: washRun 34s ease-in-out infinite alternate;
 }
 .dual-tone-backdrop-fixed { position: fixed; }
-@keyframes dualDrift {
-  from { transform: translate(0, 0) scale(1); }
-  to { transform: translate(3%, 4%) scale(1.08); }
+@keyframes washRun {
+  from { background-position: 0 0, 0% 0%; }
+  to { background-position: 0 0, 100% 100%; }
 }
 @media (prefers-reduced-motion: reduce) {
   .dual-tone-backdrop { animation: none; }
@@ -127,7 +141,7 @@ body {
 
 /* ——— Piece 35: dark mode overrides for the plain-CSS surfaces ——— */
 .dark body { background-color: #0d120a; color: #f4f2ee; }
-.dark ::selection { background: #38342e; }
+.dark ::selection { background: rgba(200,177,132,.28); }
 .dark * { scrollbar-color: #4a463f transparent; }
 .dark *::-webkit-scrollbar-thumb { background: #4a463f; }
 .dark .prose-lex { color: #eceae6; }
