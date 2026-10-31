@@ -238,7 +238,7 @@ export default function VaultPage() {
         onDrop={handleDrop}
         animate={dragging ? { scale: 1.01 } : { scale: 1 }}
         className={`mt-6 rounded-lex-lg border-2 border-dashed transition-colors p-8 text-center cursor-pointer ${
-          dragging ? 'border-ink bg-stone-100 dark:bg-[#122419]' : 'border-stone-300 dark:border-white/10 bg-white/60 hover:border-stone-400'
+          dragging ? 'border-ink bg-stone-100 dark:bg-[#122419]' : 'border-stone-300 dark:border-white/10 bg-white/60 dark:bg-white/5 hover:border-stone-400'
         }`}
         onClick={() => fileRef.current?.click()}
       >

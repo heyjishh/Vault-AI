@@ -15,6 +15,23 @@ live**, what is **built but unverified**, and what is **roadmap**.
 ## [Unreleased]
 
 ### Added
+- **Root-cause pass: color-scheme + Vault dropzone (1 Nov 2026,
+  Piece 60).** JISHAN named the remaining spots — Vault upload
+  section, the Agents counter button, the Research and Vault
+  input boxes — and asked why the fixes kept coming "a small
+  small part" at a time. The shared root cause: neither app ever
+  declared `color-scheme`, so every **native** form control
+  rendered light-theme parts in dark mode — the Agents "Max
+  steps" number stepper (the counter button), date pickers,
+  select dropdown lists, checkboxes, scrollbars, in every input
+  box on every page. Both apps now declare `color-scheme: light`
+  / `dark` on the root, fixing the whole class at once. Also:
+  the Vault upload dropzone was `bg-white/60` with no dark
+  variant (a 60%-white panel in dark mode) — now
+  `dark:bg-white/5`. A scripted sweep of every input/textarea/
+  select in both apps found no other unpaired control surfaces.
+  Verified: builds clean, `color-scheme` + dropzone variant in
+  the shipped bundles, live on test + public incl. /admin/.
 - **Dashboard suggestion chips darkened + stale-tab note
   (1 Nov 2026, Piece 59).** JISHAN reported the dark issues
   "still not fixed" on Dashboard/Research/Agents/Vault after

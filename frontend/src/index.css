@@ -159,6 +159,16 @@ html.dark [class~="text-[#a02c2c]"] { color: #f0a3a3; }
 html.dark [class~="bg-[#fdf6e3]"] { background-color: rgba(183,121,31,.16); }
 html.dark [class~="text-[#7a5b12]"] { color: #e3c878; }
 html.dark [class~="bg-[#fdf3d7]"] { background-color: rgba(33,192,99,.34); }
+/* Piece 60: the root-cause pass JISHAN asked for ("why fixing a
+   small small part"). Neither app ever declared color-scheme, so
+   EVERY native form control rendered with light-theme parts in
+   dark mode: the Agents "Max steps" counter buttons (number
+   steppers), date pickers in the composer popovers, select
+   dropdown lists, checkboxes, file buttons, scrollbars. One
+   declaration per theme fixes the entire class of defect, in
+   every input box, everywhere. */
+:root { color-scheme: light; }
+html.dark { color-scheme: dark; }
 
 @media (prefers-reduced-motion: reduce) {
   .view-enter, .dialog-pop, .menu-pop, .toast-in { animation: none; }
