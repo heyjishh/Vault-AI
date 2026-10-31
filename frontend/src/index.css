@@ -79,6 +79,14 @@ html.dark .running-border { --rb-surface: #0a1a12; }
   animation-duration: 2.4s;
   box-shadow: 0 14px 34px -14px rgba(33,192,99,.38);
 }
+/* Piece 51: the actual "inner ring" — the global :focus-visible
+   outline (line ~149, in the brand green since --bronze carries
+   it) draws a 2px green ring around the TEXTAREA inside the box,
+   and unlayered CSS beats the textarea's outline-none utility.
+   Kill it inside the composers only; keyboard focus rings stay
+   everywhere else in the app. */
+.running-border textarea:focus-visible,
+.running-border input:focus-visible { outline: none; }
 
 @media (prefers-reduced-motion: reduce) {
   .view-enter, .dialog-pop, .menu-pop, .toast-in { animation: none; }

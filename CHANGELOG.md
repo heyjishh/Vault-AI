@@ -15,6 +15,17 @@ live**, what is **built but unverified**, and what is **roadmap**.
 ## [Unreleased]
 
 ### Added
+- **The real inner ring found + removed (1 Nov 2026, Piece 51).**
+  JISHAN pasted the composer HTML: "still coming the green, when
+  hotting on input box" — the green ring on the input was the
+  global `:focus-visible` outline (2px solid `var(--bronze)`,
+  brand green since Piece 42) drawn around the **textarea
+  inside** the box; unlayered CSS beats the textarea's
+  `outline-none` utility, so it showed on every click. Piece 50
+  had removed the container's halo ring; this piece removes the
+  textarea's own outline inside both composers. Keyboard focus
+  rings remain everywhere else. Verified: build clean, the
+  override present in the shipped bundle, live on test + public.
 - **No inner ring on composer focus (1 Nov 2026, Piece 50).**
   JISHAN clarified Piece 49: "remove the inner ring when do
   focus or click on input, not outer running border" — the hard
