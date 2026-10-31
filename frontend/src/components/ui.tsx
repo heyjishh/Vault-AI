@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Moon, Sun, Trash2, X } from 'lucide-react'
+import { BookOpen, Gavel, Moon, PenLine, Scale, Sparkles, Sun, Trash2, X } from 'lucide-react'
 import type { Citation } from '../api/types'
 import { SourceModal } from './SourceModal'
 import { DocInsightButton } from './DocInsight'
@@ -335,15 +335,20 @@ export function DualToneBackdrop({ fixed = false }: { fixed?: boolean }) {
     <div
       aria-hidden="true"
       className={`dual-tone-backdrop${fixed ? ' dual-tone-backdrop-fixed' : ''}`}
-    />
+    >
+      {/* Piece 44: the rotating conic sheen (CSS in index.css). */}
+      <div className="backdrop-spin" aria-hidden />
+    </div>
   )
 }
 
 /**
  * Piece 42: the jurisvault.ai auth scene — the brand site's running
- * sign-in background (deep-emerald base, 1px grid, two
- * counter-rotating conic rings, a pulsing core glow, twinkling
- * spark dots), ported 1:1 (recipes in index.css). Rendered only by
+ * sign-in background (deep-emerald base, 1px grid, a pulsing core
+ * glow, twinkling spark dots), ported 1:1 (recipes in index.css).
+ * Piece 44: the conic rings became the site's orbit system (dashed
+ * outer orbit + plain inner orbit) with its five floating labelled
+ * nodes. Rendered only by
  * the sign-in screen, whose root carries `dark auth-scene`, so the
  * scene is always dark whatever the app theme. Purely decorative:
  * every layer is pointer-events-none + aria-hidden.
@@ -356,20 +361,43 @@ const AUTH_SPARKS: ReadonlyArray<readonly [number, number, number, number]> = [
   [48, 44, 3.0, 2], [5, 52, 1.6, 2],
 ]
 
+/* Piece 44: the site's five floating auth nodes — positions,
+   delays and labels are jurisvault.ai's own. */
+const AUTH_NODES = [
+  { label: 'AI Research', left: '60%', top: '9%', delay: '0s', Icon: Sparkles },
+  { label: 'Case Laws', left: '13%', top: '29%', delay: '1.1s', Icon: Scale },
+  { label: 'Drafts', left: '87%', top: '35%', delay: '2.2s', Icon: PenLine },
+  { label: 'Statutes', left: '8%', top: '62%', delay: '3.3s', Icon: BookOpen },
+  { label: 'Judgments', left: '77%', top: '66%', delay: '4.4s', Icon: Gavel },
+] as const
+
 export function AuthScene() {
   return (
     <>
       <div aria-hidden="true" className="auth-scene-base" />
       <div aria-hidden="true" className="auth-grid" />
-      <div aria-hidden="true" className="auth-ring-wrap">
-        <div
-          className="auth-ring"
-          style={{ width: '34rem', height: '34rem', maxWidth: '90vmin', maxHeight: '90vmin' }}
-        />
-        <div
-          className="auth-ring auth-ring-rev"
-          style={{ width: '48rem', height: '48rem', maxWidth: '90vmin', maxHeight: '90vmin' }}
-        />
+      {/* Piece 44: the site's orbit system (dashed outer orbit 46s,
+          plain inner orbit 68s reverse) replaces the conic rings. */}
+      <div className="auth-orbit-wrap" aria-hidden>
+        <div className="auth-orbit-box">
+          <div className="auth-orbit auth-orbit-dashed" />
+          <div className="auth-orbit auth-orbit-inner" />
+        </div>
+      </div>
+      {/* Piece 44: floating labelled nodes, large screens only. */}
+      <div aria-hidden="true">
+        {AUTH_NODES.map(({ label, left, top, delay, Icon }) => (
+          <div
+            key={label}
+            className="auth-node hidden lg:flex"
+            style={{ left, top, animationDelay: delay }}
+          >
+            <span className="auth-node-dot">
+              <Icon size={22} strokeWidth={1.6} />
+            </span>
+            <span className="auth-node-label">{label}</span>
+          </div>
+        ))}
       </div>
       <div aria-hidden="true" className="auth-core" />
       {AUTH_SPARKS.map(([left, top, delay, size], i) => (

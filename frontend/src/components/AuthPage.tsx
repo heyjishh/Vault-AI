@@ -104,7 +104,7 @@ export default function AuthPage() {
             )}
             <button
               type="submit" disabled={loading}
-              className="w-full rounded-lex bg-ink text-ivory py-2.5 text-[15px] font-medium hover:bg-ink-900 transition-colors disabled:opacity-50"
+              className="btn-brand w-full rounded-lex text-ivory py-2.5 text-[15px] font-medium transition-colors disabled:opacity-50"
             >
               {loading ? 'Please wait…' : mode === 'login' ? 'Sign in' : 'Create account'}
             </button>

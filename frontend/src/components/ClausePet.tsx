@@ -655,7 +655,7 @@ export default function ClausePet({ view, go, askQuestion, startNewChat }: Claus
                   <button
                     key={a.label}
                     onClick={() => runAction(a)}
-                    className="flex items-center gap-2 rounded-lex bg-ink text-ivory px-2.5 py-1.5 text-[12.5px] font-medium hover:bg-ink-900 transition-colors text-left"
+                    className="btn-brand flex items-center gap-2 rounded-lex text-ivory px-2.5 py-1.5 text-[12.5px] font-medium transition-colors text-left"
                   >
                     <MessageSquare size={13} className="shrink-0" /> {a.label}
                   </button>

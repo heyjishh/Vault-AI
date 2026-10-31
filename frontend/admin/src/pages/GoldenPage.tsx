@@ -100,7 +100,7 @@ export default function GoldenPage() {
           <button
             onClick={() => run.mutate()}
             disabled={run.isPending || list.length === 0}
-            className="rounded-lex bg-ink text-ivory px-4 py-2.5 text-[13.5px] font-medium disabled:opacity-40 inline-flex items-center justify-center gap-2"
+            className="btn-brand rounded-lex text-ivory px-4 py-2.5 text-[13.5px] font-medium disabled:opacity-40 inline-flex items-center justify-center gap-2"
           >
             <Play size={14} /> {run.isPending ? 'Running evaluation…' : 'Run evaluation'}
           </button>
@@ -133,7 +133,7 @@ export default function GoldenPage() {
             <button
               onClick={() => update.mutate()}
               disabled={!editQuestion.trim() || update.isPending}
-              className="rounded-lex bg-ink text-ivory px-4 py-2.5 text-[13.5px] font-medium disabled:opacity-40"
+              className="btn-brand rounded-lex text-ivory px-4 py-2.5 text-[13.5px] font-medium disabled:opacity-40"
             >
               Save changes
             </button>
@@ -228,7 +228,7 @@ export default function GoldenPage() {
             <button
               onClick={() => add.mutate()}
               disabled={!question.trim() || add.isPending}
-              className="rounded-lex bg-ink text-ivory px-4 py-2.5 text-[13.5px] font-medium disabled:opacity-40 inline-flex items-center justify-center gap-2"
+              className="btn-brand rounded-lex text-ivory px-4 py-2.5 text-[13.5px] font-medium disabled:opacity-40 inline-flex items-center justify-center gap-2"
             >
               <Plus size={14} /> Add rule
             </button>

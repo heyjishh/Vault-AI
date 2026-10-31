@@ -81,7 +81,7 @@ export default function MattersPage({ open }: { open: (id: string) => void }) {
         </div>
         <button
           onClick={() => setCreating((c) => !c)}
-          className="flex items-center gap-2 rounded-lex bg-ink text-ivory px-3.5 py-2.5 text-[14px] font-medium hover:bg-ink-900 transition-colors whitespace-nowrap"
+          className="btn-brand flex items-center gap-2 rounded-lex text-ivory px-3.5 py-2.5 text-[14px] font-medium transition-colors whitespace-nowrap"
         >
           {creating ? <X size={15} /> : <Plus size={15} />}
           {creating ? 'Cancel' : 'New brief'}
@@ -138,7 +138,7 @@ export default function MattersPage({ open }: { open: (id: string) => void }) {
           <button
             disabled={!title.trim() || create.isPending}
             onClick={() => create.mutate()}
-            className="mt-4 rounded-lex bg-ink text-ivory px-4 py-2 text-[14px] font-medium disabled:opacity-40 hover:bg-ink-900 transition-colors"
+            className="btn-brand mt-4 rounded-lex text-ivory px-4 py-2 text-[14px] font-medium disabled:opacity-40 transition-colors"
           >
             {create.isPending ? 'Opening…' : 'Open brief'}
           </button>
@@ -262,7 +262,7 @@ function SpacesPanel({ spaces, myId }: { spaces: Space[]; myId?: string }) {
         <button
           disabled={!name.trim() || createSpace.isPending}
           onClick={() => createSpace.mutate()}
-          className="rounded-lex bg-ink text-ivory px-3.5 py-2 text-[13.5px] font-medium disabled:opacity-40 whitespace-nowrap"
+          className="btn-brand rounded-lex text-ivory px-3.5 py-2 text-[13.5px] font-medium disabled:opacity-40 whitespace-nowrap"
         >
           Create space
         </button>
@@ -336,7 +336,7 @@ function SpacesPanel({ spaces, myId }: { spaces: Space[]; myId?: string }) {
                       <button
                         disabled={!memberEmail.trim() || addMember.isPending}
                         onClick={() => addMember.mutate(s.id)}
-                        className="rounded-lex bg-ink text-ivory px-3 py-1.5 text-[13px] font-medium disabled:opacity-40"
+                        className="btn-brand rounded-lex text-ivory px-3 py-1.5 text-[13px] font-medium disabled:opacity-40"
                       >
                         Add member
                       </button>

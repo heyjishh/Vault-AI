@@ -62,7 +62,7 @@ export default function AuthGate({ onAuthed }: { onAuthed: (u: Me) => void }) {
           )}
           <button
             type="submit" disabled={loading}
-            className="w-full rounded-lex bg-ink text-ivory py-2.5 text-[15px] font-medium hover:bg-ink-900 transition-colors disabled:opacity-50"
+            className="btn-brand w-full rounded-lex text-ivory py-2.5 text-[15px] font-medium transition-colors disabled:opacity-50"
           >
             {loading ? 'Signing in…' : 'Sign in to Command Center'}
           </button>

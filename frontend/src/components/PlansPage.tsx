@@ -146,7 +146,7 @@ export default function PlansPage() {
           </div>
           <div className="flex gap-2">
             <button
-              className="rounded-lex bg-ink text-ivory px-4 py-2 text-[13px] font-medium disabled:opacity-50"
+              className="btn-brand rounded-lex text-ivory px-4 py-2 text-[13px] font-medium disabled:opacity-50"
               disabled={confirmMock.isPending}
               onClick={() => confirmMock.mutate(pendingMock.paymentId)}
             >
@@ -196,7 +196,7 @@ export default function PlansPage() {
               <button
                 disabled={current || buy.isPending || plan.price_inr === 0}
                 onClick={() => buy.mutate(plan)}
-                className="mt-5 rounded-lex bg-ink text-ivory px-4 py-2.5 text-[13.5px] font-medium disabled:opacity-40 flex items-center justify-center gap-2"
+                className="btn-brand mt-5 rounded-lex text-ivory px-4 py-2.5 text-[13.5px] font-medium disabled:opacity-40 flex items-center justify-center gap-2"
               >
                 {current ? 'Current plan' : plan.price_inr === 0 ? 'Included' : (
                   <>Subscribe <ExternalLink size={13} /></>

@@ -210,7 +210,7 @@ export default function BillingPage() {
             <button
               onClick={() => save.mutate()}
               disabled={save.isPending}
-              className="rounded-lex bg-ink text-ivory px-5 py-2.5 text-[13.5px] font-medium disabled:opacity-50"
+              className="btn-brand rounded-lex text-ivory px-5 py-2.5 text-[13.5px] font-medium disabled:opacity-50"
             >
               {save.isPending ? 'Saving…' : 'Save payment settings'}
             </button>

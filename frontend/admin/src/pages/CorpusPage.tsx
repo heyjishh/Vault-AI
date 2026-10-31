@@ -66,7 +66,7 @@ export default function CorpusPage() {
           />
           <button
             onClick={() => ingest.mutate()} disabled={ingest.isPending}
-            className="rounded-lex bg-ink text-ivory px-4 py-2 text-[13px] font-medium hover:bg-ink-900 disabled:opacity-50"
+            className="btn-brand rounded-lex text-ivory px-4 py-2 text-[13px] font-medium disabled:opacity-50"
           >
             {ingest.isPending ? 'Ingesting…' : 'Run ingest'}
           </button>

@@ -870,7 +870,7 @@ function Composer(props: {
                   </button>
                   <button
                     onClick={() => setLawOpen(false)}
-                    className="rounded-lex bg-ink text-ivory px-3 py-1 text-[12px] font-medium"
+                    className="btn-brand rounded-lex text-ivory px-3 py-1 text-[12px] font-medium"
                   >
                     Done
                   </button>
@@ -913,7 +913,7 @@ function Composer(props: {
         ) : (
           <button
             onClick={onSubmit} disabled={!input.trim()}
-            className="w-8 h-8 rounded-lex bg-ink text-ivory flex items-center justify-center hover:bg-ink-900 disabled:opacity-40 transition-colors"
+            className="btn-brand w-8 h-8 rounded-lex text-ivory flex items-center justify-center disabled:opacity-40 transition-colors"
             title="Ask (Enter)"
           >
             <ArrowUp size={16} />

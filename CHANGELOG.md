@@ -15,6 +15,33 @@ live**, what is **built but unverified**, and what is **roadmap**.
 ## [Unreleased]
 
 ### Added
+- **Deeper jurisvault.ai adoption — brand buttons, auth orbits +
+  floating nodes, rotating backdrop, both apps (1 Nov 2026,
+  Piece 44).** JISHAN: "make more enhancement ad running
+  gradiant, and adopt more thing from main website, so it look
+  aloike same" — Piece 42 took the site's palette, type and auth
+  background; this piece takes its component language. (1) Every
+  primary action in both apps (37 buttons: sign-in submits, Ask /
+  Interact / hero sends, run buttons, uploads, saves, creates,
+  Plans subscribe + pay, Private Vault actions, pet-menu actions,
+  admin saves / ingest / golden / annotations, error reload) now
+  wears `.btn-brand`, the site's `.auth-btn-primary` recipe
+  (180° `#2ad06f → #21c063`, 12px radius, soft green shadow,
+  hover brighten, press-down); destructive confirms, nav, tab
+  pills, toggles and badges deliberately stay as they are. (2)
+  The auth scene's conic rings are replaced by the site's orbit
+  system (dashed green orbit 46s + inner orbit 68s reverse) with
+  five floating labelled nodes bobbing on the site's 7s float at
+  its own positions — the site's five labels in the user app,
+  admin-flavoured labels in the Command Center. (3) The app
+  backdrop gains a slow rotating conic sheen (70s) and a
+  breathing glow (9s) behind every screen. (4) Radii step up to
+  the site's scale (lex 10px, lex-lg 14px) and Archivo display
+  headings take weight 700. (5) The Dashboard greeting band gains
+  the grid-and-glow hero field, masked to fade downward.
+  Verified: both builds clean; `btn-brand`, `auth-orbit` and
+  `backdrop-spin` present in both shipped bundles, node labels
+  present per app.
 - **The jurisvault.ai logo everywhere (1 Nov 2026, Piece 43).**
   JISHAN: "use same logo what we have in main website" — the main
   website's header logo (its `/toplogo.png`: the green shield-and-

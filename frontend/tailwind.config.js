@@ -59,8 +59,8 @@ export default {
       },
       borderRadius: {
         // Piece 34: the tight pair — 6px controls, 8px cards.
-        'lex': '6px',
-        'lex-lg': '8px',
+        'lex': '10px',
+        'lex-lg': '14px',
       },
       boxShadow: {
         'lex': '0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.04)',

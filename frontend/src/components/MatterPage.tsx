@@ -381,7 +381,7 @@ function Documents({ matterId }: { matterId: string }) {
       <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] px-5 py-4 mt-5">
         <p className="text-[12.5px] text-stone-400 dark:text-stone-500 font-medium">Add documents</p>
         <div className="mt-3 flex flex-wrap items-center gap-3">
-          <label className="rounded-lex bg-ink text-ivory px-3.5 py-2 text-[13px] font-medium cursor-pointer hover:bg-ink-900 transition-colors">
+          <label className="btn-brand rounded-lex text-ivory px-3.5 py-2 text-[13px] font-medium cursor-pointer transition-colors">
             Upload files
             <input
               type="file" multiple className="hidden" accept={UPLOAD_ACCEPT}
@@ -494,7 +494,7 @@ function Notes({ matterId, initial }: { matterId: string; initial: string }) {
       />
       <button
         onClick={() => save.mutate()} disabled={save.isPending}
-        className="mt-3 rounded-lex bg-ink text-ivory px-4 py-2 text-[14px] font-medium disabled:opacity-40 hover:bg-ink-900 transition-colors"
+        className="btn-brand mt-3 rounded-lex text-ivory px-4 py-2 text-[14px] font-medium disabled:opacity-40 transition-colors"
       >
         {save.isPending ? 'Saving…' : 'Save notes'}
       </button>

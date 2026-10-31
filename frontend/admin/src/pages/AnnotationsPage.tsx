@@ -154,7 +154,7 @@ export default function AnnotationsPage() {
               <button
                 onClick={() => addCaptured.mutate()}
                 disabled={addCaptured.isPending}
-                className="rounded-lex bg-ink text-ivory px-4 py-2 text-[14px] font-medium disabled:opacity-50"
+                className="btn-brand rounded-lex text-ivory px-4 py-2 text-[14px] font-medium disabled:opacity-50"
               >
                 {addCaptured.isPending ? 'Verifying…' : 'Verify & serve'}
               </button>
@@ -186,7 +186,7 @@ export default function AnnotationsPage() {
             <button
               onClick={() => addManual.mutate()}
               disabled={!question.trim() || !answer.trim() || addManual.isPending}
-              className="rounded-lex bg-ink text-ivory px-4 py-2 text-[14px] font-medium disabled:opacity-50"
+              className="btn-brand rounded-lex text-ivory px-4 py-2 text-[14px] font-medium disabled:opacity-50"
             >
               {addManual.isPending ? 'Saving…' : 'Add verified answer'}
             </button>

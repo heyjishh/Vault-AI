@@ -192,7 +192,7 @@ export default function CustomizePage() {
             <button
               onClick={() => save.mutate(normalize(form))}
               disabled={save.isPending || !dirty}
-              className="w-full px-4 py-2.5 rounded-lex bg-ink text-ivory text-[13px] font-medium hover:bg-ink-900 disabled:opacity-40 transition-colors"
+              className="btn-brand w-full px-4 py-2.5 rounded-lex text-ivory text-[13px] font-medium disabled:opacity-40 transition-colors"
             >
               {save.isPending ? 'Saving…' : 'Save & apply'}
             </button>

@@ -17,7 +17,7 @@ export default class ErrorBoundary extends Component<{ children: ReactNode }, St
           <p className="text-stone-500 dark:text-stone-400 mt-2 text-[15px]">{this.state.message}</p>
           <button
             onClick={() => window.location.reload()}
-            className="mt-6 rounded-lex bg-ink text-ivory px-4 py-2 text-[14px] font-medium"
+            className="btn-brand mt-6 rounded-lex text-ivory px-4 py-2 text-[14px] font-medium"
           >
             Reload Juris Vault AI
           </button>

@@ -196,6 +196,10 @@ export default function DashboardPage({ go, openMatter }: { go: (v: View) => voi
       <div className="relative overflow-hidden rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] px-6 py-6 sm:px-8">
         {/* Piece 36: no local glow here — AppShell's fixed layer glows
             behind the whole app, this card included. */}
+        {/* Piece 44: the hero field — the auth scene's grid + green
+            glow in the light register, masked to fade out downward
+            behind the greeting (CSS in index.css). */}
+        <div className="hero-field absolute inset-0 pointer-events-none" aria-hidden />
         <div className="relative flex items-start gap-5">
           <AssistantAvatar size={76} />
           <div className="min-w-0 flex-1">
@@ -224,7 +228,7 @@ export default function DashboardPage({ go, openMatter }: { go: (v: View) => voi
               <button
                 type="submit"
                 disabled={!heroQ.trim()}
-                className="w-8 h-8 rounded-lex bg-ink text-ivory flex items-center justify-center hover:bg-ink-900 disabled:opacity-40 transition-colors shrink-0"
+                className="btn-brand w-8 h-8 rounded-lex text-ivory flex items-center justify-center disabled:opacity-40 transition-colors shrink-0"
                 title="Ask Clause"
               >
                 <ArrowUp size={15} />
@@ -262,7 +266,7 @@ export default function DashboardPage({ go, openMatter }: { go: (v: View) => voi
             </p>
             <button
               onClick={() => go('plans')}
-              className="mt-3 inline-flex items-center gap-1.5 rounded-lex bg-ink text-ivory px-4 py-2 text-[13px] font-medium hover:bg-ink-900 transition-colors"
+              className="btn-brand mt-3 inline-flex items-center gap-1.5 rounded-lex text-ivory px-4 py-2 text-[13px] font-medium transition-colors"
             >
               {isFree ? 'Upgrade your plan' : 'Manage subscription'} <ArrowRight size={13} />
             </button>

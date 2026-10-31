@@ -230,7 +230,7 @@ export default function PrivateVaultPage() {
             <button
               onClick={() => setPw.mutate()}
               disabled={password.length < 8 || setPw.isPending}
-              className="px-4 py-2 rounded-lex bg-ink text-ivory text-sm font-medium hover:bg-ink-900 disabled:opacity-40 transition-colors"
+              className="btn-brand px-4 py-2 rounded-lex text-ivory text-sm font-medium disabled:opacity-40 transition-colors"
             >
               {setPw.isPending ? 'Setting…' : 'Set password & open vault'}
             </button>
@@ -258,7 +258,7 @@ export default function PrivateVaultPage() {
             <button
               onClick={() => unlock.mutate()}
               disabled={!password || unlock.isPending}
-              className="px-4 py-2 rounded-lex bg-ink text-ivory text-sm font-medium hover:bg-ink-900 disabled:opacity-40 transition-colors"
+              className="btn-brand px-4 py-2 rounded-lex text-ivory text-sm font-medium disabled:opacity-40 transition-colors"
             >
               {unlock.isPending ? 'Unlocking…' : 'Unlock'}
             </button>
@@ -295,7 +295,7 @@ export default function PrivateVaultPage() {
               <div className="flex flex-col sm:flex-row gap-2 mt-3">
                 <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Current password" className="flex-1 rounded-lex border border-stone-200 dark:border-white/10 bg-ivory dark:bg-[#14120f] px-3 py-2 text-sm outline-none focus:border-stone-400" />
                 <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="New password (8+ characters)" className="flex-1 rounded-lex border border-stone-200 dark:border-white/10 bg-ivory dark:bg-[#14120f] px-3 py-2 text-sm outline-none focus:border-stone-400" />
-                <button onClick={() => change.mutate()} disabled={!password || newPassword.length < 8 || change.isPending} className="px-4 py-2 rounded-lex bg-ink text-ivory text-sm font-medium hover:bg-ink-900 disabled:opacity-40 transition-colors">
+                <button onClick={() => change.mutate()} disabled={!password || newPassword.length < 8 || change.isPending} className="btn-brand px-4 py-2 rounded-lex text-ivory text-sm font-medium disabled:opacity-40 transition-colors">
                   {change.isPending ? 'Re-encrypting…' : 'Change'}
                 </button>
               </div>
@@ -352,7 +352,7 @@ export default function PrivateVaultPage() {
               <button
                 onClick={enqueueSealText}
                 disabled={!text.trim()}
-                className="px-4 py-2 rounded-lex bg-ink text-ivory text-sm font-medium hover:bg-ink-900 disabled:opacity-40 transition-colors"
+                className="btn-brand px-4 py-2 rounded-lex text-ivory text-sm font-medium disabled:opacity-40 transition-colors"
               >
                 Seal pasted text
               </button>

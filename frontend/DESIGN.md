@@ -205,6 +205,72 @@ Georgia display face.
   scene motion stops under `prefers-reduced-motion`. The shells
   keep the running wash backdrop — the scene is auth-only.
 
+## Deeper adoption — the site's components (Piece 44)
+
+JISHAN: "make more enhancement and running gradient, and adopt
+more thing from main website, so it look alike same". Piece 42
+took the site's palette, type and auth background; Piece 44 takes
+its component language, in both apps.
+
+- **Brand primary buttons.** `.btn-brand` (index.css in both
+  apps) is the site's `.auth-btn-primary` minus its `width:100%`:
+  `linear-gradient(180deg,#2ad06f,#21c063)`, white 600 text, 12px
+  radius, a soft green shadow (`0 10px 26px -10px
+  rgba(33,192,99,.7)`), brighten + deeper shadow on hover, 1px
+  press-down on active, flat 60% opacity when disabled. Every
+  primary action wears it now (37 buttons): sign-in submits, Ask /
+  Interact / Dashboard-hero sends, the Agents / Research / Draft
+  run buttons, Vault upload + brief uploads, Save actions, brief /
+  space / member creates, Plans subscribe + pay-confirm, the
+  Private Vault set / unlock / change / seal actions, the pet-menu
+  actions, the error view's Reload, and in admin the sign-in
+  submit, Save buttons (Customize, Billing, System Settings),
+  Corpus ingest, Golden run / save / add, Annotations serve / add,
+  and the admin-only screen's "Open Juris Vault AI". NOT
+  converted, deliberately: destructive actions (the ConfirmDialog
+  confirm stays red), nav items and the sidebar "New research"
+  CTA, tab pills (incl. the DocInsight view switcher's selected
+  state), toggles, badges/chips, the AppShell composer-adjacent
+  utilities, the Refine "Refined — Undo" state chip, and inline
+  retries ("Try again" in DocInsight).
+- **Auth scene: orbits + floating nodes.** The conic rings are
+  replaced by the site's orbit system: a dashed green orbit
+  (`rgba(33,192,99,.21)`, `authSpin` 46s) around a plain hairline
+  inner orbit inset 20% (68s reverse), the pair sized
+  `min(88vmin,54rem)`. Five labelled nodes bob on the site's 7s
+  `authFloat` loop at the site's own positions/delays — the user
+  app wears the site's five (AI Research, Case Laws, Drafts,
+  Statutes, Judgments); the admin wears Overview, Users, Corpus,
+  Billing, Golden Rules. Node style is the site's: a 44px dark
+  glass dot (`rgba(8,26,19,.85)`, blur, green ring + glow) with a
+  green icon over an 11px `#b6c9bf` label; nodes render on large
+  screens only. The core glow, sparks, grid and base are
+  unchanged. (One implementation note: `.auth-node` sets no
+  `display` in CSS — the nodes carry Tailwind `hidden lg:flex`,
+  and an unlayered display rule would defeat the small-screen
+  hiding in the cascade.)
+- **The app backdrop moves more.** `DualToneBackdrop` gains a
+  child layer, `.backdrop-spin`: a conic sheen (two soft green
+  wedges, `.07`/`.05` alpha on light, `.14`/`.10` on dark)
+  rotating on `authSpin` at 70s — the auth scene's spin, at
+  whisper volume, behind the whole app. The glow also breathes:
+  `glowPulse` 9s alternate (opacity .78 ↔ 1) joins `washRun` on
+  `.dual-tone-backdrop`. Both motions stop under
+  `prefers-reduced-motion`.
+- **Radii + heading weight.** The radius pair steps up to the
+  site's scale: `lex` 6px → 10px, `lex-lg` 8px → 14px (its
+  buttons are 12px, its cards rounded-xl and up). A plain-CSS
+  `.font-display { font-weight: 700 }` sits after the Tailwind
+  directives in both apps, so Archivo headings read at the
+  masthead's bold weight wherever the display family is used.
+- **Dashboard hero field (user app).** The greeting band gains
+  `.hero-field` behind its content: the auth grid (44px cells)
+  and a green radial glow (`36rem 18rem at 18% 0%`, `.10` light /
+  `.14` dark; lines ink `.045` light / white `.05` dark) under a
+  top-anchored radial mask that fades the field out downward —
+  the sign-in scene's texture, in the light register, where the
+  user lands.
+
 ## Legal identity (Piece 37)
 
 JISHAN's verdict on Pieces 34–36: the theme was aligned and dark

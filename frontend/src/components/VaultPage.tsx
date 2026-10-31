@@ -365,7 +365,7 @@ export default function VaultPage() {
           />
           <button
             onClick={() => ingest.mutate()} disabled={busy}
-            className="mt-3 rounded-lex bg-ink text-ivory px-3.5 py-2 text-[13px] font-medium hover:bg-ink-900 disabled:opacity-50"
+            className="btn-brand mt-3 rounded-lex text-ivory px-3.5 py-2 text-[13px] font-medium disabled:opacity-50"
           >
             {ingest.isPending ? `Ingesting… ${formatElapsed(ingestNow - ingestStartRef.current)}` : 'Start ingest'}
           </button>
@@ -585,7 +585,7 @@ function MetaEditor(props: {
               effective_to: to || undefined,
               superseded_by: supersededBy.trim() || undefined,
             })}
-            className="rounded-lex bg-ink text-ivory px-4 py-1.5 text-[13px] font-medium disabled:opacity-50"
+            className="btn-brand rounded-lex text-ivory px-4 py-1.5 text-[13px] font-medium disabled:opacity-50"
           >
             {saving ? 'Saving…' : 'Save validity'}
           </button>

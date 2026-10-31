@@ -115,7 +115,7 @@ export default function AgentsPage({ go }: { go?: (view: string) => void } = {})
             </div>
             <button
               onClick={() => input.trim() && start.mutate()} disabled={start.isPending || !input.trim()}
-              className="flex items-center gap-2 rounded-lex bg-ink text-ivory px-4 py-2 text-meta2 font-medium hover:bg-ink-900 disabled:opacity-40"
+              className="btn-brand flex items-center gap-2 rounded-lex text-ivory px-4 py-2 text-meta2 font-medium disabled:opacity-40"
             >
               <Play size={14} /> {start.isPending ? 'Running…' : 'Run workflow'}
             </button>
@@ -150,7 +150,7 @@ export default function AgentsPage({ go }: { go?: (view: string) => void } = {})
           <RefineControls ctl={refineAuto} disabled={!goal.trim()} />
           <button
             onClick={() => goal.trim() && startAuto.mutate()} disabled={startAuto.isPending || !goal.trim()}
-            className="ml-auto flex items-center gap-2 rounded-lex bg-ink text-ivory px-4 py-2 text-meta2 font-medium hover:bg-ink-900 disabled:opacity-40"
+            className="btn-brand ml-auto flex items-center gap-2 rounded-lex text-ivory px-4 py-2 text-meta2 font-medium disabled:opacity-40"
           >
             <Play size={14} /> {startAuto.isPending ? 'Researching…' : 'Run autonomous agent'}
           </button>

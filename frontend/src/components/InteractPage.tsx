@@ -615,7 +615,7 @@ export default function InteractPage({ matterId, go }: { matterId?: string; go?:
           <button
             onClick={sendChat}
             disabled={chatBlocked}
-            className="w-8 h-8 rounded-lex bg-ink text-ivory flex items-center justify-center hover:bg-ink-900 disabled:opacity-40 transition-colors"
+            className="btn-brand w-8 h-8 rounded-lex text-ivory flex items-center justify-center disabled:opacity-40 transition-colors"
             title="Ask (Enter)"
           >
             <ArrowUp size={16} />

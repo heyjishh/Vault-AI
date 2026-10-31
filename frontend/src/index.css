@@ -2,6 +2,20 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Piece 44: Archivo display headings read bold, like the brand
+   site's masthead (Tailwind's font-display utility sets the family;
+   this sets the weight). */
+.font-display { font-weight: 700; }
+
+/* Piece 44: the brand primary button, ported from jurisvault.ai's
+   .auth-btn-primary (minus its width:100%): the site's green
+   gradient, 12px radius, soft green shadow, brighten on hover,
+   1px press-down. Primary actions across the app wear this. */
+.btn-brand { color:#fff; background:linear-gradient(180deg,#2ad06f 0%,#21c063 100%); font-weight:600; border-radius:12px; box-shadow:0 10px 26px -10px rgba(33,192,99,.7); transition:filter .18s, transform .18s, box-shadow .18s; }
+.btn-brand:hover:not(:disabled) { filter:brightness(1.07); box-shadow:0 14px 30px -10px rgba(33,192,99,.78); }
+.btn-brand:active:not(:disabled) { transform:translateY(1px); }
+.btn-brand:disabled { opacity:.6; cursor:not-allowed; box-shadow:none; }
+
 /* REA'd from harvey.ai — warm ivory paper, ink text, hairline borders */
 :root {
   --paper: #fafaf9;
@@ -124,15 +138,34 @@ body {
   background-size: auto, 175% 175%;
   background-repeat: no-repeat;
   pointer-events: none;
-  animation: washRun 34s ease-in-out infinite alternate;
+  animation: washRun 34s ease-in-out infinite alternate, glowPulse 9s ease-in-out infinite alternate;
 }
 .dual-tone-backdrop-fixed { position: fixed; }
 @keyframes washRun {
   from { background-position: 0 0, 0% 0%; }
   to { background-position: 0 0, 100% 100%; }
 }
+/* Piece 44: the backdrop's glow breathes (opacity .78 ↔ 1 on a 9s
+   alternate loop), layered over the washRun pan. */
+@keyframes glowPulse {
+  from { opacity: .78; }
+  to { opacity: 1; }
+}
+/* Piece 44: a slow rotating conic sheen inside the backdrop — the
+   auth scene's spinning motion (authSpin) brought into the app at
+   whisper alpha; stronger in dark, where the ground is the site's
+   emerald. */
+.backdrop-spin {
+  position: absolute; inset: -25%; pointer-events: none;
+  background: conic-gradient(from 0deg at 50% 42%, transparent 0deg, rgba(33,192,99,.07) 45deg, transparent 100deg, rgba(42,208,111,.05) 210deg, transparent 260deg);
+  animation: authSpin 70s linear infinite;
+}
+html.dark .backdrop-spin {
+  background: conic-gradient(from 0deg at 50% 42%, transparent 0deg, rgba(33,192,99,.14) 45deg, transparent 100deg, rgba(42,208,111,.10) 210deg, transparent 260deg);
+}
 @media (prefers-reduced-motion: reduce) {
   .dual-tone-backdrop { animation: none; }
+  .backdrop-spin { animation: none; }
 }
 
 /* ——— Piece 42: the jurisvault.ai auth scene ———
@@ -191,9 +224,32 @@ body {
   50% { opacity: 1; transform: translate(-50%,-50%) scale(1.07); }
 }
 @keyframes authTwinkle { 0%, 100% { opacity: .15; } 50% { opacity: .9; } }
+
+/* Piece 44: the site's orbit system replaces the conic rings — a
+   dashed green orbit ring (46s) around a plain inner orbit (68s
+   reverse), sized in vmin, plus floating labelled nodes that bob on
+   the site's 7s authFloat loop. Node positions/delays are the
+   site's own. (.auth-node deliberately sets no `display` — the
+   nodes carry Tailwind `hidden lg:flex`, and an unlayered display
+   here would defeat the small-screen hiding.) */
+@keyframes authFloat { 0%,100% { transform:translate(-50%,-50%) } 50% { transform:translate(-50%,calc(-50% - 7px)) } }
+.auth-orbit-wrap { position:absolute; inset:0; display:grid; place-items:center; pointer-events:none; }
+.auth-orbit-box { position:relative; width:min(88vmin,54rem); height:min(88vmin,54rem); }
+.auth-orbit { position:absolute; inset:0; border:1px solid rgba(255,255,255,.08); border-radius:9999px; animation:authSpin 46s linear infinite; }
+.auth-orbit-dashed { border-style:dashed; border-color:rgba(33,192,99,.21); }
+.auth-orbit-inner { inset:20%; animation:authSpin 68s linear infinite reverse; }
+.auth-node { position:absolute; transform:translate(-50%,-50%); flex-direction:column; align-items:center; gap:.4rem; animation:authFloat 7s ease-in-out infinite; }
+.auth-node-dot { width:44px; height:44px; display:grid; place-items:center; border-radius:9999px; color:#21c063; background:rgba(8,26,19,.85); backdrop-filter:blur(6px); border:1px solid rgba(33,192,99,.35); box-shadow:0 0 22px -6px rgba(33,192,99,.55); }
+.auth-node-label { white-space:nowrap; color:#b6c9bf; font-size:11px; font-weight:500; }
 @media (prefers-reduced-motion: reduce) {
-  .auth-ring, .auth-ring-rev, .auth-core, .auth-spark { animation: none; }
+  .auth-ring, .auth-ring-rev, .auth-core, .auth-spark, .auth-orbit, .auth-node { animation: none; }
 }
+
+/* Piece 44: the Dashboard hero field — the auth scene's grid +
+   green glow, in the light register, masked to fade out downward
+   behind the greeting band. */
+.hero-field { background-image: radial-gradient(36rem 18rem at 18% 0%, rgba(33,192,99,.10), transparent 60%), linear-gradient(rgba(15,14,13,.045) 1px, transparent 1px), linear-gradient(90deg, rgba(15,14,13,.045) 1px, transparent 1px); background-size:auto, 44px 44px, 44px 44px; -webkit-mask-image: radial-gradient(75% 90% at 50% 0%, #000 30%, transparent 100%); mask-image: radial-gradient(75% 90% at 50% 0%, #000 30%, transparent 100%); }
+html.dark .hero-field { background-image: radial-gradient(36rem 18rem at 18% 0%, rgba(33,192,99,.14), transparent 60%), linear-gradient(rgba(255,255,255,.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.05) 1px, transparent 1px); }
 
 /* ——— Piece 35: dark mode overrides for the plain-CSS surfaces ——— */
 .dark body { background-color: #04100b; color: #f4f2ee; }

@@ -103,7 +103,7 @@ export default function DraftPage({ matterId: fixedMatterId, go }: { matterId?: 
           <button
             disabled={!instructions.trim() || run.isPending}
             onClick={() => run.mutate()}
-            className="rounded-lex bg-ink text-ivory px-5 py-2.5 text-[13.5px] font-medium disabled:opacity-40 inline-flex items-center gap-2"
+            className="btn-brand rounded-lex text-ivory px-5 py-2.5 text-[13.5px] font-medium disabled:opacity-40 inline-flex items-center gap-2"
           >
             <PenLine size={14} /> {run.isPending ? 'Drafting…' : 'Generate draft'}
           </button>

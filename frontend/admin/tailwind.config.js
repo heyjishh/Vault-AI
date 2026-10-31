@@ -45,8 +45,8 @@ export default {
         mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', 'monospace'],
       },
       borderRadius: {
-        'lex': '6px',
-        'lex-lg': '8px',
+        'lex': '10px',
+        'lex-lg': '14px',
       },
       boxShadow: {
         'lex': '0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.04)',

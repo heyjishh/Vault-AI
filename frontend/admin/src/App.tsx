@@ -33,7 +33,7 @@ function NonAdmin({ user }: { user: Me }) {
           Ask an administrator to grant you access, or return to the app.
         </p>
         <div className="mt-6 flex gap-3 justify-center">
-          <a href="/" className="rounded-lex bg-ink text-ivory px-4 py-2 text-[15px] font-medium">Open Juris Vault AI</a>
+          <a href="/" className="btn-brand rounded-lex text-ivory px-4 py-2 text-[15px] font-medium">Open Juris Vault AI</a>
           <button
             onClick={() => { tokens.clear(); window.location.reload() }}
             className="rounded-lex border border-stone-300 dark:border-white/10 px-4 py-2 text-[15px] font-medium"

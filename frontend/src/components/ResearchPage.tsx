@@ -69,7 +69,7 @@ export default function ResearchPage({ go }: { go?: (view: string) => void } = {
           </div>
           <button
             onClick={() => q.trim() && run.mutate()} disabled={run.isPending || !q.trim()}
-            className="rounded-lex bg-ink text-ivory px-4 py-2 text-meta2 font-medium hover:bg-ink-900 disabled:opacity-40"
+            className="btn-brand rounded-lex text-ivory px-4 py-2 text-meta2 font-medium disabled:opacity-40"
           >
             {run.isPending ? 'Researching…' : 'Run research'}
           </button>
