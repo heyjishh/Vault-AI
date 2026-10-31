@@ -15,6 +15,14 @@ live**, what is **built but unverified**, and what is **roadmap**.
 ## [Unreleased]
 
 ### Added
+- **No inner ring on composer focus (1 Nov 2026, Piece 50).**
+  JISHAN clarified Piece 49: "remove the inner ring when do
+  focus or click on input, not outer running border" — the hard
+  3px ring that hugged the Ask/Interact box on focus is removed.
+  The outer running border is untouched and still speeds up on
+  focus (2.4s) with only a soft diffuse outer glow. Verified:
+  build clean, ring gone from the shipped bundle, live on test +
+  public.
 - **Typed confirmation for permanent deletes (1 Nov 2026,
   Piece 47).** JISHAN: "in the permanent delete comformation box
   require input so user will give input confirmation of delete" —
