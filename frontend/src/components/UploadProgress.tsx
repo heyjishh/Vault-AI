@@ -193,7 +193,7 @@ export function UploadProgressList({
                 {Math.round((finished / items.length) * 100)}%
               </span>
             </div>
-            <div className="h-1.5 mt-1 rounded-full bg-stone-200 overflow-hidden">
+            <div className="h-1.5 mt-1 rounded-full bg-stone-200 dark:bg-white/10 overflow-hidden">
               <div
                 className="h-full bg-stone-700 transition-all duration-300"
                 style={{ width: `${(finished / items.length) * 100}%` }}
@@ -250,7 +250,7 @@ export function UploadProgressList({
                 )}
               </div>
               {(u.status === 'uploading' || u.status === 'indexing' || u.status === 'sealing' || u.status === 'ready') && (
-                <div className="h-1 mt-1 rounded-full bg-stone-200 overflow-hidden">
+                <div className="h-1 mt-1 rounded-full bg-stone-200 dark:bg-white/10 overflow-hidden">
                   <div
                     className={`h-full transition-all duration-300 ${
                       u.status === 'ready'

@@ -147,6 +147,18 @@ html.dark ::selection { background: rgba(42,208,111,.48); color: #ffffff; }
    screenshot). In dark mode the mark becomes a translucent
    brand-green with the light text it already carries. */
 html.dark mark { background-color: rgba(33,192,99,.34); }
+/* Piece 58: the whole light-tint family in dark mode (JISHAN:
+   "fix everywhere"). Error boxes (pale pink #feeaea / red text)
+   and amber note boxes (cream #fdf6e3 / brown text) kept their
+   light tints on dark surfaces across Agents, Ask, Interact,
+   Research, Auth, SourceModal. Central dark tints replace them;
+   the mark-cream #fdf3d7 also covers the Source modal's legend
+   swatch so it matches the dark marks. */
+html.dark [class~="bg-[#feeaea]"] { background-color: rgba(160,44,44,.16); }
+html.dark [class~="text-[#a02c2c]"] { color: #f0a3a3; }
+html.dark [class~="bg-[#fdf6e3]"] { background-color: rgba(183,121,31,.16); }
+html.dark [class~="text-[#7a5b12]"] { color: #e3c878; }
+html.dark [class~="bg-[#fdf3d7]"] { background-color: rgba(33,192,99,.34); }
 
 @media (prefers-reduced-motion: reduce) {
   .view-enter, .dialog-pop, .menu-pop, .toast-in { animation: none; }

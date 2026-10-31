@@ -196,9 +196,9 @@ export default function PrivateVaultPage() {
         {st?.routing && (
           <p className="text-meta2 text-stone-500 dark:text-stone-400 mt-3">
             Private traffic: embeddings via{' '}
-            <span className="font-medium text-stone-700">{st.routing.embeddings === 'local' ? 'a local endpoint' : 'the main provider'}</span>
+            <span className="font-medium text-stone-700 dark:text-stone-200">{st.routing.embeddings === 'local' ? 'a local endpoint' : 'the main provider'}</span>
             {' · '}answers via{' '}
-            <span className="font-medium text-stone-700">{st.routing.llm === 'local' ? 'a local endpoint' : 'the main provider'}</span>
+            <span className="font-medium text-stone-700 dark:text-stone-200">{st.routing.llm === 'local' ? 'a local endpoint' : 'the main provider'}</span>
             {st.routing.embeddings !== 'local' || st.routing.llm !== 'local'
               ? ' — while you ask about sealed documents, the question and the decrypted passages are processed by those providers.'
               : ' — sealed content never leaves this deployment.'}

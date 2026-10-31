@@ -15,6 +15,23 @@ live**, what is **built but unverified**, and what is **roadmap**.
 ## [Unreleased]
 
 ### Added
+- **Dark-mode sweep — fix everywhere (1 Nov 2026, Piece 58).**
+  JISHAN: "fix everywhere" — a full audit of both apps for the
+  light-surface family Pieces 55–57 kept hitting one spot at a
+  time. Central dark tints (CSS) now cover: error boxes
+  (`#feeaea`/`#a02c2c` → deep red tint + light red text) and
+  amber note boxes (`#fdf6e3`/`#7a5b12` → deep amber tint) in the
+  user app; in admin also the status pills (success
+  `#e7f4e4`/`#2f6b2f`, initiated `#fdf3d7`/`#8a6d1a`, draft
+  `#fdf0e0`/`#9a6212`), the Users banner (`#fdf3f3`/`#e5c4c4`)
+  and the Corpus green tint box. Per-file dark variants added
+  where a class was the only copy: `text-stone-700` body/status
+  text (Agents, Ask, Private Vault, Research, both StatusBadges,
+  Custom Tab content incl. its heading/link/code colours), the
+  Vault dialog that had no dark background at all, a Vault card
+  footer strip, and the upload progress tracks. Verified: builds
+  clean, overrides + variants present in both shipped bundles,
+  live on test + public incl. /admin/.
 - **Composer footer strip darkened (1 Nov 2026, Piece 57).**
   JISHAN: "still grey color of below input box is there" — the
   strip under the Ask/Interact composers ("Enter to ask · …")

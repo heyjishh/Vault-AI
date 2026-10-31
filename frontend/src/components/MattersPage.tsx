@@ -12,7 +12,7 @@ export function StatusPill({ status }: { status: string }) {
   const dot =
     status === 'Active' ? '#16a34a' : status === 'On hold' ? '#b7791f' : '#8f8b85'
   return (
-    <span className="inline-flex items-center gap-1.5 text-[12px] text-stone-700">
+    <span className="inline-flex items-center gap-1.5 text-[12px] text-stone-700 dark:text-stone-200">
       <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: dot }} />
       {status}
     </span>

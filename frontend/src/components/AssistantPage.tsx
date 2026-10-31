@@ -675,7 +675,7 @@ function TurnView({ turn, onCopy, onRegenerate, onFollowUp, onCite, onShowSource
           )}
 
           {turn.verified && (
-            <div className="mt-4 flex items-center gap-1.5 text-[12.5px] text-stone-700">
+            <div className="mt-4 flex items-center gap-1.5 text-[12.5px] text-stone-700 dark:text-stone-200">
               <BadgeCheck size={14} />
               Verified answer — curated and checked by a human
             </div>

@@ -163,8 +163,8 @@ export default function ResearchPage({ go }: { go?: (view: string) => void } = {
                 {report.conflicts.map((c, i) => (
                   <div key={i} className="rounded-lex border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] px-4 py-3">
                     <p className="font-medium text-[14px]">{c.topic}</p>
-                    <p className="text-meta2 text-stone-700 mt-1">A: {c.position_a}</p>
-                    <p className="text-meta2 text-stone-700">B: {c.position_b}</p>
+                    <p className="text-meta2 text-stone-700 dark:text-stone-200 mt-1">A: {c.position_a}</p>
+                    <p className="text-meta2 text-stone-700 dark:text-stone-200">B: {c.position_b}</p>
                   </div>
                 ))}
               </div>
@@ -176,7 +176,7 @@ export default function ResearchPage({ go }: { go?: (view: string) => void } = {
               <h3 className="font-display text-xl tracking-tight mt-8 mb-3 flex items-center gap-2">
                 <Lightbulb size={18} className="text-stone-500 dark:text-stone-400" /> Open points
               </h3>
-              <ul className="list-disc pl-5 space-y-1 text-[15px] text-stone-700">
+              <ul className="list-disc pl-5 space-y-1 text-[15px] text-stone-700 dark:text-stone-200">
                 {report.open_points.map((p, i) => <li key={i}>{p}</li>)}
               </ul>
             </>

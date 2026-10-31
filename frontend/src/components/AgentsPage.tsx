@@ -250,7 +250,7 @@ export default function AgentsPage({ go }: { go?: (view: string) => void } = {})
                 </button>
                 {openStep === i && (
                   <div className="px-5 pb-4 border-t border-stone-200 dark:border-white/10 pt-3">
-                    <p className="text-meta2 text-stone-700 leading-relaxed whitespace-pre-wrap">
+                    <p className="text-meta2 text-stone-700 dark:text-stone-200 leading-relaxed whitespace-pre-wrap">
                       <CitedText text={s.findings} citations={s.citations} onOpen={setModalCitation} />
                     </p>
                     {s.citations.length > 0 && (

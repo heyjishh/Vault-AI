@@ -232,7 +232,7 @@ export default function PlansPage() {
                   <td className="px-5 py-3">{inr(p.amount_inr)}</td>
                   <td className="px-5 py-3">{p.provider === 'youpi' ? 'UPI (YouPI-PG)' : 'Test mode'}</td>
                   <td className="px-5 py-3">
-                    <span className="inline-flex items-center gap-1.5 text-[12px] text-stone-700">
+                    <span className="inline-flex items-center gap-1.5 text-[12px] text-stone-700 dark:text-stone-200">
                       <span
                         className="w-1.5 h-1.5 rounded-full shrink-0"
                         style={{ background: p.status === 'success' ? '#16a34a' : p.status === 'initiated' ? '#b7791f' : '#a02c2c' }}

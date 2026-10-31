@@ -260,7 +260,7 @@ export default function VaultPage() {
               : 'Drop files here, or click to browse'}
         </p>
         {filesBusy && activeFileItem && (
-          <div className="h-1.5 mt-4 max-w-sm mx-auto rounded-full bg-stone-200 overflow-hidden">
+          <div className="h-1.5 mt-4 max-w-sm mx-auto rounded-full bg-stone-200 dark:bg-white/10 overflow-hidden">
             <div
               className={`h-full transition-all duration-300 ${
                 activeFileItem.status === 'indexing' ? 'bg-stone-400 animate-pulse' : 'bg-stone-500'
@@ -454,7 +454,7 @@ export default function VaultPage() {
               </button>
             </div>
             {indexDocId === d.id && (
-              <div className="border-t border-stone-100 dark:border-white/10 bg-[#fcfbf9] px-5 py-4">
+              <div className="border-t border-stone-100 dark:border-white/10 bg-[#fcfbf9] dark:bg-white/5 px-5 py-4">
                 <p className="text-[12px] font-medium text-stone-400 dark:text-stone-500">
                   Indexing — generated at ingest (augmentation + statute hyperedges)
                 </p>
@@ -538,7 +538,7 @@ function MetaEditor(props: {
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-ink/30 p-4" onClick={onClose}>
       <div
-        className="dialog-pop w-full max-w-md rounded-lex-lg border border-stone-200 dark:border-white/10 bg-[#fafaf9] shadow-lex-md p-5"
+        className="dialog-pop w-full max-w-md rounded-lex-lg border border-stone-200 dark:border-white/10 bg-[#fafaf9] dark:bg-[#0a1a12] shadow-lex-md p-5"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between">
