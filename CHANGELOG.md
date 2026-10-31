@@ -15,6 +15,17 @@ live**, what is **built but unverified**, and what is **roadmap**.
 ## [Unreleased]
 
 ### Added
+- **Lighter light-theme background (31 Oct 2026, Piece 38).**
+  JISHAN: "make it more light background" — dark mode approved
+  as-is and left untouched. The light page wash keeps its 155°
+  dual-tone direction and stop positions but lightens toward
+  white: `#fcf9f1 → #f9f7f0 → #f4f6ec → #ecf1e0` (was the
+  reference's `#f7eedd → #f3efe0 → #e9ecda → #dde5cd`), and the
+  light glow softens to peach `.36` / sage `.32`. The `body`
+  fallback end-stop follows (`#ecf1e0`). The dark wash, glow,
+  accents and bronze are byte-identical — the dark theme remains
+  1:1 with the taste-skill reference. `frontend/src/index.css`
+  only, plus docs.
 - **Legal identity: bronze, scales medallion, serif lockup
   (31 Oct 2026, Piece 37).** JISHAN's verdict on the aligned theme:
   it "does not seem like a legal business — make more prominent";

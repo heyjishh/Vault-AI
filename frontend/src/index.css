@@ -18,8 +18,11 @@
      palette. Reserved for the brand mark, brand rules, and the
      active-nav indicator; flips pale on dark. */
   --bronze: #593d3a;
-  --grad-page: linear-gradient(155deg,#f7eedd 0%,#f3efe0 34%,#e9ecda 68%,#dde5cd 100%);
-  --grad-glow: radial-gradient(58% 46% at 12% 0%,rgba(240,190,120,.50),transparent 70%),radial-gradient(52% 50% at 92% 8%,rgba(146,168,120,.45),transparent 70%);
+  /* Piece 38 (user-directed): the light stops are lightened toward
+     white at the same 155° direction; the dark stops in html.dark
+     below stay 1:1 with the reference page. */
+  --grad-page: linear-gradient(155deg,#fcf9f1 0%,#f9f7f0 34%,#f4f6ec 68%,#ecf1e0 100%);
+  --grad-glow: radial-gradient(58% 46% at 12% 0%,rgba(240,190,120,.36),transparent 70%),radial-gradient(52% 50% at 92% 8%,rgba(146,168,120,.32),transparent 70%);
 }
 
 html.dark {
@@ -42,7 +45,7 @@ html, body, #root {
 }
 
 body {
-  background: #dde5cd;
+  background: #ecf1e0;
   background: var(--grad-page);
   background-attachment: fixed;
   color: var(--ink);

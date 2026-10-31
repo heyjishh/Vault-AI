@@ -41,7 +41,7 @@ look and was not part of this pass.
   is its own: verdict-first answers with citation chips — kept, and
   quieter (borderless stone-100 chips that invert to ink on hover).
 
-## Brand layer (user-directed, Pieces 35–36)
+## Brand layer (user-directed, Pieces 35–36, 38)
 
 Added 31 Oct 2026 at the user's own direction, on top of the ledger
 system above. These are the user's brand choices, carried over from
@@ -54,8 +54,8 @@ variables flipping with the theme.
 
 | Token | Light | Dark |
 |---|---|---|
-| Page wash (`--grad-page`) | `linear-gradient(155deg,#f7eedd 0%,#f3efe0 34%,#e9ecda 68%,#dde5cd 100%)` | `linear-gradient(155deg,#221a12 0%,#191a13 38%,#12150d 70%,#0d120a 100%)` |
-| Glow (`--grad-glow`) | peach `rgba(240,190,120,.50)` at 12% 0% + sage `rgba(146,168,120,.45)` at 92% 8% | terracotta `rgba(214,130,70,.28)` at 12% 0% + sage `rgba(120,150,95,.26)` at 92% 8% |
+| Page wash (`--grad-page`) | `linear-gradient(155deg,#fcf9f1 0%,#f9f7f0 34%,#f4f6ec 68%,#ecf1e0 100%)` | `linear-gradient(155deg,#221a12 0%,#191a13 38%,#12150d 70%,#0d120a 100%)` |
+| Glow (`--grad-glow`) | peach `rgba(240,190,120,.36)` at 12% 0% + sage `rgba(146,168,120,.32)` at 92% 8% | terracotta `rgba(214,130,70,.28)` at 12% 0% + sage `rgba(120,150,95,.26)` at 92% 8% |
 | Card | `#fffef9` (the app keeps `bg-white` — negligibly different) | `#1d1f19` |
 | Raised / chip | `#efece0` (stone-100 fills) | `#26281f` |
 | Ink | `#16150f` | `#f0eee3` |
@@ -65,10 +65,16 @@ variables flipping with the theme.
 (The glow alphas sit where the reference source puts them: the
 stronger glow belongs to its light theme, the softer one to dark.)
 
+**Piece 38 (user-directed).** The light wash and glow stops in
+the table are lightened toward white at the user's direction
+("make it more light background") — the same 155° direction and
+stop positions, paler values. The dark stops remain 1:1 with the
+taste-skill reference, untouched.
+
 - **The page wash.** `.app-wash` (index.css) paints
   `var(--grad-page)` with `background-attachment: fixed` on the
   AppShell and Auth roots, and `body` carries the same gradient so
-  overscroll matches (fallback end-stops `#dde5cd` / `#0d120a`).
+  overscroll matches (fallback end-stops `#ecf1e0` / `#0d120a`).
   The sidebar paints no background of its own — it sits transparent
   over the wash behind its hairline.
 - **Moving background.** `DualToneBackdrop` (ui.tsx) renders the
