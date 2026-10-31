@@ -15,6 +15,25 @@ live**, what is **built but unverified**, and what is **roadmap**.
 ## [Unreleased]
 
 ### Added
+- **Typed confirmation for permanent deletes (1 Nov 2026,
+  Piece 47).** JISHAN: "in the permanent delete comformation box
+  require input so user will give input confirmation of delete" —
+  the shared ConfirmDialog now keeps its delete button disabled
+  until the user types **DELETE** into an input in the dialog
+  (Enter submits once armed). Covers every permanent delete the
+  dialog gates: Vault + Private Vault documents, Brief deletion,
+  history entries, and sidebar recent-research clears. No delete
+  can fire on a stray click anymore. Verified: build clean, the
+  typed gate present in the shipped bundle, live on test + public.
+- **Composer focus goes full spectrum (1 Nov 2026, Piece 48).**
+  JISHAN: "remove the click green border highlight, it looks odd
+  in input box, show something crazy" — the Piece 46 focus halo is
+  gone; clicking into the Ask/Interact box now swaps its running
+  border to a full rainbow spectrum spinning at 1.4s with a
+  breathing multi-colour glow. Resting state unchanged (brand
+  green); reduced-motion stills the focus state too. Verified:
+  build clean, `rbGlow` in the shipped bundle, live on test +
+  public.
 - **Running border on the chat composers (1 Nov 2026, Piece 46).**
   JISHAN: "want a running border in chat section of input box,
   that cover all white box" — the Ask and Interact composer boxes
@@ -22,7 +41,8 @@ live**, what is **built but unverified**, and what is **roadmap**.
   perimeter of the box (`.running-border`: registered `--rb-angle`
   rotating a border-box conic over the surface; one bright chase
   segment + one softer segment, 4.5s loop). While the box has
-  focus it runs faster (2.4s) with a soft green halo. Dark surface
+  focus it runs faster (2.4s) with a soft green halo. (Focus
+  behaviour replaced by Piece 48.) Dark surface
   follows the theme; reduced-motion stills it; browsers without
   `@property` show it statically. Verified: build clean, keyframes
   + class in the shipped bundle, live on test and public.
