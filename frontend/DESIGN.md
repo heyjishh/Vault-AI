@@ -109,14 +109,45 @@ rule — flat surfaces, no resting shadows, sentence-case labels,
 tabular figures, ink primaries, dot-and-word status — still applies
 in both themes.
 
+## Legal identity (Piece 37)
+
+JISHAN's verdict on Pieces 34–36: the theme was aligned and dark
+mode was fine, but the product "did not seem like a legal business"
+— the soft pastel wash reads generic, and nothing on screen carried
+the gravitas of a law practice. Piece 37 fixes identity, not theme:
+the Piece 36 wash, glow, dual-tone data accents, and all dark-mode
+work are untouched.
+
+- **The medallion mark.** `BrandMark` (ui.tsx): the lucide scales of
+  justice centred in a 1.5px bronze ring, transparent fill. It is
+  the only brand mark — the sidebar lockup and both Auth nameplates
+  carry it.
+- **The serif lockup.** Product name in the display serif (21px in
+  the sidebar, 24px on Auth) with the tagline beneath at 11.5px,
+  and a 2px bronze rule, 44px wide, under the lockup. The Dashboard
+  greeting returns to the display serif at 30px, with the same rule
+  above it and its finding line unchanged beneath.
+- **Bronze.** `--bronze` in index.css: `#593d3a` on light — the dark
+  bronze of the original Harvey palette, the legal metal — and
+  `#c8b184` on dark, applied through `.text-bronze`, `.bg-bronze`
+  and `.border-bronze`. Bronze is reserved for exactly three uses:
+  the brand mark, brand rules, and the active-nav indicator (a 2px
+  bronze left bar inset on the active sidebar pill). Nothing else
+  recolours.
+- **The "L" monogram is gone.** The black rounded square with a
+  serif "L" — a remnant of the retired LexAgent name — survived on
+  the Auth page (both lockups) and in the favicon. The favicon is
+  now a bronze (`#593d3a`) square with an ivory serif "J".
+
 ## Shell — recorded deviation
 
 The dealt sheet offered no-sidebar, then icon-rail shells. Both were
 rejected: a 12-destination product needs labelled navigation. The shell
 stays the app-screens chapter default (§3.1/§3.2): a **labelled sidebar
 on an open plane** — 256px, 14px rows, the active item marked by a
-neutral grey pill fill only (no ring, no bar, no colour). The wordmark
-is the serif product name alone, with no icon tile.
+neutral grey pill fill (Piece 37 adds the bronze left bar — see Legal
+identity above). The lockup is the medallion + serif name + tagline
+specified in the Legal identity section.
 
 ## Palette (unchanged — Harvey REA tokens, 2026-10-20)
 

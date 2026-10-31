@@ -9,7 +9,7 @@ import { useAuth } from '../stores/auth'
 import { useSession } from '../stores/session'
 import { useMatter } from '../stores/matter'
 import { dashboardApi, mattersApi, publicSettingsApi } from '../api/client'
-import { ConfirmDialog, DualToneBackdrop, ThemeToggle } from './ui'
+import { BrandMark, ConfirmDialog, DualToneBackdrop, ThemeToggle } from './ui'
 import AssistantPage from './AssistantPage'
 import ResearchPage from './ResearchPage'
 import AgentsPage from './AgentsPage'
@@ -140,8 +140,15 @@ export default function AppShell() {
       <DualToneBackdrop fixed />
       {/* Sidebar — transparent over the wash, hairline right border */}
       <aside className="relative z-10 w-64 flex-shrink-0 border-r border-stone-200 dark:border-white/10 flex flex-col">
-        <div className="h-[4.5rem] flex items-center px-5 border-b border-stone-200 dark:border-white/10">
-          <span className="font-display text-xl tracking-tight">{brand.product_name}</span>
+        <div className="px-5 py-4 border-b border-stone-200 dark:border-white/10">
+          <div className="flex items-center gap-3">
+            <BrandMark size={36} />
+            <div className="min-w-0">
+              <p className="font-display text-[21px] leading-tight tracking-tight truncate">{brand.product_name}</p>
+              <p className="text-[11.5px] text-stone-500 dark:text-stone-400 leading-tight mt-0.5 truncate">{brand.tagline}</p>
+            </div>
+          </div>
+          <div className="mt-3 h-[2px] w-[44px] bg-bronze" />
         </div>
 
         <div className="px-3 pt-4">
@@ -186,7 +193,7 @@ export default function AppShell() {
               onClick={() => { setActiveTabId(null); setView(id) }}
               className={`w-full flex items-center gap-3 rounded-lex px-3 py-2 text-[14px] transition-colors ${
                 view === id || (id === 'matters' && view === 'matter')
-                  ? 'bg-stone-100 dark:bg-[#26281f] text-ink dark:text-[#f4f2ee] font-medium'
+                  ? 'bg-stone-100 dark:bg-[#26281f] text-ink dark:text-[#f4f2ee] font-medium shadow-[inset_2px_0_0_var(--bronze)]'
                   : 'text-stone-600 dark:text-stone-300 hover:bg-stone-100/70 dark:hover:bg-white/5 hover:text-ink'
               }`}
             >
@@ -224,7 +231,7 @@ export default function AppShell() {
                 onClick={() => { setActiveTabId(t.id); setView('tab') }}
                 className={`w-full flex items-center gap-3 rounded-lex px-3 py-2 text-[14px] transition-colors ${
                   view === 'tab' && activeTabId === t.id
-                    ? 'bg-stone-100 dark:bg-[#26281f] text-ink dark:text-[#f4f2ee] font-medium'
+                    ? 'bg-stone-100 dark:bg-[#26281f] text-ink dark:text-[#f4f2ee] font-medium shadow-[inset_2px_0_0_var(--bronze)]'
                     : 'text-stone-600 dark:text-stone-300 hover:bg-stone-100/70 dark:hover:bg-white/5 hover:text-ink'
                 }`}
               >

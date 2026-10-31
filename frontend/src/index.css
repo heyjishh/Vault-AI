@@ -14,6 +14,10 @@
      the stronger peach/sage glow belongs to the light theme). */
   --accent-a: #b4552d;
   --accent-b: #5c7350;
+  /* Piece 37: dark bronze — the legal metal from the original
+     palette. Reserved for the brand mark, brand rules, and the
+     active-nav indicator; flips pale on dark. */
+  --bronze: #593d3a;
   --grad-page: linear-gradient(155deg,#f7eedd 0%,#f3efe0 34%,#e9ecda 68%,#dde5cd 100%);
   --grad-glow: radial-gradient(58% 46% at 12% 0%,rgba(240,190,120,.50),transparent 70%),radial-gradient(52% 50% at 92% 8%,rgba(146,168,120,.45),transparent 70%);
 }
@@ -21,6 +25,7 @@
 html.dark {
   --accent-a: #e08a5f;
   --accent-b: #9db488;
+  --bronze: #c8b184;
   --grad-page: linear-gradient(155deg,#221a12 0%,#191a13 38%,#12150d 70%,#0d120a 100%);
   --grad-glow: radial-gradient(58% 46% at 12% 0%,rgba(214,130,70,.28),transparent 70%),radial-gradient(52% 50% at 92% 8%,rgba(120,150,95,.26),transparent 70%);
 }
@@ -91,6 +96,11 @@ body {
   background-clip: text;
   color: transparent;
 }
+
+/* ——— Piece 37: bronze utilities (theme-variable driven) ——— */
+.text-bronze { color: var(--bronze); }
+.bg-bronze { background-color: var(--bronze); }
+.border-bronze { border-color: var(--bronze); }
 
 /* Moving glow layer: the reference page's hero-glow fields
    (var(--grad-glow)) as one layer over the wash, drifting slowly on

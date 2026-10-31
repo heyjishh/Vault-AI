@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Scale, ShieldCheck, BookOpen, Zap } from 'lucide-react'
 import { useAuth } from '../stores/auth'
-import { DualToneBackdrop, ThemeToggle } from './ui'
+import { BrandMark, DualToneBackdrop, ThemeToggle } from './ui'
 
 export default function AuthPage() {
   const login = useAuth((s) => s.login)
@@ -29,11 +29,12 @@ export default function AuthPage() {
       </div>
       {/* Left: product panel (Harvey-style serif statement) */}
       <div className="relative hidden lg:flex w-1/2 flex-col justify-between p-14 border-r border-stone-200 dark:border-white/10">
-        <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-lg bg-ink flex items-center justify-center">
-            <span className="font-display text-ivory text-xl leading-none pt-0.5">L</span>
+        <div>
+          <div className="flex items-center gap-3">
+            <BrandMark size={40} />
+            <span className="font-display text-2xl tracking-tight">Juris Vault AI</span>
           </div>
-          <span className="font-display text-2xl tracking-tight dual-tone-text">Juris Vault AI</span>
+          <div className="mt-3 h-[2px] w-[44px] bg-bronze" />
         </div>
         <div>
           <h1 className="font-display text-5xl leading-[1.15] tracking-tight max-w-lg">
@@ -49,25 +50,26 @@ export default function AuthPage() {
               { icon: Zap, text: 'Agentic workflows for reviews, diligence and memos' },
             ].map(({ icon: Icon, text }) => (
               <div key={text} className="flex items-center gap-3 text-stone-700">
-                <Icon className="w-4.5 h-4.5 text-stone-500 dark:text-stone-400" size={18} />
+                <Icon className="w-4.5 h-4.5 text-bronze" size={18} />
                 <span className="text-[15px]">{text}</span>
               </div>
             ))}
           </div>
         </div>
         <p className="text-meta text-stone-400 dark:text-stone-500 flex items-center gap-1.5">
-          <Scale size={12} /> Juris Vault AI — agentic legal research &amp; RAG
+          <Scale size={12} className="text-bronze" /> Juris Vault AI — agentic legal research &amp; RAG
         </p>
       </div>
 
       {/* Right: auth card */}
       <div className="relative flex-1 flex items-center justify-center p-6">
         <div className="w-full max-w-sm fade-up">
-          <div className="lg:hidden flex items-center gap-2.5 mb-8 justify-center">
-            <div className="w-9 h-9 rounded-lg bg-ink flex items-center justify-center">
-              <span className="font-display text-ivory text-xl leading-none pt-0.5">L</span>
+          <div className="lg:hidden flex flex-col items-center mb-8">
+            <div className="flex items-center gap-3">
+              <BrandMark size={40} />
+              <span className="font-display text-2xl tracking-tight">Juris Vault AI</span>
             </div>
-            <span className="font-display text-2xl tracking-tight dual-tone-text">Juris Vault AI</span>
+            <div className="mt-3 h-[2px] w-[44px] bg-bronze" />
           </div>
           <h2 className="font-display text-3xl tracking-tight">
             {mode === 'login' ? 'Welcome back' : 'Create your workspace'}

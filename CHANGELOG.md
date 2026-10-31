@@ -15,6 +15,27 @@ live**, what is **built but unverified**, and what is **roadmap**.
 ## [Unreleased]
 
 ### Added
+- **Legal identity: bronze, scales medallion, serif lockup
+  (31 Oct 2026, Piece 37).** JISHAN's verdict on the aligned theme:
+  it "does not seem like a legal business — make more prominent";
+  dark mode approved as it stands. An identity fix, not a theme
+  change — the Piece 36 wash, glow, dual-tone data accents and all
+  dark-mode work are untouched. (1) **A real brand mark**:
+  `BrandMark`, the scales of justice centred in a 1.5px bronze
+  medallion ring, replacing the black-square serif "L" monogram — a
+  retired LexAgent-era remnant — in the sidebar and both Auth
+  lockups. (2) **Bronze as a theme variable**: `--bronze` is
+  `#593d3a` on light (the original palette's dark bronze) and
+  `#c8b184` on dark, reserved for the mark, the 44px brand rules,
+  and the active-nav indicator (a 2px inset bronze bar on the
+  active sidebar pill). (3) **Serif presence restored where it
+  counts**: the sidebar lockup is medallion + serif name at 21px +
+  tagline with the bronze rule beneath; the Auth wordmark is an ink
+  serif nameplate (no longer gradient text) with bronze feature
+  icons; the Dashboard greeting returns to the display serif at
+  30px with the bronze rule above it. (4) **Favicon**: bronze
+  square with an ivory serif "J" (was a black square with "L").
+  Frontend-only, presentation-only.
 - **Theme aligned 1:1 to the taste-skill page (31 Oct 2026,
   Piece 36).** Piece 35's brand layer used approximated values and
   confined the wash to two screens; JISHAN compared the two side by

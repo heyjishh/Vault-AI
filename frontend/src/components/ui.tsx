@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Moon, Sun, Trash2, X } from 'lucide-react'
+import { Moon, Scale, Sun, Trash2, X } from 'lucide-react'
 import type { Citation } from '../api/types'
 import { SourceModal } from './SourceModal'
 import { DocInsightButton } from './DocInsight'
@@ -264,6 +264,24 @@ export function DateChips({ value, onChange }: { value: DateRange; onChange: (r:
         </button>
       ))}
     </div>
+  )
+}
+
+/**
+ * Piece 37: the brand mark — the scales of justice centred in a
+ * bronze medallion ring (transparent fill). Bronze flips with the
+ * theme via --bronze in index.css. This replaces the retired
+ * black-square "L" monogram wherever the brand locks up.
+ */
+export function BrandMark({ size = 36 }: { size?: number }) {
+  return (
+    <span
+      aria-hidden="true"
+      className="inline-flex items-center justify-center rounded-full border-[1.5px] border-bronze text-bronze shrink-0"
+      style={{ width: size, height: size }}
+    >
+      <Scale size={Math.round(size * 0.52)} strokeWidth={1.8} />
+    </span>
   )
 }
 

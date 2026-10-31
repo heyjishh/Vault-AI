@@ -199,7 +199,8 @@ export default function DashboardPage({ go, openMatter }: { go: (v: View) => voi
         <div className="relative flex items-start gap-5">
           <AssistantAvatar size={76} />
           <div className="min-w-0 flex-1">
-            <h1 className="text-[24px] font-semibold leading-tight tracking-tight">
+            <div className="h-[2px] w-[44px] bg-bronze mb-3" />
+            <h1 className="font-display text-[30px] leading-tight tracking-tight">
               {greeting()}, {firstName}
             </h1>
             <p className="text-stone-500 dark:text-stone-400 mt-1 text-[14px]">
