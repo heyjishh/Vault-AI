@@ -15,6 +15,17 @@ live**, what is **built but unverified**, and what is **roadmap**.
 ## [Unreleased]
 
 ### Added
+- **The jurisvault.ai logo everywhere (1 Nov 2026, Piece 43).**
+  JISHAN: "use same logo what we have in main website" — the main
+  website's header logo (its `/toplogo.png`: the green shield-and-
+  scales emblem, byte-identical copy) now ships in both apps as
+  `logo.png`. `BrandMark` in both apps renders it in the site's own
+  treatment — a white rounded chip with a soft shadow — in the
+  sidebar lockup, the sign-in nameplate, and the admin equivalents;
+  Piece 37's drawn medallion is retired. Both browser-tab favicons
+  are the emblem too (the data-URI "J" tile is gone). Verified:
+  both builds clean; `/logo.png` and `/admin/logo.png` serve the
+  exact bytes (md5-matched to the site's file) on test and public.
 - **jurisvault.ai theme — brand green, Archivo/Inter, running
   emerald auth scene, both apps (31 Oct 2026, Piece 42).** JISHAN:
   "does it is a running background? of gradiant?

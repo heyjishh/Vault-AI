@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Moon, Scale, Sun } from 'lucide-react'
+import { Moon, Sun } from 'lucide-react'
 
 /**
  * Piece 39: the brand mark, ported from the user app — the scales
@@ -10,10 +10,15 @@ export function BrandMark({ size = 36 }: { size?: number }) {
   return (
     <span
       aria-hidden="true"
-      className="inline-flex items-center justify-center rounded-full border-[1.5px] border-bronze text-bronze shrink-0"
-      style={{ width: size, height: size }}
+      className="inline-flex bg-white rounded-lg p-0.5 shadow-sm shadow-black/10 shrink-0"
     >
-      <Scale size={Math.round(size * 0.52)} strokeWidth={1.8} />
+      <img
+        src="/admin/logo.png"
+        alt=""
+        draggable={false}
+        className="object-contain rounded-[5px]"
+        style={{ width: size, height: size }}
+      />
     </span>
   )
 }

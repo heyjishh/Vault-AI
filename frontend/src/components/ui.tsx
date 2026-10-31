@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Moon, Scale, Sun, Trash2, X } from 'lucide-react'
+import { Moon, Sun, Trash2, X } from 'lucide-react'
 import type { Citation } from '../api/types'
 import { SourceModal } from './SourceModal'
 import { DocInsightButton } from './DocInsight'
@@ -268,19 +268,26 @@ export function DateChips({ value, onChange }: { value: DateRange; onChange: (r:
 }
 
 /**
- * Piece 37: the brand mark — the scales of justice centred in a
- * bronze medallion ring (transparent fill). Bronze flips with the
- * theme via --bronze in index.css. This replaces the retired
- * black-square "L" monogram wherever the brand locks up.
+ * Piece 43: the brand mark is the jurisvault.ai logo itself — the
+ * green shield-and-scales emblem (public/logo.png, the same file the
+ * main website ships as its header logo). The PNG sits on a white
+ * ground, so it is presented in the site's own treatment: a white
+ * rounded chip with a soft shadow. (Piece 37's drawn medallion is
+ * retired.)
  */
 export function BrandMark({ size = 36 }: { size?: number }) {
   return (
     <span
       aria-hidden="true"
-      className="inline-flex items-center justify-center rounded-full border-[1.5px] border-bronze text-bronze shrink-0"
-      style={{ width: size, height: size }}
+      className="inline-flex bg-white rounded-lg p-0.5 shadow-sm shadow-black/10 shrink-0"
     >
-      <Scale size={Math.round(size * 0.52)} strokeWidth={1.8} />
+      <img
+        src="/logo.png"
+        alt=""
+        draggable={false}
+        className="object-contain rounded-[5px]"
+        style={{ width: size, height: size }}
+      />
     </span>
   )
 }

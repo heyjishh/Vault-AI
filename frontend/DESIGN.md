@@ -217,7 +217,11 @@ work are untouched.
 - **The medallion mark.** `BrandMark` (ui.tsx): the lucide scales of
   justice centred in a 1.5px bronze ring, transparent fill. It is
   the only brand mark — the sidebar lockup and both Auth nameplates
-  carry it.
+  carry it. **Superseded by Piece 43 (1 Nov 2026):** BrandMark now
+  renders the jurisvault.ai logo itself — the green shield-and-
+  scales emblem (`public/logo.png`, byte-identical to the main
+  website's header logo) in the site's own white-chip treatment —
+  and both favicons are the emblem.
 - **The serif lockup.** Product name in the display serif (21px in
   the sidebar, 24px on Auth) with the tagline beneath at 11.5px,
   and a 2px bronze rule, 44px wide, under the lockup. The Dashboard
