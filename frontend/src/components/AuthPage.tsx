@@ -65,7 +65,7 @@ export default function AuthPage() {
 
       {/* Right: auth card */}
       <div className="relative flex-1 flex items-center justify-center p-6">
-        <div className="w-full max-w-sm fade-up">
+        <div className="w-full max-w-sm view-enter">
           <div className="lg:hidden flex flex-col items-center mb-8">
             <div className="flex items-center gap-3">
               <BrandMark size={40} />

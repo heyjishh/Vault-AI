@@ -152,7 +152,7 @@ export function AuthScene() {
 
 export function StatCard({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
   return (
-    <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] px-5 py-4">
+    <div className="card-hover rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] px-5 py-4">
       <p className="text-meta text-stone-500 dark:text-stone-400 font-medium">{label}</p>
       <p className="font-display text-3xl mt-1.5 tracking-tight">{value}</p>
       {sub && <p className="text-meta text-stone-500 dark:text-stone-400 mt-1">{sub}</p>}

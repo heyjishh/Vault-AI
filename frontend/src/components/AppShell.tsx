@@ -191,7 +191,7 @@ export default function AppShell() {
             <button
               key={id}
               onClick={() => { setActiveTabId(null); setView(id) }}
-              className={`w-full flex items-center gap-3 rounded-lex px-3 py-2 text-[14px] transition-colors ${
+              className={`w-full flex items-center gap-3 rounded-lex px-3 py-2 text-[14px] transition-colors active:scale-[.98] ${
                 view === id || (id === 'matters' && view === 'matter')
                   ? 'bg-stone-100 dark:bg-[#122419] text-ink dark:text-[#f4f2ee] font-medium shadow-[inset_2px_0_0_var(--bronze)]'
                   : 'text-stone-600 dark:text-stone-300 hover:bg-stone-100/70 dark:hover:bg-white/5 hover:text-ink'
@@ -205,7 +205,7 @@ export default function AppShell() {
           {user?.role === 'admin' && (
             <a
               href="/admin/"
-              className="w-full flex items-center gap-3 rounded-lex px-3 py-2 text-[14px] text-stone-600 dark:text-stone-300 hover:bg-stone-100/70 dark:hover:bg-white/5 hover:text-ink transition-colors"
+              className="w-full flex items-center gap-3 rounded-lex px-3 py-2 text-[14px] text-stone-600 dark:text-stone-300 hover:bg-stone-100/70 dark:hover:bg-white/5 hover:text-ink transition-colors active:scale-[.98]"
             >
               <LayoutDashboard size={16} strokeWidth={1.8} />
               Command Center
@@ -220,7 +220,7 @@ export default function AppShell() {
                 href={t.url}
                 target="_blank"
                 rel="noreferrer"
-                className="w-full flex items-center gap-3 rounded-lex px-3 py-2 text-[14px] text-stone-600 dark:text-stone-300 hover:bg-stone-100/70 dark:hover:bg-white/5 hover:text-ink transition-colors"
+                className="w-full flex items-center gap-3 rounded-lex px-3 py-2 text-[14px] text-stone-600 dark:text-stone-300 hover:bg-stone-100/70 dark:hover:bg-white/5 hover:text-ink transition-colors active:scale-[.98]"
               >
                 <ExternalLink size={16} strokeWidth={1.8} />
                 {t.label}
@@ -229,7 +229,7 @@ export default function AppShell() {
               <button
                 key={t.id}
                 onClick={() => { setActiveTabId(t.id); setView('tab') }}
-                className={`w-full flex items-center gap-3 rounded-lex px-3 py-2 text-[14px] transition-colors ${
+                className={`w-full flex items-center gap-3 rounded-lex px-3 py-2 text-[14px] transition-colors active:scale-[.98] ${
                   view === 'tab' && activeTabId === t.id
                     ? 'bg-stone-100 dark:bg-[#122419] text-ink dark:text-[#f4f2ee] font-medium shadow-[inset_2px_0_0_var(--bronze)]'
                     : 'text-stone-600 dark:text-stone-300 hover:bg-stone-100/70 dark:hover:bg-white/5 hover:text-ink'

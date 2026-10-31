@@ -59,7 +59,7 @@ export function ConfirmDialog({
       onClick={() => !busy && onCancel()}
     >
       <div
-        className="w-full max-w-md rounded-lex-lg bg-white dark:bg-[#0a1a12] shadow-lex-lg overflow-hidden"
+        className="dialog-pop w-full max-w-md rounded-lex-lg bg-white dark:bg-[#0a1a12] shadow-lex-lg overflow-hidden"
         onClick={(e) => e.stopPropagation()}
         role="alertdialog"
         aria-modal="true"
@@ -172,8 +172,9 @@ export function StatusBadge({ status }: { status: string }) {
 export function StatCard({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
   // Piece 34: a ledger KPI — bare type, no tile. Pages place these in
   // one hairline-divided strip (see MatterPage overview).
+  // Piece 45: card-hover adds the shared hover lift.
   return (
-    <div className="px-5 py-4">
+    <div className="card-hover px-5 py-4">
       <p className="text-[13px] text-stone-500 dark:text-stone-400">{label}</p>
       <p className="text-[24px] font-medium mt-1 tabular-nums">{value}</p>
       {sub && <p className="text-meta text-stone-500 dark:text-stone-400 mt-1">{sub}</p>}

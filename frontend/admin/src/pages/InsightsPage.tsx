@@ -82,15 +82,15 @@ export default function InsightsPage() {
       </div>
 
       <div className="grid xl:grid-cols-3 gap-4 mt-5">
-        <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] px-5 py-4">
+        <div className="card-hover rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] px-5 py-4">
           <p className="text-meta text-stone-500 dark:text-stone-400 font-medium">Activity — last 14 days</p>
           <div className="mt-3"><BarChart data={eventBars} /></div>
         </div>
-        <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] px-5 py-4">
+        <div className="card-hover rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] px-5 py-4">
           <p className="text-meta text-stone-500 dark:text-stone-400 font-medium">Tokens — last 14 days</p>
           <div className="mt-3"><BarChart data={tokenBars} /></div>
         </div>
-        <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] px-5 py-4">
+        <div className="card-hover rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] px-5 py-4">
           <p className="text-meta text-stone-500 dark:text-stone-400 font-medium">Plan mix</p>
           <div className="mt-3">
             <Donut data={d.plan_distribution.map((p) => ({ label: p.plan, value: p.users }))} />

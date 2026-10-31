@@ -15,6 +15,24 @@ live**, what is **built but unverified**, and what is **roadmap**.
 ## [Unreleased]
 
 ### Added
+- **Animation + transition layer, both apps (1 Nov 2026,
+  Piece 45).** JISHAN: "add some animation, and transition
+  effect" — one CSS motion system shared by both apps (the
+  admin has no framer-motion): a global .18s easing rule for
+  every interactive element's colour states (transform
+  deliberately excluded, so the pet and framer elements keep
+  control); entrances — `.view-enter` page rise (the admin
+  shell now wraps pages in a view-keyed wrapper; both sign-in
+  cards rise with it), `.dialog-pop` on the ConfirmDialog /
+  SourceModal / DocInsight / Vault validity panels, `.menu-pop`
+  on the Ask menus and response Download dropdown; `.skeleton`
+  shimmer placeholders (keyframe ported from jurisvault.ai);
+  `.card-hover` 2px lift + soft shadow on StatCards, plan
+  cards, Vault cards and the admin Corpus/Insights cards; and
+  an `active:scale-[.98]` press on sidebar nav in both shells.
+  All of it stills under `prefers-reduced-motion`. Verified:
+  both builds clean; the keyframes and classes are in both
+  shipped bundles, `view-enter` in the admin JS.
 - **Deeper jurisvault.ai adoption — brand buttons, auth orbits +
   floating nodes, rotating backdrop, both apps (1 Nov 2026,
   Piece 44).** JISHAN: "make more enhancement ad running

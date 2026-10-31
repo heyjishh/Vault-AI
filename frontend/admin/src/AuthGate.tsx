@@ -31,7 +31,7 @@ export default function AuthGate({ onAuthed }: { onAuthed: (u: Me) => void }) {
       <div className="absolute top-4 right-4 z-20">
         <ThemeToggle />
       </div>
-      <div className="relative z-10 w-full max-w-sm fade-up">
+      <div className="relative z-10 w-full max-w-sm view-enter">
         <div>
           <div className="flex items-center gap-3">
             <BrandMark size={40} />

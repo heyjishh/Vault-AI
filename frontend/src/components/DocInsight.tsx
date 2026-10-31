@@ -92,7 +92,7 @@ export function DocInsightModal({ documentId, title, onClose }: {
       onClick={(e) => { e.stopPropagation(); onClose() }}
     >
       <div
-        className="flex max-h-[86vh] w-full max-w-3xl flex-col rounded-lex-lg bg-white dark:bg-[#0a1a12] shadow-lex-md"
+        className="dialog-pop flex max-h-[86vh] w-full max-w-3xl flex-col rounded-lex-lg bg-white dark:bg-[#0a1a12] shadow-lex-md"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start gap-3 border-b border-stone-200 dark:border-white/10 px-6 py-4">

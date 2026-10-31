@@ -271,6 +271,44 @@ its component language, in both apps.
   the sign-in scene's texture, in the light register, where the
   user lands.
 
+## Motion layer (Piece 45)
+
+JISHAN: "add some animation, and transition effect". One shared
+motion system for both apps, CSS-only (the admin has no
+framer-motion, so CSS is how it gets the same feel as the user
+app). All of it lives in both `index.css` files; everything
+stills under `prefers-reduced-motion`.
+
+- **Global easing.** Every interactive element (`button, a,
+  input, select, textarea, [role="button"], [role="switch"],
+  label`) transitions colour / background / border / shadow /
+  filter / opacity at .18s ease — hover and active states stop
+  snapping. Transform is deliberately NOT in the rule: components
+  that animate transforms (the pet, framer-motion elements) keep
+  full control, and `.btn-brand` keeps its own transform
+  transition.
+- **Entrances.** `.view-enter` (viewIn: fade + 8px rise, .38s,
+  house ease `cubic-bezier(.16,1,.3,1)`) — the admin shell wraps
+  each page in a div keyed by the view, so page switches replay
+  it, mirroring the user app's framer transitions; both sign-in
+  cards rise with it too. `.dialog-pop` (popIn: scale .96 + 4px,
+  .22s) on the shared ConfirmDialog and the SourceModal /
+  DocInsight / Vault validity panels. `.menu-pop` (menuIn:
+  scale .97, .16s) on dropdowns and popovers (Ask's As-of and
+  Sources menus, response Download). `.toast-in` (toastIn:
+  10px rise, .25s) ships in the layer for plain-CSS toasts; the
+  user app's Toaster is framer-motion already and keeps its own
+  entrance.
+- **Shimmer skeletons.** `.skeleton` runs the `shimmer` keyframe
+  ported from jurisvault.ai (a light band sweeping a neutral
+  tint, 1.6s linear) instead of flat pulsing blocks; under
+  reduced motion it rests as a static tint.
+- **Card hover.** `.card-hover` lifts cards 2px with a soft
+  shadow on hover (StatCards in both apps, plan cards, the
+  Vault's standalone cards, the admin Corpus stat cards and
+  Insights chart cards). Sidebar nav items in both shells gain
+  an `active:scale-[.98]` press.
+
 ## Legal identity (Piece 37)
 
 JISHAN's verdict on Pieces 34–36: the theme was aligned and dark

@@ -325,7 +325,7 @@ export default function VaultPage() {
       )}
 
       <div className="grid md:grid-cols-2 gap-4 mt-4">
-        <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] p-5">
+        <div className="card-hover rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] p-5">
           <h3 className="font-medium text-[15px]">Paste text</h3>
           <input
             value={title} onChange={(e) => setTitle(e.target.value)}
@@ -351,7 +351,7 @@ export default function VaultPage() {
             />
           )}
         </div>
-        <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] p-5">
+        <div className="card-hover rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] p-5">
           <h3 className="font-medium text-[15px]">Ingest from S3 / R2</h3>
           <p className="text-[13px] text-stone-500 dark:text-stone-400 mt-2 leading-relaxed">
             Pulls every supported file under a prefix from the bucket configured on the server
@@ -465,7 +465,7 @@ export default function VaultPage() {
                 ) : (
                   <div className="mt-3 space-y-3">
                     {(indexChunks ?? []).map((c) => (
-                      <div key={c.id} className="rounded-lex border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] px-4 py-3">
+                      <div key={c.id} className="card-hover rounded-lex border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] px-4 py-3">
                         <p className="text-[13px] text-stone-600 dark:text-stone-300 leading-relaxed">{c.text_preview}…</p>
                         {c.hyper_id && (
                           <span className="mt-2 inline-block rounded-lex bg-white dark:bg-[#0a1a12] border border-stone-200 dark:border-white/10 text-stone-600 dark:text-stone-300 px-2 py-px text-[11px] font-medium">
@@ -538,7 +538,7 @@ function MetaEditor(props: {
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-ink/30 p-4" onClick={onClose}>
       <div
-        className="w-full max-w-md rounded-lex-lg border border-stone-200 dark:border-white/10 bg-[#fafaf9] shadow-lex-md p-5"
+        className="dialog-pop w-full max-w-md rounded-lex-lg border border-stone-200 dark:border-white/10 bg-[#fafaf9] shadow-lex-md p-5"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between">

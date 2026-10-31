@@ -174,7 +174,7 @@ export default function PlansPage() {
           return (
             <div
               key={plan.id}
-              className={`rounded-lex-lg border bg-white dark:bg-[#0a1a12] px-6 py-5 flex flex-col ${current ? 'border-ink' : 'border-stone-200 dark:border-white/10'}`}
+              className={`card-hover rounded-lex-lg border bg-white dark:bg-[#0a1a12] px-6 py-5 flex flex-col ${current ? 'border-ink' : 'border-stone-200 dark:border-white/10'}`}
             >
               <p className="font-display text-xl">{plan.name}</p>
               <p className="mt-2">

@@ -841,7 +841,7 @@ function Composer(props: {
               As of{lawActive ? `: ${asOf || jurisdiction}` : ''} <ChevronDown size={12} />
             </button>
             {lawOpen && (
-              <div className="absolute bottom-full mb-1.5 left-0 rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] shadow-lex-md p-3 z-10 w-60 space-y-2.5">
+              <div className="menu-pop absolute bottom-full mb-1.5 left-0 rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] shadow-lex-md p-3 z-10 w-60 space-y-2.5">
                 <label className="block">
                   <span className="text-[12px] font-medium text-stone-500 dark:text-stone-400">In force on</span>
                   <input
@@ -889,7 +889,7 @@ function Composer(props: {
               Sources: {sources} <ChevronDown size={12} />
             </button>
             {srcOpen && (
-              <div className="absolute bottom-full mb-1.5 left-0 rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] shadow-lex-md py-1 z-10 w-36">
+              <div className="menu-pop absolute bottom-full mb-1.5 left-0 rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] shadow-lex-md py-1 z-10 w-36">
                 {[3, 5, 10, 20].map((n) => (
                   <button
                     key={n}

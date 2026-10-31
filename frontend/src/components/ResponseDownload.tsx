@@ -68,7 +68,7 @@ export function ResponseDownload({ question, title, answerMarkdown, citations }:
         <Download size={13} /> Download <ChevronDown size={12} />
       </button>
       {open && (
-        <div className="absolute left-0 top-full z-20 mt-1.5 w-60 overflow-hidden rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] py-1 shadow-lex-md">
+        <div className="menu-pop absolute left-0 top-full z-20 mt-1.5 w-60 overflow-hidden rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] py-1 shadow-lex-md">
           <p className="px-3 pt-2 pb-1 text-[12px] font-medium text-stone-400 dark:text-stone-500">
             With citations
           </p>
