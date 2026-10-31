@@ -6,7 +6,7 @@ import { mattersApi, openOriginalDocument, vaultApi } from '../api/client'
 import type { DocumentInfo, IngestReport } from '../api/types'
 import { useSession } from '../stores/session'
 import { useMatter } from '../stores/matter'
-import { EmptyState, Pager, Spinner, usePagination } from './ui'
+import { ConfirmDialog, EmptyState, Pager, Spinner, usePagination } from './ui'
 import {
   UploadProgressList, formatElapsed, isPendingStatus, useNow,
   applyBatchCaps, batchLabelFor, filesFromDataTransfer, UPLOAD_ACCEPT,
@@ -202,10 +202,15 @@ export default function VaultPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['docs'] })
       qc.invalidateQueries({ queryKey: ['stats'] })
-      toast('info', 'Document removed from the index')
+      setPendingDelete(null)
+      toast('info', 'Document deleted permanently')
     },
     onError: (e) => toast('error', (e as Error).message),
   })
+  // Piece 33 consent: document removal is permanent (document, its
+  // chunks and its retained original all go) — it goes through the
+  // shared consent dialog, never a bare click or native confirm().
+  const [pendingDelete, setPendingDelete] = useState<DocumentInfo | null>(null)
 
   async function handleDrop(e: React.DragEvent) {
     e.preventDefault()
@@ -440,8 +445,8 @@ export default function VaultPage() {
                 <Scale size={15} />
               </button>
               <button
-                onClick={() => { if (confirm(`Remove "${d.title}" from the index?`)) remove.mutate(d.id) }}
-                title="Remove from index"
+                onClick={() => setPendingDelete(d)}
+                title="Delete this document permanently"
                 className="p-2 rounded-lex text-stone-400 hover:text-[#a02c2c] hover:bg-[#feeaea] transition-colors"
               >
                 <Trash2 size={15} />
@@ -501,6 +506,15 @@ export default function VaultPage() {
           saving={saveMeta.isPending}
           onClose={() => setMetaDoc(null)}
           onSave={(meta) => saveMeta.mutate({ id: metaDoc.id, meta })}
+        />
+      )}
+      {pendingDelete && (
+        <ConfirmDialog
+          title="Delete this document permanently?"
+          body={`"${pendingDelete.title}" will be deleted for good — the document, all its indexed chunks and the retained original file. This cannot be undone.`}
+          busy={remove.isPending}
+          onConfirm={() => remove.mutate(pendingDelete.id)}
+          onCancel={() => setPendingDelete(null)}
         />
       )}
     </div>

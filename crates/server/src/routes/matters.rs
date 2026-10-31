@@ -343,6 +343,12 @@ pub struct TimelineItem {
     pub citations: usize,
     pub tokens: u64,
     pub user_email: String,
+    /// Piece 33: the backing activity entry's id, present only on
+    /// activity-backed items — those are the deletable history
+    /// entries. System items (document filings, brief creation) have
+    /// no history entry behind them and carry no id.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub id: Option<String>,
 }
 
 /// The matter's living history: everything done inside it, plus document
@@ -367,6 +373,7 @@ pub async fn matter_timeline(
             citations: e.citations,
             tokens: e.tokens,
             user_email: e.user_email,
+            id: Some(e.id),
         })
         .collect();
     for doc_id in &matter.document_ids {
@@ -380,6 +387,7 @@ pub async fn matter_timeline(
                 citations: 0,
                 tokens: 0,
                 user_email: String::new(),
+                id: None,
             });
         }
     }
@@ -392,6 +400,7 @@ pub async fn matter_timeline(
         citations: 0,
         tokens: 0,
         user_email: matter.created_by.clone(),
+        id: None,
     });
     items.sort_by(|a, b| b.at.cmp(&a.at));
     items.truncate(200);

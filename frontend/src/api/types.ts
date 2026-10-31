@@ -177,6 +177,9 @@ export interface TimelineItem {
   citations: number
   tokens: number
   user_email: string
+  /** Piece 33: backing activity entry id — present only on
+   *  deletable history entries (absent on system timeline items). */
+  id?: string
 }
 
 export interface MatterMemory {

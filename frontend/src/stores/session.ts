@@ -18,6 +18,7 @@ interface SessionState {
   setRestore: (kind: string, payload: Record<string, unknown>) => void
   consumeRestore: (kind: string) => Record<string, unknown> | null
   addHistory: (q: string) => void
+  removeHistory: (q: string) => void
   clearHistory: () => void
   toasts: Toast[]
   toast: (kind: Toast['kind'], message: string) => void
@@ -64,6 +65,12 @@ export const useSession = create<SessionState>((set, get) => ({
 
   addHistory: (q) => {
     const next = [q, ...get().history.filter((h) => h !== q)].slice(0, 12)
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(next))
+    set({ history: next })
+  },
+
+  removeHistory: (q) => {
+    const next = get().history.filter((h) => h !== q)
     localStorage.setItem(HISTORY_KEY, JSON.stringify(next))
     set({ history: next })
   },

@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Fingerprint, FolderUp, KeyRound, Lock, LockOpen, ShieldCheck, Trash2 } from 'lucide-react'
 import { privateVaultApi, type PrivateDocMeta } from '../api/client'
 import { useSession } from '../stores/session'
-import { EmptyState, Spinner } from './ui'
+import { ConfirmDialog, EmptyState, Spinner } from './ui'
 import {
   UploadProgressList, UPLOAD_ACCEPT, UPLOAD_FORMATS_HINT,
   applyBatchCaps, batchLabelFor,
@@ -175,9 +175,12 @@ export default function PrivateVaultPage() {
   }
   const remove = useMutation({
     mutationFn: (id: string) => privateVaultApi.remove(id),
-    onSuccess: () => { refresh(); toast('success', 'Private document destroyed') },
+    onSuccess: () => { refresh(); setPendingDestroy(null); toast('success', 'Private document destroyed') },
     onError: onErr,
   })
+  // Piece 33 consent: destroying a sealed document goes through the
+  // shared consent dialog like every other permanent delete.
+  const [pendingDestroy, setPendingDestroy] = useState<{ id: string; title: string } | null>(null)
 
   const st = status.data
 
@@ -384,7 +387,7 @@ export default function PrivateVaultPage() {
                     </p>
                   </div>
                   <button
-                    onClick={() => { if (window.confirm(`Destroy “${d.title}” permanently? This cannot be undone.`)) remove.mutate(d.id) }}
+                    onClick={() => setPendingDestroy({ id: d.id, title: d.title })}
                     className="p-1.5 text-stone-400 hover:text-[#a02c2c] transition-colors"
                     title="Destroy document"
                   >
@@ -395,6 +398,16 @@ export default function PrivateVaultPage() {
             </div>
           )}
         </>
+      )}
+      {pendingDestroy && (
+        <ConfirmDialog
+          title="Destroy this sealed document permanently?"
+          body={`"${pendingDestroy.title}" will be destroyed for good — its ciphertext is erased and there is no recovery, by design. This cannot be undone.`}
+          confirmLabel="Destroy permanently"
+          busy={remove.isPending}
+          onConfirm={() => remove.mutate(pendingDestroy.id)}
+          onCancel={() => setPendingDestroy(null)}
+        />
       )}
     </div>
   )

@@ -1,9 +1,10 @@
 import { useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, FileText, FolderUp, Paperclip, X } from 'lucide-react'
-import { mattersApi, vaultApi } from '../api/client'
+import { ArrowLeft, FileText, FolderUp, Paperclip, Trash2, X } from 'lucide-react'
+import { dashboardApi, mattersApi, vaultApi } from '../api/client'
 import { useSession } from '../stores/session'
-import { EmptyState, Spinner, StatCard } from './ui'
+import { useAuth } from '../stores/auth'
+import { ConfirmDialog, EmptyState, Spinner, StatCard } from './ui'
 import { StatusPill } from './MattersPage'
 import AssistantPage from './AssistantPage'
 import InteractPage from './InteractPage'
@@ -147,42 +148,90 @@ function Overview({ matterId, notes }: { matterId: string; notes: string }) {
       <div className="mt-8">
         <p className="text-[11px] uppercase tracking-wider text-stone-400 font-medium">Recent history</p>
         <div className="mt-3">
-          <TimelineList items={(timeline.data ?? []).slice(0, 6)} loading={timeline.isLoading} />
+          <TimelineList items={(timeline.data ?? []).slice(0, 6)} loading={timeline.isLoading} matterId={matterId} />
         </div>
       </div>
     </div>
   )
 }
 
-function TimelineList({ items, loading }: { items: import('../api/types').TimelineItem[]; loading?: boolean }) {
+function TimelineList({ items, loading, matterId }: { items: import('../api/types').TimelineItem[]; loading?: boolean; matterId?: string }) {
+  const myEmail = useAuth((s) => s.user?.email)
+  const toast = useSession((s) => s.toast)
+  const qc = useQueryClient()
+  // Piece 33: delete on history entries — only the user's OWN
+  // activity-backed entries carry an id and match their email;
+  // system timeline items (document filed, brief created) and other
+  // members' entries get no delete control. The trash opens the
+  // shared consent dialog; deletion is permanent only on its
+  // explicit confirm click.
+  const [pending, setPending] = useState<import('../api/types').TimelineItem | null>(null)
+  const [deleting, setDeleting] = useState(false)
   if (loading) return <Spinner />
   if (items.length === 0) return <EmptyState title="Nothing here yet" hint="Work done inside this brief will appear in its history." />
+  async function remove(id: string) {
+    setDeleting(true)
+    try {
+      await dashboardApi.deleteActivity(id)
+      await qc.invalidateQueries({ queryKey: ['matter-timeline', matterId] })
+      await qc.invalidateQueries({ queryKey: ['dashboard'] })
+      toast('success', 'History entry deleted')
+    } catch (err) {
+      toast('error', `Could not delete: ${(err as Error).message}`)
+    } finally {
+      setDeleting(false)
+      setPending(null)
+    }
+  }
   return (
     <div className="space-y-2">
-      {items.map((t, i) => (
-        <div key={i} className="rounded-lex-lg border border-stone-200 bg-white shadow-lex px-4 py-3 flex gap-3">
-          <div className="min-w-0 flex-1">
-            <p className="text-[14px] font-medium truncate">{t.title}</p>
-            {t.excerpt && <p className="text-[13px] text-stone-500 mt-0.5 line-clamp-2">{t.excerpt}</p>}
-            <p className="text-[12px] text-stone-400 mt-1">
-              {new Date(t.at).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}
-              {t.citations > 0 ? ` · ${t.citations} sources` : ''}
-              {t.tokens > 0 ? ` · ${t.tokens.toLocaleString()} tokens` : ''}
-              {t.user_email ? ` · ${t.user_email}` : ''}
-            </p>
+      {items.map((t, i) => {
+        const mine = !!t.id && !!myEmail && t.user_email === myEmail
+        return (
+          <div key={t.id ?? i} className="rounded-lex-lg border border-stone-200 bg-white shadow-lex px-4 py-3 flex gap-3">
+            <div className="min-w-0 flex-1">
+              <p className="text-[14px] font-medium truncate">{t.title}</p>
+              {t.excerpt && <p className="text-[13px] text-stone-500 mt-0.5 line-clamp-2">{t.excerpt}</p>}
+              <p className="text-[12px] text-stone-400 mt-1">
+                {new Date(t.at).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}
+                {t.citations > 0 ? ` · ${t.citations} sources` : ''}
+                {t.tokens > 0 ? ` · ${t.tokens.toLocaleString()} tokens` : ''}
+                {t.user_email ? ` · ${t.user_email}` : ''}
+              </p>
+            </div>
+            <span className="flex flex-col items-end gap-1.5 shrink-0">
+              <span className="text-[11px] font-medium rounded-full px-2 py-0.5 bg-stone-500/10 text-stone-500 h-fit whitespace-nowrap">
+                {KIND_LABEL[t.kind] ?? t.kind}
+              </span>
+              {mine && t.id && (
+                <button
+                  onClick={() => setPending(t)}
+                  title="Delete this history entry"
+                  className="p-1 rounded-lex text-stone-400 hover:text-[#a02c2c] hover:bg-[#feeaea] transition-colors"
+                >
+                  <Trash2 size={13} />
+                </button>
+              )}
+            </span>
           </div>
-          <span className="text-[11px] font-medium rounded-full px-2 py-0.5 bg-stone-500/10 text-stone-500 h-fit whitespace-nowrap">
-            {KIND_LABEL[t.kind] ?? t.kind}
-          </span>
-        </div>
-      ))}
+        )
+      })}
+      {pending?.id && (
+        <ConfirmDialog
+          title="Delete this history entry permanently?"
+          body={`"${pending.title}" will be removed from this brief's history for good. Your token usage and billing records are not affected.`}
+          busy={deleting}
+          onConfirm={() => { void remove(pending.id as string) }}
+          onCancel={() => setPending(null)}
+        />
+      )}
     </div>
   )
 }
 
 function History({ matterId }: { matterId: string }) {
   const timeline = useQuery({ queryKey: ['matter-timeline', matterId], queryFn: () => mattersApi.timeline(matterId) })
-  return <TimelineList items={timeline.data ?? []} loading={timeline.isLoading} />
+  return <TimelineList items={timeline.data ?? []} loading={timeline.isLoading} matterId={matterId} />
 }
 
 function Documents({ matterId }: { matterId: string }) {

@@ -1,14 +1,14 @@
 import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  ArrowRight, ArrowUp, Bot, Briefcase, FileSearch, FlaskConical, Lock, MessageSquare, PenLine, Sparkles, Upload,
+  ArrowRight, ArrowUp, Bot, Briefcase, FileSearch, FlaskConical, Lock, MessageSquare, PenLine, Sparkles, Trash2, Upload,
 } from 'lucide-react'
 import { dashboardApi, mattersApi, type ActivityEvent } from '../api/client'
 import { useAuth } from '../stores/auth'
 import { useSession } from '../stores/session'
 import type { View } from './AppShell'
 import AssistantAvatar from './AssistantAvatar'
-import { DateChips, dateInRange, EmptyState, Pager, Spinner, usePagination, type DateRange } from './ui'
+import { ConfirmDialog, DateChips, dateInRange, EmptyState, Pager, Spinner, usePagination, type DateRange } from './ui'
 
 const KIND_META: Record<string, { label: string; icon: React.ElementType; view: View }> = {
   query: { label: 'Asked', icon: MessageSquare, view: 'assistant' },
@@ -59,6 +59,26 @@ function ActivityRow({ e, go }: { e: ActivityEvent; go: (v: View) => void }) {
   const Icon = meta.icon
   const setRestore = useSession((s) => s.setRestore)
   const askBridge = useSession((s) => s.ask)
+  const toast = useSession((s) => s.toast)
+  const qc = useQueryClient()
+  // Piece 33: per-entry delete — the trash opens the shared consent
+  // dialog; the entry is deleted permanently only on its explicit
+  // "Delete permanently" click. Only the history entry goes;
+  // usage/billing records are separate stores and stay untouched.
+  const [confirming, setConfirming] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  async function remove() {
+    setDeleting(true)
+    try {
+      await dashboardApi.deleteActivity(e.id)
+      await qc.invalidateQueries({ queryKey: ['dashboard'] })
+      toast('success', 'History entry deleted')
+    } catch (err) {
+      toast('error', `Could not delete: ${(err as Error).message}`)
+      setDeleting(false)
+      setConfirming(false)
+    }
+  }
   // A history click reopens the work itself: full result restored into
   // its page when a payload was captured; older query rows (pre-payload)
   // fall back to re-asking the question.
@@ -71,28 +91,46 @@ function ActivityRow({ e, go }: { e: ActivityEvent; go: (v: View) => void }) {
     go(meta.view)
   }
   return (
-    <button
-      onClick={open}
-      className="w-full text-left px-5 py-3.5 flex gap-3.5 hover:bg-ivory transition-colors border-b border-stone-100 last:border-0"
-    >
-      <span className="w-8 h-8 rounded-full bg-ivory border border-stone-200 flex items-center justify-center shrink-0 mt-0.5">
-        <Icon size={14} className="text-stone-500" />
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="flex items-baseline gap-2">
-          <span className="text-[12px] font-medium uppercase tracking-wide text-stone-400">{meta.label}</span>
-          {e.detail && <span className="text-[12px] text-stone-400">· {e.detail}</span>}
-          <span className="ml-auto text-[12px] text-stone-400 shrink-0">{when(e.created_at)}</span>
+    <div className="flex items-start border-b border-stone-100 last:border-0 hover:bg-ivory transition-colors">
+      <button
+        onClick={open}
+        className="min-w-0 flex-1 text-left px-5 py-3.5 flex gap-3.5"
+      >
+        <span className="w-8 h-8 rounded-full bg-ivory border border-stone-200 flex items-center justify-center shrink-0 mt-0.5">
+          <Icon size={14} className="text-stone-500" />
         </span>
-        <span className="block text-[14px] font-medium truncate mt-0.5">{e.title}</span>
-        {e.result_excerpt && (
-          <span className="block text-[13px] text-stone-500 line-clamp-2 mt-0.5">{e.result_excerpt}</span>
-        )}
-        <span className="block text-meta text-stone-400 mt-1">
-          {e.tokens.toLocaleString('en-IN')} tokens{e.citations > 0 ? ` · ${e.citations} sources` : ''}
+        <span className="min-w-0 flex-1">
+          <span className="flex items-baseline gap-2">
+            <span className="text-[12px] font-medium uppercase tracking-wide text-stone-400">{meta.label}</span>
+            {e.detail && <span className="text-[12px] text-stone-400">· {e.detail}</span>}
+            <span className="ml-auto text-[12px] text-stone-400 shrink-0">{when(e.created_at)}</span>
+          </span>
+          <span className="block text-[14px] font-medium truncate mt-0.5">{e.title}</span>
+          {e.result_excerpt && (
+            <span className="block text-[13px] text-stone-500 line-clamp-2 mt-0.5">{e.result_excerpt}</span>
+          )}
+          <span className="block text-meta text-stone-400 mt-1">
+            {e.tokens.toLocaleString('en-IN')} tokens{e.citations > 0 ? ` · ${e.citations} sources` : ''}
+          </span>
         </span>
-      </span>
-    </button>
+      </button>
+      <button
+        onClick={() => setConfirming(true)}
+        title="Delete this history entry"
+        className="mr-4 mt-3.5 shrink-0 p-1.5 rounded-lex text-stone-400 hover:text-[#a02c2c] hover:bg-[#feeaea] transition-colors"
+      >
+        <Trash2 size={14} />
+      </button>
+      {confirming && (
+        <ConfirmDialog
+          title="Delete this history entry permanently?"
+          body={`"${e.title}" will be removed from your history for good — it will no longer appear here or be restorable. Your token usage and billing records are not affected.`}
+          busy={deleting}
+          onConfirm={() => { void remove() }}
+          onCancel={() => setConfirming(false)}
+        />
+      )}
+    </div>
   )
 }
 

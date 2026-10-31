@@ -14,6 +14,30 @@ live**, what is **built but unverified**, and what is **roadmap**.
 
 ## [Unreleased]
 
+### Added
+- **Delete on history, with consent (31 Oct 2026, Piece 33).** Every
+  history surface now has a per-entry delete: the Dashboard's "Pick up
+  where you left off", a brief's History timeline (own entries only),
+  and the sidebar's Recent research list (per item + clear-all). New
+  endpoint `DELETE /api/v1/dashboard/activity/{id}` removes exactly
+  one of the caller's own entries from the activity store — another
+  user's entry, a system purge record, and an unknown id all return
+  the same 404; billing and token-usage records live in other stores
+  and are never touched. Brief timeline items now carry their backing
+  activity id so the timeline can offer the same delete. Per JISHAN's
+  direction, NO permanent delete in the app fires on a bare click any
+  more: all of them — history entries, Vault documents, Private Vault
+  documents, sidebar history — open one shared consent dialog
+  ("Delete … permanently? … This cannot be undone") and delete only
+  on its explicit confirm click; the Vault and Private Vault's native
+  `confirm()` prompts were replaced by it. Verified live on the test
+  instance through the API (delete → 200 and the entry gone, repeat →
+  404, fabricated id → 404, unauthenticated → 401) and the endpoint
+  confirmed live on prod. Workspace suite 271 green — the run also
+  exposed and fixed a latent flake: the activity tests shared one
+  pid-named temp file across parallel test threads; the helper now
+  allocates a unique file per test.
+
 ### Changed
 - **Full-width pages everywhere (31 Oct 2026, Piece 32).** Every page
   sat in a centred, max-width column (3xl–5xl), leaving large empty

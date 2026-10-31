@@ -1,4 +1,6 @@
 import { useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
+import { Trash2, X } from 'lucide-react'
 import type { Citation } from '../api/types'
 import { SourceModal } from './SourceModal'
 import { DocInsightButton } from './DocInsight'
@@ -31,6 +33,72 @@ export function AnswerText({
         )
       })}
     </span>
+  )
+}
+
+/**
+ * Piece 33 (consent revision): the one consent dialog for every
+ * permanent delete in the app — history entries, documents, briefs.
+ * Nothing destructive fires without this dialog's explicit
+ * "Delete permanently" click. Rendered via portal; Escape and
+ * backdrop click cancel.
+ */
+export function ConfirmDialog({
+  title, body, confirmLabel = 'Delete permanently', busy, onConfirm, onCancel,
+}: {
+  title: string
+  body: string
+  confirmLabel?: string
+  busy?: boolean
+  onConfirm: () => void
+  onCancel: () => void
+}) {
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[80] bg-ink/40 flex items-center justify-center p-4"
+      onClick={() => !busy && onCancel()}
+    >
+      <div
+        className="w-full max-w-md rounded-lex-lg bg-white shadow-lex-lg overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+        role="alertdialog"
+        aria-modal="true"
+        aria-label={title}
+      >
+        <div className="flex items-start gap-3 px-6 pt-5">
+          <span className="w-9 h-9 rounded-full bg-[#feeaea] flex items-center justify-center shrink-0">
+            <Trash2 size={16} className="text-[#a02c2c]" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <h3 className="font-display text-[17px] leading-snug">{title}</h3>
+            <p className="text-[13.5px] text-stone-500 mt-1 leading-relaxed">{body}</p>
+          </div>
+          <button
+            onClick={() => !busy && onCancel()}
+            className="p-1 rounded text-stone-400 hover:text-ink transition-colors"
+            aria-label="Cancel"
+          >
+            <X size={16} />
+          </button>
+        </div>
+        <div className="flex justify-end gap-2 px-6 py-4 mt-2 bg-ivory border-t border-stone-100">
+          <button
+            onClick={() => !busy && onCancel()}
+            className="rounded-full border border-stone-300 px-4 py-1.5 text-[13px] font-medium text-stone-600 hover:bg-stone-100 transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={busy}
+            className="rounded-full bg-[#a02c2c] px-4 py-1.5 text-[13px] font-semibold text-white hover:bg-[#8c2626] disabled:opacity-50 transition-colors"
+          >
+            {busy ? 'Deleting…' : confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body,
   )
 }
 

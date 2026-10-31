@@ -3,12 +3,13 @@ import { useQuery } from '@tanstack/react-query'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
   MessageSquare, FlaskConical, Bot, FolderOpen, Network, LogOut, LayoutDashboard,
-  PenSquare, Trash2, CreditCard, FileSearch, PenLine, Briefcase, Scale, Lock, ExternalLink, PanelTop, Search,
+  PenSquare, Trash2, CreditCard, FileSearch, PenLine, Briefcase, Scale, Lock, ExternalLink, PanelTop, Search, X,
 } from 'lucide-react'
 import { useAuth } from '../stores/auth'
 import { useSession } from '../stores/session'
 import { useMatter } from '../stores/matter'
 import { dashboardApi, mattersApi, publicSettingsApi } from '../api/client'
+import { ConfirmDialog } from './ui'
 import AssistantPage from './AssistantPage'
 import ResearchPage from './ResearchPage'
 import AgentsPage from './AgentsPage'
@@ -85,6 +86,9 @@ export default function AppShell() {
   }, [mattersList, currentMatterId, currentIsValid, defaultMatterId, setCurrentMatter])
   const { data: pubSettings } = useQuery({ queryKey: ['public-settings'], queryFn: publicSettingsApi.get })
   const [activeTabId, setActiveTabId] = useState<string | null>(null)
+  // Piece 33 consent: sidebar history removals (single + clear-all)
+  // ask first through the shared dialog, like every permanent delete.
+  const [historyRemoval, setHistoryRemoval] = useState<string | 'all' | null>(null)
   const brand = pubSettings?.brand ?? { product_name: 'Juris Vault AI', tagline: 'Legal Research, With Memory' }
   const customTabs = pubSettings?.tabs ?? []
   const activeTab = customTabs.find((t) => t.id === activeTabId && t.kind === 'page')
@@ -103,6 +107,7 @@ export default function AppShell() {
   const history = useSession((s) => s.history)
   const ask = useSession((s) => s.ask)
   const clearHistory = useSession((s) => s.clearHistory)
+  const removeHistory = useSession((s) => s.removeHistory)
   const { data: dash } = useQuery({ queryKey: ['dashboard'], queryFn: dashboardApi.me, refetchInterval: 60_000 })
 
   function newChat() {
@@ -233,22 +238,47 @@ export default function AppShell() {
             <div className="mt-6">
               <div className="flex items-center justify-between px-3">
                 <p className="text-[11px] uppercase tracking-wider text-stone-400 font-medium">Recent research</p>
-                <button onClick={clearHistory} title="Clear history" className="text-stone-400 hover:text-ink p-0.5">
+                <button onClick={() => setHistoryRemoval('all')} title="Clear history" className="text-stone-400 hover:text-ink p-0.5">
                   <Trash2 size={12} />
                 </button>
               </div>
               <div className="mt-1.5 space-y-0.5">
                 {history.map((h) => (
-                  <button
-                    key={h}
-                    onClick={() => reAsk(h)}
-                    title={h}
-                    className="w-full text-left rounded-lex px-3 py-1.5 text-[13px] text-stone-600 hover:bg-stone-100/70 hover:text-ink truncate transition-colors"
-                  >
-                    {h}
-                  </button>
+                  <div key={h} className="group relative flex items-center">
+                    <button
+                      onClick={() => reAsk(h)}
+                      title={h}
+                      className="w-full text-left rounded-lex px-3 py-1.5 pr-7 text-[13px] text-stone-600 hover:bg-stone-100/70 hover:text-ink truncate transition-colors"
+                    >
+                      {h}
+                    </button>
+                    <button
+                      onClick={() => setHistoryRemoval(h)}
+                      title="Remove from history"
+                      className="absolute right-1.5 p-0.5 rounded text-stone-400 hover:text-ink opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
                 ))}
               </div>
+              {historyRemoval === 'all' ? (
+                <ConfirmDialog
+                  title="Clear your recent research history?"
+                  body="Every entry in the sidebar's Recent research list will be removed permanently. Your Dashboard history and saved work are not affected."
+                  confirmLabel="Clear history"
+                  onConfirm={() => { clearHistory(); setHistoryRemoval(null) }}
+                  onCancel={() => setHistoryRemoval(null)}
+                />
+              ) : historyRemoval ? (
+                <ConfirmDialog
+                  title="Remove this from your history?"
+                  body={`"${historyRemoval}" will be removed from your Recent research list permanently.`}
+                  confirmLabel="Remove permanently"
+                  onConfirm={() => { removeHistory(historyRemoval); setHistoryRemoval(null) }}
+                  onCancel={() => setHistoryRemoval(null)}
+                />
+              ) : null}
             </div>
           )}
 

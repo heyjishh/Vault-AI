@@ -147,6 +147,7 @@ pub fn router(state: AppState) -> Router {
         .route("/api/v1/private-vault/documents/{id}", delete(private_vault::delete_document))
         // Dashboard (user home).
         .route("/api/v1/dashboard/me", get(insights::my_dashboard))
+        .route("/api/v1/dashboard/activity/{id}", delete(insights::delete_my_activity))
         // Billing: token plans, subscriptions, payments (YouPI-PG UPI).
         .route("/api/v1/billing/plans", get(billing::list_plans))
         .route("/api/v1/billing/me", get(billing::my_billing))

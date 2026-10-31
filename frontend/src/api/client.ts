@@ -396,6 +396,11 @@ export const dashboardApi = {
   async me(): Promise<MyDashboard> {
     const r = await api.get<MyDashboard>('/dashboard/me'); return r.data
   },
+  /** Piece 33: delete one of the caller's own history entries. */
+  async deleteActivity(id: string): Promise<void> {
+    try { await api.delete(`/dashboard/activity/${id}`) }
+    catch (e) { throw new Error(err(e)) }
+  },
 }
 
 export interface InteractDocumentResult {

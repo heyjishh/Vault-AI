@@ -7,7 +7,7 @@
 
 use std::collections::HashMap;
 
-use axum::extract::State;
+use axum::extract::{Path, State};
 use axum::Json;
 use chrono::{DateTime, Duration, Utc};
 use legal_rag_auth::{AdminUser, AuthUser};
@@ -73,6 +73,25 @@ pub async fn my_dashboard(
         corpus_documents: state.rag.list_documents().len(),
         corpus_chunks: state.rag.corpus_size().await,
     })
+}
+
+/// Piece 33: delete ONE of the caller's own history entries
+/// (`DELETE /api/v1/dashboard/activity/{id}`). The store enforces
+/// ownership — an id belonging to another user, a system purge
+/// record, or an unknown id all land on the same 404, so the route
+/// never reveals whether someone else's entry exists. Only the
+/// history record goes; billing / token-usage records are separate
+/// stores and are never touched here.
+pub async fn delete_my_activity(
+    State(state): State<AppState>,
+    AuthUser(user): AuthUser,
+    Path(id): Path<String>,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    if state.activity.remove_entry_for_user(&user.id, &id) {
+        Ok(Json(serde_json::json!({ "deleted": true, "id": id })))
+    } else {
+        Err(legal_rag_common::Error::NotFound("history entry not found".into()).into())
+    }
 }
 
 // ------------------------------------------------------------ admin insights

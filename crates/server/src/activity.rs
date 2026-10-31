@@ -219,6 +219,28 @@ impl ActivityStore {
         }
         removed
     }
+
+    /// Remove ONE history entry, only when it belongs to `user_id`
+    /// (Piece 33: the per-entry delete on the user's own history).
+    /// Another user's entry is never removed through here, and system
+    /// purge records are untouchable as everywhere else in this store.
+    /// Returns true when an entry was removed (and persisted).
+    pub fn remove_entry_for_user(&self, user_id: &str, event_id: &str) -> bool {
+        let removed = {
+            let mut events = self.events.write().unwrap();
+            let before = events.len();
+            events.retain(|e| {
+                !(e.id == event_id && e.user_id == user_id && e.kind != Self::PURGE_KIND)
+            });
+            before - events.len()
+        };
+        if removed > 0 {
+            self.save();
+            true
+        } else {
+            false
+        }
+    }
 }
 
 #[cfg(test)]
@@ -226,9 +248,16 @@ mod tests {
     use super::*;
 
     fn temp_store() -> (ActivityStore, PathBuf) {
+        // Unique per call: tests in one binary run on parallel
+        // threads, and a pid-only name made every activity test share
+        // ONE file — concurrent load/save across tests raced and
+        // flaked (first seen when the Piece 33 test joined the set).
+        static COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let n = COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let path = std::env::temp_dir().join(format!(
-            "activity-test-{}.json",
-            std::process::id()
+            "activity-test-{}-{}.json",
+            std::process::id(),
+            n
         ));
         let _ = std::fs::remove_file(&path);
         (ActivityStore::load(path.clone()), path)
@@ -309,6 +338,40 @@ mod tests {
         assert_eq!(store.remove_for_matter("matter-1"), 0);
         let reloaded = ActivityStore::load(path.clone());
         assert_eq!(reloaded.all().len(), 3);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// The per-entry delete contract (Piece 33): a user can delete
+    /// their own history entry by id — nobody else's, and never a
+    /// system purge record. Unknown ids remove nothing.
+    #[test]
+    fn remove_entry_for_user_takes_only_own_entry() {
+        let (store, path) = temp_store();
+        let mine = ev("user-a", "query");
+        let mine_id = mine.id.clone();
+        let other = ev("user-b", "query");
+        let other_id = other.id.clone();
+        let purge = ev("user-a", ActivityStore::PURGE_KIND);
+        let purge_id = purge.id.clone();
+        store.record(mine);
+        store.record(other);
+        store.record(purge);
+
+        // Another user's entry: not removable by user-a.
+        assert!(!store.remove_entry_for_user("user-a", &other_id));
+        // A system purge record: not removable even by its author.
+        assert!(!store.remove_entry_for_user("user-a", &purge_id));
+        // Unknown id: nothing removed.
+        assert!(!store.remove_entry_for_user("user-a", "no-such-id"));
+        assert_eq!(store.all().len(), 3);
+
+        // The owner's own entry: removed and persisted.
+        assert!(store.remove_entry_for_user("user-a", &mine_id));
+        let remaining = store.all();
+        assert_eq!(remaining.len(), 2);
+        assert!(remaining.iter().all(|e| e.id != mine_id));
+        let reloaded = ActivityStore::load(path.clone());
+        assert_eq!(reloaded.all().len(), 2);
         let _ = std::fs::remove_file(&path);
     }
 }
