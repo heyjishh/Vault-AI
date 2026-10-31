@@ -85,14 +85,15 @@ export default function DraftPage({ matterId: fixedMatterId, go }: { matterId?: 
             </button>
           ))}
         </div>
-        <textarea
-          value={instructions}
-          onChange={(e) => setInstructions(e.target.value)}
-          rows={5}
-          placeholder={'Describe what you need. E.g. "Notice to a tenant at 14 MG Road, Bengaluru for 3 months’ unpaid rent of ₹45,000/month, demanding payment within 15 days and vacation on default."'}
-          className="running-border mt-4 w-full rounded-lex border border-stone-300 dark:border-white/10 px-3.5 py-3 text-[14.5px] leading-relaxed"
-        />
-        <div className="flex items-center justify-between mt-3 flex-wrap gap-3">
+        <div className="running-border mt-4 rounded-lex-lg border border-stone-300 dark:border-white/10 bg-white dark:bg-[#0a1a12]">
+          <textarea
+            value={instructions}
+            onChange={(e) => setInstructions(e.target.value)}
+            rows={5}
+            placeholder={'Describe what you need. E.g. "Notice to a tenant at 14 MG Road, Bengaluru for 3 months’ unpaid rent of ₹45,000/month, demanding payment within 15 days and vacation on default."'}
+            className="w-full resize-none px-4 pt-4 pb-2 text-[15px] leading-relaxed outline-none placeholder:text-stone-400 bg-transparent"
+          />
+          <div className="flex items-center justify-between px-3 pb-3 pt-1 flex-wrap gap-3">
           <div className="flex items-center gap-3 flex-wrap">
             <label className="flex items-center gap-2 text-[13.5px] text-stone-600 dark:text-stone-300">
               <input type="checkbox" checked={useCorpus} onChange={(e) => setUseCorpus(e.target.checked)} className="accent-[#0f0e0d]" />
@@ -107,6 +108,7 @@ export default function DraftPage({ matterId: fixedMatterId, go }: { matterId?: 
           >
             <PenLine size={14} /> {run.isPending ? 'Drafting…' : 'Generate draft'}
           </button>
+          </div>
         </div>
       </div>
 

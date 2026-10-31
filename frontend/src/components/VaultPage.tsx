@@ -332,17 +332,21 @@ export default function VaultPage() {
             placeholder="Title (optional)"
             className="mt-3 w-full rounded-lex border border-stone-300 dark:border-white/10 px-3 py-2 text-[13px] outline-none focus:border-ink placeholder:text-stone-400"
           />
-          <textarea
-            value={paste} onChange={(e) => setPaste(e.target.value)} rows={5}
-            placeholder="Paste statutes, clauses, notes…"
-            className="mt-2 w-full rounded-lex border border-stone-300 dark:border-white/10 px-3 py-2 text-[13px] outline-none focus:border-ink placeholder:text-stone-400 resize-none"
-          />
-          <button
-            onClick={() => void runPaste(title || 'Pasted document', paste)} disabled={busy || !paste.trim()}
-            className="mt-2 rounded-lex border border-stone-300 dark:border-white/10 px-3.5 py-2 text-[13px] font-medium hover:bg-stone-100 dark:hover:bg-white/10 disabled:opacity-50"
-          >
-            Index pasted text
-          </button>
+          <div className="running-border mt-3 rounded-lex-lg border border-stone-300 dark:border-white/10 bg-white dark:bg-[#0a1a12]">
+            <textarea
+              value={paste} onChange={(e) => setPaste(e.target.value)} rows={5}
+              placeholder="Paste statutes, clauses, notes…"
+              className="w-full resize-none px-4 pt-4 pb-2 text-[15px] outline-none placeholder:text-stone-400 bg-transparent"
+            />
+            <div className="flex items-center justify-end px-3 pb-3 pt-1">
+              <button
+                onClick={() => void runPaste(title || 'Pasted document', paste)} disabled={busy || !paste.trim()}
+                className="btn-brand rounded-lex text-ivory px-4 py-2 text-meta2 font-medium disabled:opacity-40"
+              >
+                Index pasted text
+              </button>
+            </div>
+          </div>
           {pasteItem && (
             <UploadProgressList
               items={[pasteItem]}

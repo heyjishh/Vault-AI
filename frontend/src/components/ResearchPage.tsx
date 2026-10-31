@@ -48,14 +48,14 @@ export default function ResearchPage({ go }: { go?: (view: string) => void } = {
         Deep research runs an epistemic loop: frame hypotheses, gather cited evidence for each, then adjudicate.
       </p>
 
-      <div className="running-border mt-6 rounded-lex-lg border border-stone-300 dark:border-white/10 bg-white dark:bg-[#0a1a12] p-4">
+      <div className="running-border mt-6 rounded-lex-lg border border-stone-300 dark:border-white/10 bg-white dark:bg-[#0a1a12]">
         <textarea
           value={q} onChange={(e) => setQ(e.target.value)} rows={3}
           placeholder="State the legal question to investigate…"
-          className="w-full resize-none text-[15px] outline-none placeholder:text-stone-400"
+          className="w-full resize-none px-4 pt-4 pb-2 text-[15px] outline-none placeholder:text-stone-400 bg-transparent"
           onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); if (q.trim()) run.mutate() } }}
         />
-        <div className="flex items-center justify-between mt-2">
+        <div className="flex items-center justify-between px-3 pb-3 pt-1">
           <div className="flex items-center gap-2">
             <button
               onClick={() => setWeb(!web)}

@@ -15,6 +15,24 @@ live**, what is **built but unverified**, and what is **roadmap**.
 ## [Unreleased]
 
 ### Added
+- **One input-box design everywhere (1 Nov 2026, Piece 61).**
+  JISHAN: "why draft, ask input box is not same as agent or
+  research or vault" — the prompt boxes had grown four different
+  shapes: Ask/Interact are full composers, Research was a padded
+  box, Draft and Agents were bare bordered textareas, and the
+  Vault paste box was a plain form field. All of them now share
+  the Ask composer's anatomy exactly: a `running-border`
+  container (rounded-lex-lg, same surface), a transparent
+  textarea inside (same padding, 15px), and a toolbar row inside
+  the box's bottom holding the page's controls with the primary
+  action (brand button) at the right — Draft (Generate inside,
+  with its Ground-in-vault toggle + Refine), Agents workflow and
+  autonomous boxes (steps/Refine/Run and select/Max-steps/Run
+  inside), Research (aligned padding/toolbar), and the Vault
+  paste box (Index button inside, now the brand button). The
+  Vault title field stays a field above its box. Verified: build
+  clean (JSX structure checked by tsc), all nine running-border
+  boxes in the shipped bundle, live on test + public.
 - **Root-cause pass: color-scheme + Vault dropzone (1 Nov 2026,
   Piece 60).** JISHAN named the remaining spots — Vault upload
   section, the Agents counter button, the Research and Vault

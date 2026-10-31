@@ -103,12 +103,13 @@ export default function AgentsPage({ go }: { go?: (view: string) => void } = {})
       {selected && (
         <div className="mt-6 rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] p-5 fade-up">
           <label className="block text-meta font-medium text-stone-600 dark:text-stone-300 mb-1.5">{selected.input_label}</label>
+          <div className="running-border rounded-lex-lg border border-stone-300 dark:border-white/10 bg-white dark:bg-[#0a1a12]">
           <textarea
             value={input} onChange={(e) => setInput(e.target.value)} rows={4}
             placeholder="Paste the contract text, deal summary, or legal question…"
-            className="running-border w-full rounded-lex border border-stone-300 dark:border-white/10 px-3 py-2.5 text-[15px] outline-none placeholder:text-stone-400 resize-y"
+            className="w-full resize-none px-4 pt-4 pb-2 text-[15px] outline-none placeholder:text-stone-400 bg-transparent"
           />
-          <div className="flex items-center justify-between mt-3">
+          <div className="flex items-center justify-between px-3 pb-3 pt-1">
             <div className="flex items-center gap-3">
               <p className="text-meta text-stone-400 dark:text-stone-500">Steps: {selected.steps.map((s) => s.name).join(' → ')}</p>
               <RefineControls ctl={refineWf} disabled={!input.trim()} />
@@ -120,6 +121,7 @@ export default function AgentsPage({ go }: { go?: (view: string) => void } = {})
               <Play size={14} /> {start.isPending ? 'Running…' : 'Run workflow'}
             </button>
           </div>
+          </div>
         </div>
       )}
 
@@ -130,12 +132,13 @@ export default function AgentsPage({ go }: { go?: (view: string) => void } = {})
         <p className="text-meta2 text-stone-500 dark:text-stone-400 mt-1">
           Give it a goal — a lead agent splits it across specialist researchers, a drafter, and an independent checker, then reconciles their work into a cited report. Fixed workflows below run a set recipe; this one chooses.
         </p>
+        <div className="running-border mt-3 rounded-lex-lg border border-stone-300 dark:border-white/10 bg-white dark:bg-[#0a1a12]">
         <textarea
           value={goal} onChange={(e) => setGoal(e.target.value)} rows={3}
           placeholder="e.g. What does the vault say about compensation for delayed possession, and what is the current law on the web?"
-          className="running-border w-full mt-3 rounded-lex border border-stone-300 dark:border-white/10 px-3 py-2.5 text-[15px] outline-none placeholder:text-stone-400 resize-y"
+          className="w-full resize-none px-4 pt-4 pb-2 text-[15px] outline-none placeholder:text-stone-400 bg-transparent"
         />
-        <div className="flex flex-wrap items-center gap-3 mt-3">
+        <div className="flex flex-wrap items-center gap-3 px-3 pb-3 pt-1">
           <select value={autoMatter} onChange={(e) => setAutoMatter(e.target.value)}
             className="rounded-lex border border-stone-300 dark:border-white/10 px-2.5 py-2 text-meta2 bg-white dark:bg-[#0a1a12] outline-none focus:border-ink max-w-[220px]">
             <option value="">Whole vault</option>
@@ -154,6 +157,7 @@ export default function AgentsPage({ go }: { go?: (view: string) => void } = {})
           >
             <Play size={14} /> {startAuto.isPending ? 'Researching…' : 'Run autonomous agent'}
           </button>
+        </div>
         </div>
         {autoError && (
           <div className="mt-4 rounded-lex border border-brand-red/30 bg-[#feeaea] px-4 py-3 text-meta2 text-[#a02c2c]">{autoError}</div>
