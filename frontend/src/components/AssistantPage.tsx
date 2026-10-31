@@ -785,7 +785,7 @@ function Composer(props: {
   const [lawOpen, setLawOpen] = useState(false)
   const lawActive = !!(asOf || jurisdiction.trim())
   return (
-    <div className="mt-8 rounded-lex-lg border border-stone-300 dark:border-white/10 bg-white dark:bg-[#0a1a12]">
+    <div className="running-border mt-8 rounded-lex-lg border border-stone-300 dark:border-white/10 bg-white dark:bg-[#0a1a12]">
       <textarea
         value={input}
         onChange={(e) => setInput(e.target.value)}

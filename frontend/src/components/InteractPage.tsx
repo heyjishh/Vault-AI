@@ -591,7 +591,7 @@ export default function InteractPage({ matterId, go }: { matterId?: string; go?:
       )}
 
       {/* ---- Composer (Ask-style) ---- */}
-      <div className="mt-5 rounded-lex-lg border border-stone-300 dark:border-white/10 bg-white dark:bg-[#0a1a12]">
+      <div className="running-border mt-5 rounded-lex-lg border border-stone-300 dark:border-white/10 bg-white dark:bg-[#0a1a12]">
         <textarea
           value={question}
           onChange={(e) => setQuestion(e.target.value)}

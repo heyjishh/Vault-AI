@@ -15,6 +15,17 @@ live**, what is **built but unverified**, and what is **roadmap**.
 ## [Unreleased]
 
 ### Added
+- **Running border on the chat composers (1 Nov 2026, Piece 46).**
+  JISHAN: "want a running border in chat section of input box,
+  that cover all white box" — the Ask and Interact composer boxes
+  now carry a brand-green conic gradient that travels the full
+  perimeter of the box (`.running-border`: registered `--rb-angle`
+  rotating a border-box conic over the surface; one bright chase
+  segment + one softer segment, 4.5s loop). While the box has
+  focus it runs faster (2.4s) with a soft green halo. Dark surface
+  follows the theme; reduced-motion stills it; browsers without
+  `@property` show it statically. Verified: build clean, keyframes
+  + class in the shipped bundle, live on test and public.
 - **Animation + transition layer, both apps (1 Nov 2026,
   Piece 45).** JISHAN: "add some animation, and transition
   effect" — one CSS motion system shared by both apps (the
