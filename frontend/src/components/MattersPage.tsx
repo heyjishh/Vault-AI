@@ -96,7 +96,7 @@ export default function MattersPage({ open }: { open: (id: string) => void }) {
               <input
                 value={title} onChange={(e) => setTitle(e.target.value)}
                 placeholder="e.g. Verma v. Kanpur Development Authority"
-                className="mt-1.5 w-full rounded-lex border border-stone-200 dark:border-white/10 px-3 py-2 text-[14px] outline-none focus:border-stone-400"
+                className="mt-1.5 w-full rounded-lex border border-stone-200 dark:border-white/10 px-3 py-2 text-[14px] outline-none focus:border-stone-400 bg-white dark:bg-[#0a1a12]"
               />
             </label>
             <label className="block">
@@ -104,7 +104,7 @@ export default function MattersPage({ open }: { open: (id: string) => void }) {
               <input
                 value={client} onChange={(e) => setClient(e.target.value)}
                 placeholder="Client name"
-                className="mt-1.5 w-full rounded-lex border border-stone-200 dark:border-white/10 px-3 py-2 text-[14px] outline-none focus:border-stone-400"
+                className="mt-1.5 w-full rounded-lex border border-stone-200 dark:border-white/10 px-3 py-2 text-[14px] outline-none focus:border-stone-400 bg-white dark:bg-[#0a1a12]"
               />
             </label>
             <label className="block">
@@ -121,7 +121,7 @@ export default function MattersPage({ open }: { open: (id: string) => void }) {
               <input
                 value={notes} onChange={(e) => setNotes(e.target.value)}
                 placeholder="Optional — key facts, forum, next date…"
-                className="mt-1.5 w-full rounded-lex border border-stone-200 dark:border-white/10 px-3 py-2 text-[14px] outline-none focus:border-stone-400"
+                className="mt-1.5 w-full rounded-lex border border-stone-200 dark:border-white/10 px-3 py-2 text-[14px] outline-none focus:border-stone-400 bg-white dark:bg-[#0a1a12]"
               />
             </label>
             <label className="block">

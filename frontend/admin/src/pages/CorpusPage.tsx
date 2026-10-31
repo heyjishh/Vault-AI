@@ -62,7 +62,7 @@ export default function CorpusPage() {
           <input
             value={prefix} onChange={(e) => setPrefix(e.target.value)}
             placeholder="Prefix (e.g. acts/income-tax/)"
-            className="flex-1 rounded-lex border border-stone-300 dark:border-white/10 px-3 py-2 text-[13px] outline-none focus:border-ink placeholder:text-stone-400 dark:placeholder:text-stone-500"
+            className="flex-1 rounded-lex border border-stone-300 dark:border-white/10 px-3 py-2 text-[13px] outline-none focus:border-ink placeholder:text-stone-400 dark:placeholder:text-stone-500 bg-white dark:bg-[#0a1a12]"
           />
           <button
             onClick={() => ingest.mutate()} disabled={ingest.isPending}

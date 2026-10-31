@@ -143,7 +143,7 @@ export default function AnnotationsPage() {
               value={edited}
               onChange={(e) => { setEdited(e.target.value); setUseEdited(true) }}
               rows={5}
-              className="mt-1 w-full rounded-lex border border-stone-300 dark:border-white/10 px-3 py-2 text-[14px] leading-relaxed focus:outline-none focus:border-ink"
+              className="mt-1 w-full rounded-lex border border-stone-300 dark:border-white/10 px-3 py-2 text-[14px] leading-relaxed focus:outline-none focus:border-ink bg-white dark:bg-[#0a1a12]"
             />
             <div className="flex items-center justify-between mt-2">
               <p className="text-[12px] text-stone-400 dark:text-stone-500">
@@ -173,14 +173,14 @@ export default function AnnotationsPage() {
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
             placeholder="Question users ask, e.g. What does Section 86 of the Income Tax Act deal with?"
-            className="w-full rounded-lex border border-stone-300 dark:border-white/10 px-3 py-2 text-[14px] focus:outline-none focus:border-ink"
+            className="w-full rounded-lex border border-stone-300 dark:border-white/10 px-3 py-2 text-[14px] focus:outline-none focus:border-ink bg-white dark:bg-[#0a1a12]"
           />
           <textarea
             value={answer}
             onChange={(e) => setAnswer(e.target.value)}
             rows={4}
             placeholder="The verified answer, served verbatim…"
-            className="w-full rounded-lex border border-stone-300 dark:border-white/10 px-3 py-2 text-[14px] leading-relaxed focus:outline-none focus:border-ink"
+            className="w-full rounded-lex border border-stone-300 dark:border-white/10 px-3 py-2 text-[14px] leading-relaxed focus:outline-none focus:border-ink bg-white dark:bg-[#0a1a12]"
           />
           <div className="flex justify-end">
             <button

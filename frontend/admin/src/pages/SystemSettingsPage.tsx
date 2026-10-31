@@ -120,7 +120,7 @@ function HitTestCard() {
           onChange={(e) => setQuestion(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && question.trim() && run.mutate()}
           placeholder="e.g. What does Section 86 of the Income Tax Act deal with?"
-          className="flex-1 rounded-lex border border-stone-300 dark:border-white/10 px-3 py-2 text-[14px] focus:outline-none focus:border-ink"
+          className="flex-1 rounded-lex border border-stone-300 dark:border-white/10 px-3 py-2 text-[14px] focus:outline-none focus:border-ink bg-white dark:bg-[#0a1a12]"
         />
         <button
           onClick={() => run.mutate()}

@@ -15,6 +15,20 @@ live**, what is **built but unverified**, and what is **roadmap**.
 ## [Unreleased]
 
 ### Added
+- **Standalone fields get the app surface (1 Nov 2026,
+  Piece 62).** JISHAN's Vault screenshot showed the remaining
+  difference: the "Title (optional)" and "Prefix" fields rendered
+  as dark purple-grey slabs — they (and 13 like them) carried a
+  border but **no background class at all**, so the browser's own
+  dark form-control fill showed through instead of the app's
+  surface. All 15 standalone fields now carry
+  `bg-white dark:bg-[#0a1a12]`, the same surface as every other
+  field in the app: Vault title + prefix, the Brief paste title +
+  text (Matter page), the new-Brief form (3 fields), the
+  composer's As-of date + jurisdiction inputs, the Agents Max
+  steps counter, and admin's Annotations (3), Corpus and System
+  Settings fields. Verified: builds clean, surfaces present in
+  both shipped bundles, live on test + public incl. /admin/.
 - **One input-box design everywhere (1 Nov 2026, Piece 61).**
   JISHAN: "why draft, ask input box is not same as agent or
   research or vault" — the prompt boxes had grown four different

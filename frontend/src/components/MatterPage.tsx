@@ -432,13 +432,13 @@ function Documents({ matterId }: { matterId: string }) {
         <input
           value={pasteTitle} onChange={(e) => setPasteTitle(e.target.value)}
           placeholder="Title for pasted text (optional)"
-          className="mt-4 w-full rounded-lex border border-stone-200 dark:border-white/10 px-3 py-2 text-[13px] outline-none focus:border-stone-400"
+          className="mt-4 w-full rounded-lex border border-stone-200 dark:border-white/10 px-3 py-2 text-[13px] outline-none focus:border-stone-400 bg-white dark:bg-[#0a1a12]"
         />
         <textarea
           value={paste} onChange={(e) => setPaste(e.target.value)}
           placeholder="…or paste document text here"
           rows={4}
-          className="mt-2 w-full rounded-lex border border-stone-200 dark:border-white/10 px-3 py-2 text-[13px] outline-none focus:border-stone-400"
+          className="mt-2 w-full rounded-lex border border-stone-200 dark:border-white/10 px-3 py-2 text-[13px] outline-none focus:border-stone-400 bg-white dark:bg-[#0a1a12]"
         />
         <button
           disabled={!paste.trim()}

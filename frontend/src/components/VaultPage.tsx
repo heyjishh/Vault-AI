@@ -330,7 +330,7 @@ export default function VaultPage() {
           <input
             value={title} onChange={(e) => setTitle(e.target.value)}
             placeholder="Title (optional)"
-            className="mt-3 w-full rounded-lex border border-stone-300 dark:border-white/10 px-3 py-2 text-[13px] outline-none focus:border-ink placeholder:text-stone-400"
+            className="mt-3 w-full rounded-lex border border-stone-300 dark:border-white/10 px-3 py-2 text-[13px] outline-none focus:border-ink placeholder:text-stone-400 bg-white dark:bg-[#0a1a12]"
           />
           <div className="running-border mt-3 rounded-lex-lg border border-stone-300 dark:border-white/10 bg-white dark:bg-[#0a1a12]">
             <textarea
@@ -365,7 +365,7 @@ export default function VaultPage() {
           <input
             value={prefix} onChange={(e) => setPrefix(e.target.value)}
             placeholder="Prefix (e.g. acts/income-tax/)"
-            className="mt-3 w-full rounded-lex border border-stone-300 dark:border-white/10 px-3 py-2 text-[13px] outline-none focus:border-ink placeholder:text-stone-400"
+            className="mt-3 w-full rounded-lex border border-stone-300 dark:border-white/10 px-3 py-2 text-[13px] outline-none focus:border-ink placeholder:text-stone-400 bg-white dark:bg-[#0a1a12]"
           />
           <button
             onClick={() => ingest.mutate()} disabled={busy}

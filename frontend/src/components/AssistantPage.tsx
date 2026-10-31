@@ -848,7 +848,7 @@ function Composer(props: {
                     type="date"
                     value={asOf}
                     onChange={(e) => setAsOf(e.target.value)}
-                    className="mt-1 w-full rounded-lex border border-stone-200 dark:border-white/10 px-2 py-1.5 text-[13px] outline-none focus:border-stone-400"
+                    className="mt-1 w-full rounded-lex border border-stone-200 dark:border-white/10 px-2 py-1.5 text-[13px] outline-none focus:border-stone-400 bg-white dark:bg-[#0a1a12]"
                   />
                 </label>
                 <label className="block">
@@ -858,7 +858,7 @@ function Composer(props: {
                     value={jurisdiction}
                     onChange={(e) => setJurisdiction(e.target.value)}
                     placeholder="e.g. IN, IN-DL, US-CA"
-                    className="mt-1 w-full rounded-lex border border-stone-200 dark:border-white/10 px-2 py-1.5 text-[13px] outline-none focus:border-stone-400 placeholder:text-stone-400"
+                    className="mt-1 w-full rounded-lex border border-stone-200 dark:border-white/10 px-2 py-1.5 text-[13px] outline-none focus:border-stone-400 placeholder:text-stone-400 bg-white dark:bg-[#0a1a12]"
                   />
                 </label>
                 <div className="flex items-center justify-between pt-0.5">

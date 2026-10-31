@@ -148,7 +148,7 @@ export default function AgentsPage({ go }: { go?: (view: string) => void } = {})
             Max steps
             <input type="number" min={1} max={10} value={autoSteps}
               onChange={(e) => setAutoSteps(Math.min(10, Math.max(1, Number(e.target.value) || 6)))}
-              className="w-16 rounded-lex border border-stone-300 dark:border-white/10 px-2 py-1.5 outline-none focus:border-ink" />
+              className="w-16 rounded-lex border border-stone-300 dark:border-white/10 px-2 py-1.5 outline-none focus:border-ink bg-white dark:bg-[#0a1a12]" />
           </label>
           <RefineControls ctl={refineAuto} disabled={!goal.trim()} />
           <button
