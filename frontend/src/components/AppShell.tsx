@@ -139,7 +139,7 @@ export default function AppShell() {
           page wash — the taste-skill page's background system. */}
       <DualToneBackdrop fixed />
       {/* Sidebar — transparent over the wash, hairline right border */}
-      <aside className="relative z-10 w-64 flex-shrink-0 border-r border-stone-200 dark:border-white/10 flex flex-col">
+      <aside className="sidebar-raise relative z-10 w-64 flex-shrink-0 border-r border-stone-200 dark:border-white/10 flex flex-col">
         <div className="px-5 py-4 border-b border-stone-200 dark:border-white/10">
           <div className="flex items-center gap-3">
             <BrandMark size={36} />

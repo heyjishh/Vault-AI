@@ -97,11 +97,25 @@ html.dark .running-border { --rb-surface: #0a1a12; }
    and anything already carrying a shadow-lex utility (dialogs,
    menus, popovers). */
 html:not(.dark) [class*="rounded-lex-lg"][class*="bg-white"]:not([class*="shadow-lex"]):not(.running-border) {
-  box-shadow: 0 1px 2px rgba(15,14,13,.05), 0 14px 34px -12px rgba(15,14,13,.20);
+  /* Piece 53: toned down at JISHAN's word ("too much shadow,
+     make a little bit low"). */
+  box-shadow: 0 1px 2px rgba(15,14,13,.04), 0 8px 20px -10px rgba(15,14,13,.12);
 }
 html.dark [class*="rounded-lex-lg"][class*="bg-white"]:not([class*="shadow-lex"]):not(.running-border) {
   border-color: rgba(255,255,255,.16);
-  box-shadow: 0 14px 34px -12px rgba(0,0,0,.55);
+  box-shadow: 0 8px 22px -10px rgba(0,0,0,.45);
+}
+/* Piece 53: the sidebar gets the same raised-surface treatment —
+   it was transparent wash with a hairline; now it is a white
+   (dark: card-surface) panel casting a soft shadow to its right,
+   at the same toned-down strength as the cards. Both apps. */
+html:not(.dark) .sidebar-raise {
+  background: #ffffff;
+  box-shadow: 2px 0 3px rgba(15,14,13,.03), 12px 0 26px -12px rgba(15,14,13,.13);
+}
+html.dark .sidebar-raise {
+  background: #0a1a12;
+  box-shadow: 12px 0 26px -12px rgba(0,0,0,.50);
 }
 
 @media (prefers-reduced-motion: reduce) {

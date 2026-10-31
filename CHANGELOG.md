@@ -15,6 +15,18 @@ live**, what is **built but unverified**, and what is **roadmap**.
 ## [Unreleased]
 
 ### Added
+- **Card shadow toned down + sidebar raised + admin parity
+  (1 Nov 2026, Piece 53).** JISHAN on Piece 52: "its too much
+  shadow, make a little bit low, and do same visual effect in
+  sidebar, and make admin also compatible same" — (1) the card
+  elevation is roughly halved in both apps (light: 8px/20px at
+  .12 alpha; dark: 8px/22px at .45). (2) Both sidebars (user
+  AppShell + admin Shell) were transparent wash with a hairline;
+  they are now raised panels in the same treatment
+  (`.sidebar-raise`: white / dark card-surface, soft shadow cast
+  right). (3) Admin verified byte-for-byte equivalent rules.
+  Verified: builds clean, toned shadow + sidebar-raise in both
+  shipped bundles, live on test + public incl. /admin/.
 - **White cards made prominent (1 Nov 2026, Piece 52).** JISHAN:
   "make all white cards more prominent and more knownable" —
   flat white cards on a near-white page were washing out. Two

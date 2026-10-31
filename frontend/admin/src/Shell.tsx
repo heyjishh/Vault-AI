@@ -37,7 +37,7 @@ export default function Shell({ user, onLogout }: { user: Me; onLogout: () => vo
           page wash — the same background system as the user app. */}
       <DualToneBackdrop fixed />
       {/* Sidebar — transparent over the wash, hairline right border */}
-      <aside className="relative z-10 w-60 flex-shrink-0 border-r border-stone-200 dark:border-white/10 flex flex-col">
+      <aside className="sidebar-raise relative z-10 w-60 flex-shrink-0 border-r border-stone-200 dark:border-white/10 flex flex-col">
         <div className="px-5 py-4 border-b border-stone-200 dark:border-white/10">
           <div className="flex items-center gap-3">
             <BrandMark size={36} />
