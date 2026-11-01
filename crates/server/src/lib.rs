@@ -18,6 +18,7 @@ pub mod error;
 pub mod frontend;
 pub mod feedback;
 pub mod golden;
+pub mod prompts;
 pub mod routes;
 pub mod state;
 

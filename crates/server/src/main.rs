@@ -385,6 +385,9 @@ async fn main() -> anyhow::Result<()> {
     let feedback = std::sync::Arc::new(
         legal_rag_server::feedback::FeedbackStore::load(data_dir.join("feedback.json")),
     );
+    let prompts = std::sync::Arc::new(
+        legal_rag_server::prompts::PromptStore::load(data_dir.join("prompts.json")),
+    );
     let annotations = std::sync::Arc::new(
         legal_rag_server::annotations::AnnotationStore::load(data_dir.join("annotations.json")),
     );
@@ -445,6 +448,7 @@ async fn main() -> anyhow::Result<()> {
         activity,
         golden,
         feedback,
+        prompts,
         annotations,
         matters,
         spaces,

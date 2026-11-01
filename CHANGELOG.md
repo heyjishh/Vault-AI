@@ -15,6 +15,28 @@ live**, what is **built but unverified**, and what is **roadmap**.
 ## [Unreleased]
 
 ### Added
+- **Prompt Library (1 Nov 2026, Piece 63).** JISHAN pointed at a
+  reference product's prompt library (photos: a library modal with
+  a curated collection by category + My Prompts, and a Prompts
+  button inside the chat input) and asked for "a prompt section on
+  sidebar and in input box of every chat". Shipped: (a) a new
+  **Prompts page** in the sidebar — a Juris Vault Collection of 14
+  curated prompts by category (Contracts, Drafting, Dispute
+  Resolution, Corporate, Banking & Finance, Research, Inhouse
+  Teams; four flagged Suggested: Redline Issues, Deviation
+  analysis from playbook, insolvency rights, dispute escalation),
+  plus My Prompts — Created By Me, Starred, Shared With Me — with
+  search, Preview, and Use; (b) a **Prompts button in the Ask and
+  Interact composers** opening the same library as a picker; "Use"
+  drops the prompt text into the composer (from the page, Ask
+  opens prefilled), with [bracketed placeholders] left for the
+  user to fill. Users can create, edit, star, delete (typed-DELETE
+  consent, as everywhere) and share their own prompts — shared
+  prompts appear in colleagues' libraries. Backend: `prompts.json`
+  store + `/api/v1/prompts` CRUD/star/share (owner-only mutation,
+  verified live incl. cross-user sharing and a forbidden-edit
+  check); curated seeds live in code so they survive data wipes.
+  Two new store tests; suite 249 green.
 - **Standalone fields get the app surface (1 Nov 2026,
   Piece 62).** JISHAN's Vault screenshot showed the remaining
   difference: the "Title (optional)" and "Prefix" fields rendered

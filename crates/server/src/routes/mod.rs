@@ -15,6 +15,7 @@ pub mod insights;
 pub mod knowledge;
 pub mod matters;
 pub mod mcp;
+pub mod prompts;
 pub mod spaces;
 pub mod private_vault;
 pub mod uploads;
@@ -145,6 +146,14 @@ pub fn router(state: AppState) -> Router {
             get(private_vault::list_documents),
         )
         .route("/api/v1/private-vault/documents/{id}", delete(private_vault::delete_document))
+        // Prompt library (Piece 63): curated collection + user prompts.
+        .route("/api/v1/prompts", get(prompts::list_prompts).post(prompts::create_prompt))
+        .route(
+            "/api/v1/prompts/{id}",
+            patch(prompts::update_prompt).delete(prompts::delete_prompt),
+        )
+        .route("/api/v1/prompts/{id}/star", post(prompts::star_prompt))
+        .route("/api/v1/prompts/{id}/share", post(prompts::share_prompt))
         // Dashboard (user home).
         .route("/api/v1/dashboard/me", get(insights::my_dashboard))
         .route("/api/v1/dashboard/activity/{id}", delete(insights::delete_my_activity))

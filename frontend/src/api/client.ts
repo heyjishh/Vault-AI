@@ -616,6 +616,55 @@ export const spacesApi = {
   },
 }
 
+/** Prompt library (Piece 63): one library entry as the API returns it —
+ *  the prompt fields flattened with the caller's `mine` / `starred`. */
+export interface PromptItem {
+  id: string
+  title: string
+  body: string
+  category: string
+  owner_email: string | null
+  shared: boolean
+  suggested: boolean
+  created_at: string
+  updated_at: string
+  mine: boolean
+  starred: boolean
+}
+
+export const promptsApi = {
+  async list(): Promise<{ prompts: PromptItem[]; categories: string[] }> {
+    const r = await api.get<{ prompts: PromptItem[]; categories: string[] }>('/prompts')
+    return r.data
+  },
+  async create(title: string, body: string, category: string): Promise<PromptItem> {
+    try {
+      const r = await api.post<PromptItem>('/prompts', { title, body, category })
+      return { ...r.data, mine: true, starred: false }
+    } catch (e) { throw new Error(err(e)) }
+  },
+  async update(id: string, patch: { title?: string; body?: string; category?: string }): Promise<PromptItem> {
+    try {
+      const r = await api.patch<PromptItem>(`/prompts/${id}`, patch)
+      return { ...r.data, mine: true, starred: false }
+    } catch (e) { throw new Error(err(e)) }
+  },
+  async remove(id: string): Promise<void> {
+    try { await api.delete(`/prompts/${id}`) }
+    catch (e) { throw new Error(err(e)) }
+  },
+  async star(id: string): Promise<boolean> {
+    const r = await api.post<{ active: boolean }>(`/prompts/${id}/star`)
+    return r.data.active
+  },
+  async share(id: string): Promise<boolean> {
+    try {
+      const r = await api.post<{ active: boolean }>(`/prompts/${id}/share`)
+      return r.data.active
+    } catch (e) { throw new Error(err(e)) }
+  },
+}
+
 export type { Citation }
 
 export interface StreamHandlers {
