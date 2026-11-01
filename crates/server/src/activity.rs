@@ -220,6 +220,34 @@ impl ActivityStore {
         removed
     }
 
+    /// Remove SEVERAL of a user's history entries in one pass
+    /// (Piece 64: multi-select delete on the Dashboard history).
+    /// Same ownership rules as the single-entry delete: only the
+    /// caller's own entries go, system purge records never, and
+    /// unknown or foreign ids are silently skipped. Returns how many
+    /// entries were removed; persisted once.
+    pub fn remove_entries_for_user(&self, user_id: &str, event_ids: &[String]) -> usize {
+        if event_ids.is_empty() {
+            return 0;
+        }
+        let ids: std::collections::HashSet<&str> =
+            event_ids.iter().map(String::as_str).collect();
+        let removed = {
+            let mut events = self.events.write().unwrap();
+            let before = events.len();
+            events.retain(|e| {
+                !(ids.contains(e.id.as_str())
+                    && e.user_id == user_id
+                    && e.kind != Self::PURGE_KIND)
+            });
+            before - events.len()
+        };
+        if removed > 0 {
+            self.save();
+        }
+        removed
+    }
+
     /// Remove ONE history entry, only when it belongs to `user_id`
     /// (Piece 33: the per-entry delete on the user's own history).
     /// Another user's entry is never removed through here, and system
@@ -370,6 +398,47 @@ mod tests {
         let remaining = store.all();
         assert_eq!(remaining.len(), 2);
         assert!(remaining.iter().all(|e| e.id != mine_id));
+        let reloaded = ActivityStore::load(path.clone());
+        assert_eq!(reloaded.all().len(), 2);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// The bulk delete contract (Piece 64): several of the caller's
+    /// own entries go in one call; foreign ids, purge records and
+    /// unknown ids in the same list are skipped without failing.
+    #[test]
+    fn remove_entries_for_user_takes_only_own_entries() {
+        let (store, path) = temp_store();
+        let a = ev("user-a", "query");
+        let a_id = a.id.clone();
+        let b = ev("user-a", "research");
+        let b_id = b.id.clone();
+        let other = ev("user-b", "query");
+        let other_id = other.id.clone();
+        let purge = ev("user-a", ActivityStore::PURGE_KIND);
+        let purge_id = purge.id.clone();
+        store.record(a);
+        store.record(b);
+        store.record(other);
+        store.record(purge);
+
+        let removed = store.remove_entries_for_user(
+            "user-a",
+            &[
+                a_id.clone(),
+                b_id.clone(),
+                other_id.clone(),
+                purge_id.clone(),
+                "no-such-id".to_string(),
+            ],
+        );
+        assert_eq!(removed, 2);
+        let remaining = store.all();
+        assert_eq!(remaining.len(), 2);
+        assert!(remaining.iter().any(|e| e.id == other_id));
+        assert!(remaining.iter().any(|e| e.id == purge_id));
+        // Idempotent.
+        assert_eq!(store.remove_entries_for_user("user-a", &[a_id]), 0);
         let reloaded = ActivityStore::load(path.clone());
         assert_eq!(reloaded.all().len(), 2);
         let _ = std::fs::remove_file(&path);

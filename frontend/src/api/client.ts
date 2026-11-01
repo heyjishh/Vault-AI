@@ -401,6 +401,13 @@ export const dashboardApi = {
     try { await api.delete(`/dashboard/activity/${id}`) }
     catch (e) { throw new Error(err(e)) }
   },
+  /** Piece 64: multi-select delete — returns how many entries went. */
+  async deleteActivities(ids: string[]): Promise<number> {
+    try {
+      const r = await api.post<{ deleted: number }>('/dashboard/activity/delete-many', { ids })
+      return r.data.deleted
+    } catch (e) { throw new Error(err(e)) }
+  },
 }
 
 export interface InteractDocumentResult {

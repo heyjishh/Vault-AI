@@ -68,7 +68,12 @@ pub async fn my_dashboard(
             drafts: count("draft"),
             uploads: count("upload"),
         },
-        recent_activity: state.activity.for_user(&user.id, 60),
+        // Piece 64: the SAME list the counts above are computed
+        // from. This used to be a separate 60-entry window, so the
+        // Dashboard pager read "of 60" while the user's history
+        // (and the counts) ran past it — the total was the cap,
+        // not the history.
+        recent_activity: mine,
         documents,
         corpus_documents: state.rag.list_documents().len(),
         corpus_chunks: state.rag.corpus_size().await,
@@ -92,6 +97,25 @@ pub async fn delete_my_activity(
     } else {
         Err(legal_rag_common::Error::NotFound("history entry not found".into()).into())
     }
+}
+
+#[derive(serde::Deserialize)]
+pub struct DeleteManyRequest {
+    pub ids: Vec<String>,
+}
+
+/// Piece 64: delete SEVERAL of the caller's own history entries in
+/// one call (`POST /api/v1/dashboard/activity/delete-many`) — the
+/// Dashboard's multi-select delete. Same ownership contract as the
+/// single delete; foreign, system and unknown ids are skipped and
+/// the response reports how many entries actually went.
+pub async fn delete_my_activities(
+    State(state): State<AppState>,
+    AuthUser(user): AuthUser,
+    Json(body): Json<DeleteManyRequest>,
+) -> Json<serde_json::Value> {
+    let deleted = state.activity.remove_entries_for_user(&user.id, &body.ids);
+    Json(serde_json::json!({ "deleted": deleted }))
 }
 
 // ------------------------------------------------------------ admin insights
