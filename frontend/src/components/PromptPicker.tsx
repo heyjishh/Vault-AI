@@ -13,11 +13,14 @@ import { TemplatePicker } from './TemplatePicker'
  *  and put prompt and template should be look like refine
  *  button"). The composers now carry explicit library pills
  *  styled exactly like the Refine pill — a "Prompts" pill in
- *  every chat input, plus a "Templates" pill in Draft only —
- *  each opening its library modal directly. */
+ *  every chat input, plus a "Templates" pill in Draft —
+ *  each opening its library modal directly.
+ *  Piece 74: JISHAN asked for the Templates pill in Interact
+ *  too, same as Draft — Interact now passes withTemplates.
+ *  Picked templates arrive wrapped format-only (Piece 73). */
 export function ComposerLibraryButtons({ onPick, withTemplates = false }: {
   onPick: (body: string) => void
-  /** Draft only — Templates exist in Draft and nowhere else. */
+  /** Draft + Interact — composers that also offer Templates. */
   withTemplates?: boolean
 }) {
   const [pickerOpen, setPickerOpen] = useState(false)

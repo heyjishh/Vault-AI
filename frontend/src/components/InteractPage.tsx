@@ -608,7 +608,7 @@ export default function InteractPage({ matterId, go }: { matterId?: string; go?:
         />
         <div className="flex items-center justify-between px-3 pb-3">
           <div className="flex items-center gap-2">
-            <ComposerLibraryButtons onPick={promptInsert(question, setQuestion, 'interact-input')} />
+            <ComposerLibraryButtons withTemplates onPick={promptInsert(question, setQuestion, 'interact-input')} />
             <span className="inline-flex items-center gap-1.5 rounded-lex bg-ink text-ivory px-2.5 py-1 text-[12px]">
               {source === 'private' ? <Lock size={13} /> : source === 'both' ? <Briefcase size={13} /> : <FileSearch size={13} />}
               {SOURCES.find((s) => s.id === source)?.label}

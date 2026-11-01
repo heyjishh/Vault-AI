@@ -15,6 +15,15 @@ live**, what is **built but unverified**, and what is **roadmap**.
 ## [Unreleased]
 
 ### Added
+- **Templates pill in Interact, same as Draft (1 Nov 2026,
+  Piece 74).** JISHAN: "want template option in interact also
+  same as draft". The Interact composer now carries the
+  **Templates** pill beside Prompts, opening the same Template
+  Library modal; a picked template is inserted into the
+  Interact input highlighted, wrapped in the Piece 73
+  format-only instruction (structure and layout only, no
+  template content used as facts). Ask, Research and Agents
+  remain Prompts-only.
 - **Create a template from a document + templates are
   format-only (1 Nov 2026, Piece 73).** JISHAN: template
   creation needs a document-upload option, and whoever uses a
