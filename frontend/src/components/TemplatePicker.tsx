@@ -16,10 +16,26 @@ export function templateInGroup(p: TemplateItem, group: string): boolean {
   }
 }
 
-/** The template picker modal — opened from Draft's + menu (the
- *  only place templates can be picked; JISHAN: templates exist in
- *  Draft only). Mirrors the prompt picker: search, group chips,
- *  star, Use inserts the template body into the Draft input. */
+/** Piece 73: the format-only wrapper applied EVERY time a
+ *  template is used (JISHAN's rule: whoever uses a template —
+ *  in Draft today — takes ONLY its format and layout; no
+ *  template content may flow into the work). The instruction
+ *  travels with the inserted text so the model sees the
+ *  constraint next to the skeleton itself. */
+export function templateUseText(body: string): string {
+  return [
+    'Use the template below ONLY as a format and layout guide: follow its structure, headings, clause order and [bracketed placeholders].',
+    'Do NOT reuse any of its wording, names, figures or content as facts — write everything fresh from my matter, and replace every [placeholder] with my actual details.',
+    '',
+    body,
+  ].join('\n')
+}
+
+/** The template picker modal — opened from Draft's Templates
+ *  pill (the only place templates can be picked; JISHAN:
+ *  templates exist in Draft only). Mirrors the prompt picker:
+ *  search, group chips, star, Use inserts the template body
+ *  (format-wrapped, Piece 73) into the Draft input. */
 export function TemplatePicker({ onClose, onUse }: { onClose: () => void; onUse: (body: string) => void }) {
   const { data, isLoading } = useQuery({ queryKey: ['templates'], queryFn: templatesApi.list })
   const qc = useQueryClient()
@@ -94,7 +110,7 @@ export function TemplatePicker({ onClose, onUse }: { onClose: () => void; onUse:
                 <Star size={15} fill={p.starred ? 'currentColor' : 'none'} />
               </button>
               <button
-                onClick={() => onUse(p.body)}
+                onClick={() => onUse(templateUseText(p.body))}
                 className="btn-brand shrink-0 rounded-lex text-ivory px-3.5 py-1.5 text-[12.5px] font-medium"
               >
                 Use

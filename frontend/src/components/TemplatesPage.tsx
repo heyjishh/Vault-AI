@@ -1,12 +1,12 @@
 import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  LayoutTemplate, Eye, FolderOpen, Pencil, Plus, Search, Share2, Star, Trash2, X,
+  LayoutTemplate, Eye, FolderOpen, Pencil, Plus, Search, Share2, Star, Trash2, Upload, X,
 } from 'lucide-react'
 import { templatesApi, type TemplateItem } from '../api/client'
 import { useSession } from '../stores/session'
 import { ConfirmDialog } from './ui'
-import { templateInGroup } from './TemplatePicker'
+import { templateInGroup, templateUseText } from './TemplatePicker'
 
 /** Piece 68: the Template Library page — the drafting twin of the
  *  Prompt Library, same pattern at JISHAN's direction: a curated
@@ -68,7 +68,7 @@ export default function TemplatesPage({ go }: { go: (view: string) => void }) {
   })
 
   function useTemplate(p: TemplateItem) {
-    sessionStorage.setItem('jurisvault.templateSeed', p.body)
+    sessionStorage.setItem('jurisvault.templateSeed', templateUseText(p.body))
     go('draft')
   }
 
@@ -258,6 +258,29 @@ function TemplateForm({ initial, categories, onClose, onSaved }: {
   const [title, setTitle] = useState(initial?.title ?? '')
   const [category, setCategory] = useState(initial?.category ?? 'General')
   const [body, setBody] = useState(initial?.body ?? '')
+  // Piece 73: create from an uploaded document — the server
+  // extracts it and converts it to a FORMAT-ONLY skeleton
+  // (specifics stripped into [placeholders]) which lands in the
+  // fields below for review before saving. The document itself
+  // is never stored or ingested.
+  const [converting, setConverting] = useState(false)
+  async function convertDocument(file: File) {
+    setConverting(true)
+    try {
+      const r = await templatesApi.fromDocument(file)
+      setTitle(r.title)
+      setBody(r.body)
+      if (r.skeletonized) {
+        toast('success', 'Converted to a format template — names, dates and amounts were replaced with [placeholders]. Review it before saving.')
+      } else {
+        toast('error', 'The format conversion was unavailable, so the document text was loaded as-is. Remove names, dates and other specifics yourself before saving.')
+      }
+    } catch (e) {
+      toast('error', e instanceof Error ? e.message : 'Could not convert that document.')
+    } finally {
+      setConverting(false)
+    }
+  }
   const saveMut = useMutation({
     mutationFn: async () => {
       if (initial) return templatesApi.update(initial.id, { title: title.trim(), body: body.trim(), category: category.trim() || 'General' })
@@ -298,6 +321,26 @@ function TemplateForm({ initial, categories, onClose, onSaved }: {
             <option value="General" />
           </datalist>
         </label>
+        {!initial && (
+          <div className="mt-3 flex items-center gap-3 rounded-lex border border-dashed border-stone-300 dark:border-white/15 px-3 py-2.5">
+            <label className={`flex items-center gap-1.5 rounded-lex border border-stone-200 dark:border-white/10 px-3 py-1.5 text-[12.5px] font-medium text-stone-600 dark:text-stone-300 hover:text-ink hover:border-stone-300 transition-colors ${converting ? 'opacity-40 pointer-events-none' : 'cursor-pointer'}`}>
+              <Upload size={13} /> {converting ? 'Converting…' : 'Upload a document'}
+              <input
+                type="file" className="hidden"
+                accept=".pdf,.doc,.docx,.docm,.odt,.rtf,.txt,.md"
+                onChange={(e) => {
+                  const f = e.target.files?.[0]
+                  e.target.value = ''
+                  if (f) void convertDocument(f)
+                }}
+              />
+            </label>
+            <p className="text-[12px] text-stone-400 dark:text-stone-500 leading-snug">
+              Turn an existing document into this template — only its format and layout are kept;
+              names, dates and amounts become [placeholders].
+            </p>
+          </div>
+        )}
         <label className="block mt-3">
           <span className="text-[12.5px] font-medium text-stone-500 dark:text-stone-400">Template</span>
           <textarea

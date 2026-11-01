@@ -14,6 +14,25 @@ live**, what is **built but unverified**, and what is **roadmap**.
 
 ## [Unreleased]
 
+### Added
+- **Create a template from a document + templates are
+  format-only (1 Nov 2026, Piece 73).** JISHAN: template
+  creation needs a document-upload option, and whoever uses a
+  template (Draft) must take ONLY its format and layout — no
+  template content may flow into the work. (1) The New Template
+  form gains **Upload a document**: the server extracts it with
+  the ingest pipeline's own parsers (PDF/DOCX/RTF/Office/text)
+  and converts it with the LLM into a format-only skeleton —
+  names, dates, amounts and facts replaced with [bracketed
+  placeholders] — which lands in the form for review before
+  saving; the document is never stored or ingested, and if the
+  conversion is unavailable the raw text loads with an explicit
+  warning to strip specifics manually. (2) Every template Use
+  (picker + library page) now wraps the body in a format-only
+  instruction: follow the structure, headings, clause order and
+  placeholders; never reuse its wording, names or figures as
+  facts; write fresh from the user's matter.
+
 ### Fixed
 - **Large uploads no longer die with 504 at the last step
   (1 Nov 2026, Piece 72).** JISHAN's

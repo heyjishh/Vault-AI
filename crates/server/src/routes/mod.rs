@@ -162,6 +162,7 @@ pub fn router(state: AppState) -> Router {
             "/api/v1/templates/{id}",
             patch(templates::update_template).delete(templates::delete_template),
         )
+        .route("/api/v1/templates/from-document", post(templates::from_document))
         .route("/api/v1/templates/{id}/star", post(templates::star_template))
         .route("/api/v1/templates/{id}/share", post(templates::share_template))
         // Document-source connectors (Piece 70): OAuth connect +

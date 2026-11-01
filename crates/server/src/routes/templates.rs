@@ -149,3 +149,88 @@ pub async fn share_template(
             .into()
         })
 }
+
+#[derive(Deserialize)]
+pub struct FromDocumentRequest {
+    pub file_name: String,
+    pub content_base64: String,
+}
+
+#[derive(Serialize)]
+pub struct FromDocumentView {
+    pub title: String,
+    /// The template body: the document converted to format-only
+    /// skeleton when `skeletonized`, else the raw extracted text
+    /// (the UI warns the user to strip specifics before saving).
+    pub body: String,
+    pub skeletonized: bool,
+}
+
+/// POST /api/v1/templates/from-document (Piece 73): create-a-
+/// template by uploading a document. The document is extracted
+/// with the SAME parsers as vault ingest, then converted by the
+/// LLM into a format-only skeleton — names, dates, amounts and
+/// facts replaced with [bracketed placeholders] — because a
+/// template must carry format and layout, never content. The
+/// document itself is NOT ingested or stored.
+pub async fn from_document(
+    State(state): State<AppState>,
+    AuthUser(user): AuthUser,
+    Json(body): Json<FromDocumentRequest>,
+) -> Result<Json<FromDocumentView>, ApiError> {
+    use base64::Engine as _;
+    crate::routes::billing::ensure_quota(&state, &user.id)?;
+    if body.content_base64.len() > 14 * 1024 * 1024 {
+        return Err(legal_rag_common::Error::BadRequest(
+            "document too large to convert into a template (keep it under ~10 MB)".into(),
+        )
+        .into());
+    }
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(body.content_base64.trim())
+        .map_err(|e| {
+            legal_rag_common::Error::BadRequest(format!("invalid base64 content: {e}"))
+        })?;
+    // Pipeline-grade extraction (PDF/DOCX/RTF/Office/text), on a
+    // blocking thread like the ingest path.
+    let config = state.rag.config().clone();
+    let file_name = body.file_name.clone();
+    let blocks = tokio::task::spawn_blocking(move || {
+        let parser = legal_rag_rag::parser::get_parser("auto", &file_name, &config)?;
+        parser.parse(&file_name, &bytes)
+    })
+    .await
+    .map_err(|e| {
+        legal_rag_common::Error::BadRequest(format!("parser task failed: {e}"))
+    })??;
+    let (text, _modal, _pages) = legal_rag_rag::content::separate_content(&blocks);
+    if text.trim().is_empty() {
+        return Err(legal_rag_common::Error::BadRequest(
+            "no extractable text in this document".into(),
+        )
+        .into());
+    }
+    // Bound the conversion call; the skeleton keeps the layout of
+    // the opening and clauses, which live in the first pages.
+    let truncated: String = text.chars().take(12_000).collect();
+    let scope = legal_rag_rag::usage::new_scope();
+    let converted = legal_rag_rag::usage::scope_usage(scope.clone(), async {
+        state.query.skeletonize_template(&truncated).await
+    })
+    .await;
+    let totals = scope.lock().map(|t| *t).unwrap_or_default();
+    state.billing.add_usage(&user.id, &totals);
+    let (tpl_body, skeletonized) = match converted {
+        Ok(s) => (s, true),
+        Err(e) => {
+            tracing::warn!(error = %e, "template skeletonization failed; returning raw text");
+            (truncated, false)
+        }
+    };
+    let title = body
+        .file_name
+        .rsplit_once('.')
+        .map(|(stem, _)| stem.to_string())
+        .unwrap_or_else(|| body.file_name.clone());
+    Ok(Json(FromDocumentView { title, body: tpl_body, skeletonized }))
+}

@@ -393,6 +393,27 @@ corpus: the statutes, Acts, sections, clauses, documents, and legal concepts the
 text names or clearly points to, plus narrower and broader synonyms, including \
 Hindi equivalents where natural. At most 10 terms.";
 
+/// The format-only conversion behind template creation from an
+/// uploaded document (Piece 73). The product rule (JISHAN):
+/// templates carry FORMAT AND LAYOUT ONLY — never the source
+/// document's content. This prompt is the enforcement at
+/// creation time; a matching instruction wraps the template
+/// again at use time.
+pub const SKELETON_SYSTEM: &str = "You convert a legal document into a reusable \
+FORMAT TEMPLATE. Keep ONLY the document's format and layout: its title line, \
+heading structure, clause/section order, numbering style, and signature blocks. \
+Replace EVERY specific with a bracketed placeholder: party and person names -> \
+[Party Name] / [Name], company names -> [Company Name], dates -> [Date], \
+amounts and figures -> [Amount], addresses -> [Address], statute/section \
+references that are specific to this matter -> [Section], case numbers -> \
+[Case Number]. Rewrite operative sentences as generic skeleton lines that keep \
+the clause's PURPOSE but none of its original facts or wording — e.g. 'The \
+[Service Provider] shall provide [Services] for a fee of [Amount] payable \
+within [Number] days.' Never copy a real name, date, amount, address, or fact \
+from the source. Keep generic legal connectives (hereby, whereas, in witness \
+whereof) where they are part of the layout. Output ONLY the template text, \
+with line breaks mirroring the source layout. No preamble, no commentary.";
+
 /// A human-verified answer (annotation): a curator corrected or authored
 /// the answer to a question, and semantically matching future questions
 /// are served it verbatim. Annotations bind to the corpus fingerprint
@@ -2461,6 +2482,27 @@ impl QueryService {
             refined,
             terms: clean_refine_terms(&parsed.terms),
         })
+    }
+
+    /// Convert a real document into a FORMAT-ONLY template
+    /// (Piece 73): keep the structure, headings, clause order and
+    /// layout; replace every specific — names, parties, dates,
+    /// amounts, addresses, facts — with bracketed placeholders.
+    /// Templates in this product carry format, never content
+    /// (JISHAN's rule), so an uploaded document must be stripped
+    /// before it can become one.
+    pub async fn skeletonize_template(&self, text: &str) -> Result<String> {
+        let raw = self
+            .llm
+            .complete(SKELETON_SYSTEM, &format!("---\n{text}\n---"))
+            .await?;
+        let out = raw.trim().to_string();
+        if out.is_empty() {
+            return Err(legal_rag_common::Error::Upstream(
+                "template conversion came back empty".into(),
+            ));
+        }
+        Ok(out)
     }
 
     /// Retrieval with HyDE / multi-query expansion queries pooled into

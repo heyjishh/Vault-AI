@@ -730,6 +730,19 @@ export const templatesApi = {
       return r.data.active
     } catch (e) { throw new Error(err(e)) }
   },
+  /** Piece 73: convert an uploaded document into a format-only
+   *  template draft (server extracts + strips specifics into
+   *  placeholders). The document is not stored or ingested. */
+  async fromDocument(file: File): Promise<{ title: string; body: string; skeletonized: boolean }> {
+    try {
+      const content_base64 = await blobToBase64(file)
+      const r = await api.post<{ title: string; body: string; skeletonized: boolean }>(
+        '/templates/from-document',
+        { file_name: file.name, content_base64 },
+      )
+      return r.data
+    } catch (e) { throw new Error(err(e)) }
+  },
 }
 
 /** Document-source connectors (Piece 70). */
