@@ -16,6 +16,8 @@ pub mod knowledge;
 pub mod matters;
 pub mod mcp;
 pub mod prompts;
+pub mod templates;
+pub mod connectors;
 pub mod spaces;
 pub mod private_vault;
 pub mod uploads;
@@ -154,6 +156,23 @@ pub fn router(state: AppState) -> Router {
         )
         .route("/api/v1/prompts/{id}/star", post(prompts::star_prompt))
         .route("/api/v1/prompts/{id}/share", post(prompts::share_prompt))
+        // Template library (Piece 68): curated collection + user templates.
+        .route("/api/v1/templates", get(templates::list_templates).post(templates::create_template))
+        .route(
+            "/api/v1/templates/{id}",
+            patch(templates::update_template).delete(templates::delete_template),
+        )
+        .route("/api/v1/templates/{id}/star", post(templates::star_template))
+        .route("/api/v1/templates/{id}/share", post(templates::share_template))
+        // Document-source connectors (Piece 70): OAuth connect +
+        // browse + import into the Vault. The callback carries no
+        // session — the state nonce identifies the user.
+        .route("/api/v1/connectors", get(connectors::list_connectors))
+        .route("/api/v1/connectors/{provider}/auth-url", get(connectors::auth_url))
+        .route("/api/v1/connectors/{provider}/callback", get(connectors::callback))
+        .route("/api/v1/connectors/{provider}/disconnect", post(connectors::disconnect))
+        .route("/api/v1/connectors/{provider}/files", get(connectors::list_files))
+        .route("/api/v1/connectors/{provider}/import", post(connectors::import_file))
         // Dashboard (user home).
         .route("/api/v1/dashboard/me", get(insights::my_dashboard))
         .route("/api/v1/dashboard/activity/{id}", delete(insights::delete_my_activity))

@@ -388,6 +388,12 @@ async fn main() -> anyhow::Result<()> {
     let prompts = std::sync::Arc::new(
         legal_rag_server::prompts::PromptStore::load(data_dir.join("prompts.json")),
     );
+    let templates = std::sync::Arc::new(
+        legal_rag_server::templates::TemplateStore::load(data_dir.join("templates.json")),
+    );
+    let connectors = std::sync::Arc::new(
+        legal_rag_server::connectors::ConnectorStore::load(data_dir.join("connectors.json")),
+    );
     let annotations = std::sync::Arc::new(
         legal_rag_server::annotations::AnnotationStore::load(data_dir.join("annotations.json")),
     );
@@ -449,6 +455,8 @@ async fn main() -> anyhow::Result<()> {
         golden,
         feedback,
         prompts,
+        templates,
+        connectors,
         annotations,
         matters,
         spaces,

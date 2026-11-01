@@ -26,6 +26,21 @@ export default function DraftPage({ matterId: fixedMatterId, go }: { matterId?: 
   const matterId = fixedMatterId ?? storeMatterId ?? undefined
   const [kind, setKind] = useState<string>('legal_notice')
   const [instructions, setInstructions] = useState('')
+  // Piece 68: "Use" on the Templates page seeds the Draft
+  // instructions with the template, highlighted in the input.
+  useEffect(() => {
+    const seed = sessionStorage.getItem('jurisvault.templateSeed')
+    if (!seed) return
+    sessionStorage.removeItem('jurisvault.templateSeed')
+    setInstructions(seed)
+    window.setTimeout(() => {
+      const el = document.getElementById('draft-input') as HTMLTextAreaElement | null
+      if (el) {
+        el.focus()
+        try { el.setSelectionRange(0, seed.length) } catch { /* noop */ }
+      }
+    }, 80)
+  }, [])
   const [useCorpus, setUseCorpus] = useState(true)
   const [result, setResult] = useState<DraftResponse | null>(null)
   const [modalCitation, setModalCitation] = useState<Citation | null>(null)
@@ -97,7 +112,7 @@ export default function DraftPage({ matterId: fixedMatterId, go }: { matterId?: 
           />
           <div className="flex items-center justify-between px-3 pb-3 pt-1 flex-wrap gap-3">
           <div className="flex items-center gap-3 flex-wrap">
-            <PromptPlusButton onPick={promptInsert(instructions, setInstructions, 'draft-input')} />
+            <PromptPlusButton withTemplates onPick={promptInsert(instructions, setInstructions, 'draft-input')} />
             <label className="flex items-center gap-2 text-[13.5px] text-stone-600 dark:text-stone-300">
               <input type="checkbox" checked={useCorpus} onChange={(e) => setUseCorpus(e.target.checked)} className="accent-[#0f0e0d]" />
               Ground in the vault (search sources first, cite them in the draft)

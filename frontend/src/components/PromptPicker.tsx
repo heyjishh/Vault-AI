@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { BookOpen, Plus, Search, Star, X } from 'lucide-react'
+import { BookOpen, LayoutTemplate, Plus, Search, Star, X } from 'lucide-react'
 import { promptsApi, type PromptItem } from '../api/client'
+import { TemplatePicker } from './TemplatePicker'
 
 /** Piece 65: the + button that lives in every chat input's toolbar
  *  (Ask, Interact, Draft, Research, both Agents boxes, the
@@ -10,13 +11,19 @@ import { promptsApi, type PromptItem } from '../api/client'
  *  in every section, not just Ask/Interact. (Piece 63 shipped the
  *  sidebar page + picker, but the composer wiring never landed;
  *  this replaces the planned chip with the + button he asked for.) */
-export function PromptPlusButton({ onPick }: { onPick: (body: string) => void }) {
+export function PromptPlusButton({ onPick, withTemplates = false }: {
+  onPick: (body: string) => void
+  /** Piece 68: Draft only — the + menu also lists Templates,
+   *  which exist in Draft and nowhere else. */
+  withTemplates?: boolean
+}) {
   // Piece 66: the + button opens a small MENU first (JISHAN: the
   // library must not open directly — the menu will hold more
   // things later); choosing "Prompts" in the menu opens the
   // library modal. New + menu items belong in the list below.
   const [menuOpen, setMenuOpen] = useState(false)
   const [pickerOpen, setPickerOpen] = useState(false)
+  const [tplOpen, setTplOpen] = useState(false)
   return (
     <span className="relative inline-flex">
       <button
@@ -40,12 +47,31 @@ export function PromptPlusButton({ onPick }: { onPick: (body: string) => void })
               <span className="block text-[11.5px] text-stone-400 dark:text-stone-500">Insert from the prompt library</span>
             </span>
           </button>
+          {withTemplates && (
+            <button
+              type="button"
+              onClick={() => { setMenuOpen(false); setTplOpen(true) }}
+              className="w-full flex items-center gap-2.5 px-3.5 py-2 text-left hover:bg-stone-100 dark:hover:bg-white/10 transition-colors"
+            >
+              <LayoutTemplate size={15} className="text-stone-500 dark:text-stone-400 shrink-0" />
+              <span>
+                <span className="block text-[13px] font-medium">Templates</span>
+                <span className="block text-[11.5px] text-stone-400 dark:text-stone-500">Use a drafting template</span>
+              </span>
+            </button>
+          )}
         </span>
       )}
       {pickerOpen && (
         <PromptPicker
           onClose={() => setPickerOpen(false)}
           onUse={(body) => { onPick(body); setPickerOpen(false) }}
+        />
+      )}
+      {tplOpen && (
+        <TemplatePicker
+          onClose={() => setTplOpen(false)}
+          onUse={(body) => { onPick(body); setTplOpen(false) }}
         />
       )}
     </span>

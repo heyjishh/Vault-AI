@@ -672,6 +672,102 @@ export const promptsApi = {
   },
 }
 
+/** Template library (Piece 68): the prompt library's shape, for
+ *  drafting templates — picked from Draft only. */
+export interface TemplateItem {
+  id: string
+  title: string
+  body: string
+  category: string
+  owner_email: string | null
+  shared: boolean
+  suggested: boolean
+  created_at: string
+  updated_at: string
+  mine: boolean
+  starred: boolean
+}
+
+export const templatesApi = {
+  async list(): Promise<{ templates: TemplateItem[]; categories: string[] }> {
+    const r = await api.get<{ templates: TemplateItem[]; categories: string[] }>('/templates')
+    return r.data
+  },
+  async create(title: string, body: string, category: string): Promise<TemplateItem> {
+    try {
+      const r = await api.post<TemplateItem>('/templates', { title, body, category })
+      return { ...r.data, mine: true, starred: false }
+    } catch (e) { throw new Error(err(e)) }
+  },
+  async update(id: string, patch: { title?: string; body?: string; category?: string }): Promise<TemplateItem> {
+    try {
+      const r = await api.patch<TemplateItem>(`/templates/${id}`, patch)
+      return { ...r.data, mine: true, starred: false }
+    } catch (e) { throw new Error(err(e)) }
+  },
+  async remove(id: string): Promise<void> {
+    try { await api.delete(`/templates/${id}`) }
+    catch (e) { throw new Error(err(e)) }
+  },
+  async star(id: string): Promise<boolean> {
+    const r = await api.post<{ active: boolean }>(`/templates/${id}/star`)
+    return r.data.active
+  },
+  async share(id: string): Promise<boolean> {
+    try {
+      const r = await api.post<{ active: boolean }>(`/templates/${id}/share`)
+      return r.data.active
+    } catch (e) { throw new Error(err(e)) }
+  },
+}
+
+/** Document-source connectors (Piece 70). */
+export interface ConnectorStatus {
+  id: string
+  name: string
+  blurb: string
+  configured: boolean
+  connected: boolean
+  account_email: string | null
+  note: string | null
+}
+
+export interface RemoteFile {
+  id: string
+  name: string
+  mime_type: string | null
+  size: number | null
+  modified: string | null
+}
+
+export const connectorsApi = {
+  async list(): Promise<ConnectorStatus[]> {
+    const r = await api.get<ConnectorStatus[]>('/connectors')
+    return r.data
+  },
+  async authUrl(provider: string): Promise<string> {
+    try {
+      const r = await api.get<{ url: string }>(`/connectors/${provider}/auth-url`)
+      return r.data.url
+    } catch (e) { throw new Error(err(e)) }
+  },
+  async disconnect(provider: string): Promise<void> {
+    await api.post(`/connectors/${provider}/disconnect`, {})
+  },
+  async files(provider: string, q: string): Promise<RemoteFile[]> {
+    const r = await api.get<RemoteFile[]>(`/connectors/${provider}/files`, { params: q ? { q } : {} })
+    return r.data
+  },
+  async importFile(provider: string, file: RemoteFile, matter_id?: string): Promise<{ doc_id: string | null; chunks: number }> {
+    try {
+      const r = await api.post<{ doc_id: string | null; chunks: number }>(`/connectors/${provider}/import`, {
+        file_id: file.id, name: file.name, mime_type: file.mime_type ?? undefined, matter_id,
+      })
+      return r.data
+    } catch (e) { throw new Error(err(e)) }
+  },
+}
+
 export type { Citation }
 
 export interface StreamHandlers {

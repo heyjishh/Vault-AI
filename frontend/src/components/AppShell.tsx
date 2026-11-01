@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
   MessageSquare, FlaskConical, Bot, FolderOpen, Network, LogOut, LayoutDashboard,
-  PenSquare, Trash2, CreditCard, FileSearch, PenLine, Briefcase, Lock, ExternalLink, PanelTop, Search, X, BookOpen,
+  PenSquare, Trash2, CreditCard, FileSearch, PenLine, Briefcase, Lock, ExternalLink, PanelTop, Search, X, BookOpen, LayoutTemplate, Plug,
 } from 'lucide-react'
 import { useAuth } from '../stores/auth'
 import { useSession } from '../stores/session'
@@ -24,12 +24,14 @@ import PrivateVaultPage from './PrivateVaultPage'
 import CustomTabPage from './CustomTabPage'
 import SearchPage from './SearchPage'
 import PromptsPage from './PromptsPage'
+import TemplatesPage from './TemplatesPage'
+import ConnectorsPage from './ConnectorsPage'
 import MatterPage from './MatterPage'
 import ErrorBoundary from './ErrorBoundary'
 import Toaster from './Toaster'
 import ClausePet, { ClausePetToggle } from './ClausePet'
 
-export type View = 'dashboard' | 'matters' | 'matter' | 'assistant' | 'interact' | 'draft' | 'research' | 'agents' | 'vault' | 'search' | 'private' | 'graph' | 'plans' | 'tab' | 'prompts'
+export type View = 'dashboard' | 'matters' | 'matter' | 'assistant' | 'interact' | 'draft' | 'research' | 'agents' | 'vault' | 'search' | 'private' | 'graph' | 'plans' | 'tab' | 'prompts' | 'templates' | 'connectors'
 
 const NAV: { id: View; label: string; icon: React.ElementType }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -40,7 +42,9 @@ const NAV: { id: View; label: string; icon: React.ElementType }[] = [
   { id: 'research', label: 'Research', icon: FlaskConical },
   { id: 'agents', label: 'Agents', icon: Bot },
   { id: 'prompts', label: 'Prompts', icon: BookOpen },
+  { id: 'templates', label: 'Templates', icon: LayoutTemplate },
   { id: 'vault', label: 'Vault', icon: FolderOpen },
+  { id: 'connectors', label: 'Connectors', icon: Plug },
   { id: 'search', label: 'Search documents', icon: Search },
   { id: 'private', label: 'Private Vault', icon: Lock },
   { id: 'graph', label: 'Knowledge', icon: Network },
@@ -364,6 +368,8 @@ export default function AppShell() {
               {view === 'research' && <ResearchPage go={(v) => { setActiveTabId(null); setView(v as View) }} />}
               {view === 'agents' && <AgentsPage go={(v) => { setActiveTabId(null); setView(v as View) }} />}
               {view === 'prompts' && <PromptsPage go={(v) => { setActiveTabId(null); setView(v as View) }} />}
+              {view === 'templates' && <TemplatesPage go={(v) => { setActiveTabId(null); setView(v as View) }} />}
+              {view === 'connectors' && <ConnectorsPage />}
               {view === 'vault' && <VaultPage />}
               {view === 'search' && <SearchPage go={(v) => { setActiveTabId(null); setView(v) }} />}
               {view === 'private' && <PrivateVaultPage />}
