@@ -8,7 +8,6 @@ import { useAuth } from '../stores/auth'
 import { useSession } from '../stores/session'
 import type { View } from './AppShell'
 import AssistantAvatar from './AssistantAvatar'
-import { PromptPlusButton, promptInsert } from './PromptPicker'
 import { ConfirmDialog, DateChips, dateInRange, EmptyState, Pager, Spinner, usePagination, type DateRange } from './ui'
 
 const KIND_META: Record<string, { label: string; icon: React.ElementType; view: View }> = {
@@ -258,7 +257,10 @@ export default function DashboardPage({ go, openMatter }: { go: (v: View) => voi
             glow in the light register, masked to fade out downward
             behind the greeting (CSS in index.css). */}
         <div className="hero-field absolute inset-0 pointer-events-none" aria-hidden />
-        <div className="relative flex items-start gap-5">
+        {/* The avatar is centred against the text column — pinned
+            to the top it left an odd empty well beneath it (JISHAN,
+            1 Nov, Piece 67). */}
+        <div className="relative flex items-center gap-5">
           <AssistantAvatar size={76} />
           <div className="min-w-0 flex-1">
             <div className="h-[2px] w-[44px] bg-bronze mb-3" />
@@ -274,9 +276,7 @@ export default function DashboardPage({ go, openMatter }: { go: (v: View) => voi
               onSubmit={(e) => { e.preventDefault(); askNow(heroQ) }}
             >
               <Sparkles size={15} className="text-stone-400 dark:text-stone-500 shrink-0" />
-              <PromptPlusButton onPick={promptInsert(heroQ, setHeroQ, 'dashboard-hero-input')} />
               <input
-                id="dashboard-hero-input"
                 value={heroQ}
                 onChange={(e) => setHeroQ(e.target.value)}
                 placeholder="Ask Clause anything…"

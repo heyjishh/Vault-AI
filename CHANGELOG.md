@@ -15,6 +15,12 @@ live**, what is **built but unverified**, and what is **roadmap**.
 ## [Unreleased]
 
 ### Added
+- **Dashboard hero tidy-up (1 Nov 2026, Piece 67).** Per
+  JISHAN's screenshot: the prompt + button is removed from the
+  Dashboard hero box (it stays in the actual chat inputs — Ask,
+  Interact, Draft, Research, Agents), and the Clause avatar is
+  vertically centred against the greeting column instead of
+  pinned to the top, which left an odd empty space beneath it.
 - **The + button opens a menu first (1 Nov 2026, Piece 66).**
   JISHAN: clicking + should not open the Prompt Library
   directly — the + opens a small menu listing **Prompts**
