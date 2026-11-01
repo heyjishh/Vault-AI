@@ -273,7 +273,7 @@ pub async fn vault_complete(
     State(state): State<AppState>,
     AuthUser(user): AuthUser,
     Path(id): Path<String>,
-) -> Result<Json<crate::routes::vault::IngestReport>, ApiError> {
+) -> Result<axum::response::Response, ApiError> {
     let (session, bytes) = assemble(&id, &user.id, Target::Vault)?;
     let title = session
         .title
@@ -295,9 +295,12 @@ pub async fn vault_complete(
         decided_on: None,
         applicant: None,
     };
-    crate::routes::vault::run_upload(&state, &user, req, bytes, false)
-        .await
-        .map(Json)
+    // Piece 72: streamed completion (see vault::streaming_ingest_response).
+    Ok(crate::routes::vault::streaming_ingest_response(async move {
+        crate::routes::vault::run_upload(&state, &user, req, bytes, false)
+            .await
+            .map(|r| serde_json::to_value(&r).unwrap_or(Value::Null))
+    }))
 }
 
 pub async fn vault_abort(
@@ -350,7 +353,7 @@ pub async fn pv_complete(
     State(state): State<AppState>,
     AuthUser(user): AuthUser,
     Path(id): Path<String>,
-) -> Result<Json<Value>, ApiError> {
+) -> Result<axum::response::Response, ApiError> {
     pv_locked(&state, &user)?;
     let (session, bytes) = assemble(&id, &user.id, Target::Private)?;
     let req = crate::routes::private_vault::PrivateUpload {
@@ -360,9 +363,10 @@ pub async fn pv_complete(
         content_base64: None,
         file_password: None,
     };
-    crate::routes::private_vault::seal_upload(&state, &user, req, bytes)
-        .await
-        .map(Json)
+    // Piece 72: streamed completion (see vault::streaming_ingest_response).
+    Ok(crate::routes::vault::streaming_ingest_response(async move {
+        crate::routes::private_vault::seal_upload(&state, &user, req, bytes).await
+    }))
 }
 
 pub async fn pv_abort(

@@ -14,6 +14,26 @@ live**, what is **built but unverified**, and what is **roadmap**.
 
 ## [Unreleased]
 
+### Fixed
+- **Large uploads no longer die with 504 at the last step
+  (1 Nov 2026, Piece 72).** JISHAN's
+  `income-tax-act-1961-section-2.rtf` uploaded, then failed
+  with "Request failed with status code 504" and never landed.
+  Root cause: the public tunnel relay answers 504 to any
+  request whose first response frame takes over 55 seconds,
+  and the upload completion ran the whole ingest (extraction +
+  chunking + embeddings + augmentation — minutes for a big
+  file) before sending a single byte. Fix: every upload
+  completion (single-shot vault, chunked vault, single-shot +
+  chunked Private Vault) now STREAMS its response — first
+  frame immediately, a whitespace heartbeat every 10 s while
+  the ingest runs, then the JSON report; an ingest failure
+  arrives as an `error` body the client unwraps back into the
+  progress list's failure state. Ingest duration through the
+  tunnel is now bounded by the relay's 300 s idle window,
+  re-armed by every heartbeat, instead of the 55 s first-frame
+  deadline.
+
 ### Changed
 - **No more + button — library pills like Refine (1 Nov 2026,
   Piece 71).** JISHAN: "remove the plus button, and put prompt

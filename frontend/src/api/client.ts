@@ -200,6 +200,17 @@ export const MAX_FILE_BYTES = 100 * 1024 * 1024
 const SINGLE_SHOT_MAX = 8 * 1024 * 1024
 const PART_BYTES = 4 * 1024 * 1024
 
+/** Piece 72: upload completions STREAM their response (heartbeat
+ *  frames, then the report) so a long ingest survives the public
+ *  tunnel's first-frame deadline — an ingest failure therefore
+ *  arrives as HTTP 200 with an `error` body instead of an error
+ *  status. Unwrap it back into a thrown error here. */
+function unwrapStreamed<T>(data: T): T {
+  const e = (data as { error?: unknown })?.error
+  if (typeof e === 'string' && e) throw new Error(e)
+  return data
+}
+
 export function fileSizeError(file: File): Error {
   return new Error(
     `${file.name} is ${(file.size / 1048576).toFixed(1)} MB — the limit is 100 MB per file`,
@@ -257,7 +268,7 @@ export const vaultApi = {
               : undefined,
           },
         )
-        return r.data
+        return unwrapStreamed(r.data)
       } catch (e) { throw new Error(err(e)) }
     }
     let uploadId: string | null = null
@@ -278,7 +289,7 @@ export const vaultApi = {
         onProgress?.(sent / file.size)
       }
       const r = await api.post<IngestReport>(`/vault/uploads/${uploadId}/complete`, {})
-      return r.data
+      return unwrapStreamed(r.data)
     } catch (e) {
       if (uploadId) api.delete(`/vault/uploads/${uploadId}`).catch(() => {})
       throw new Error(err(e))
@@ -287,7 +298,7 @@ export const vaultApi = {
   async uploadText(title: string, file_name: string, text: string, matter_id?: string): Promise<IngestReport> {
     try {
       const r = await api.post<IngestReport>('/vault/documents', { title, file_name, text, matter_id })
-      return r.data
+      return unwrapStreamed(r.data)
     } catch (e) { throw new Error(err(e)) }
   },
   async ingestS3(prefix?: string): Promise<IngestReport> {
@@ -496,7 +507,7 @@ export const privateVaultApi = {
   },
   async upload(body: { title?: string; file_name: string; text?: string; content_base64?: string }): Promise<PrivateDocMeta> {
     try {
-      const r = await api.post<PrivateDocMeta>('/private-vault/documents', body); return r.data
+      const r = await api.post<PrivateDocMeta>('/private-vault/documents', body); return unwrapStreamed(r.data)
     } catch (e) { throw new Error(err(e)) }
   },
   /**
@@ -536,7 +547,7 @@ export const privateVaultApi = {
       }
       onBytesSent?.()
       const r = await api.post<PrivateDocMeta>(`/private-vault/uploads/${uploadId}/complete`, {})
-      return r.data
+      return unwrapStreamed(r.data)
     } catch (e) {
       if (uploadId) api.delete(`/private-vault/uploads/${uploadId}`).catch(() => {})
       throw new Error(err(e))

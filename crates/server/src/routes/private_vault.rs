@@ -133,7 +133,7 @@ pub async fn upload_document(
     State(state): State<AppState>,
     AuthUser(user): AuthUser,
     Json(body): Json<PrivateUpload>,
-) -> Result<Json<Value>, ApiError> {
+) -> Result<axum::response::Response, ApiError> {
     if !state.private_vault.is_unlocked(&user.id) {
         return Err(locked());
     }
@@ -147,7 +147,10 @@ pub async fn upload_document(
     } else {
         return Err(bad_request("provide text or content_base64"));
     };
-    seal_upload(&state, &user, body, bytes).await.map(Json)
+    // Piece 72: streamed completion (see vault::streaming_ingest_response).
+    Ok(crate::routes::vault::streaming_ingest_response(async move {
+        seal_upload(&state, &user, body, bytes).await
+    }))
 }
 
 /// Shared completion for every confidential-vault upload path — the

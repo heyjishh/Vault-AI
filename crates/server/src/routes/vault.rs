@@ -187,11 +187,79 @@ pub(crate) fn split_encrypted_s3(
 }
 
 /// Upload a document directly (pasted text or base64 file bytes).
+/// Piece 72: stream an ingest's response — first frame at once,
+/// then a whitespace heartbeat every 10s while the ingest runs,
+/// then the JSON report (or a `{"error": …}` body the client
+/// unwraps). Why: the public tunnel relay answers 504 to any
+/// request whose FIRST frame takes over 55s, and a large file's
+/// ingest (extraction + chunking + embeddings + augmentation)
+/// runs for minutes — a synchronous completion could never
+/// answer in time through the public site (JISHAN's
+/// income-tax-act-1961-section-2.rtf died exactly this way,
+/// 2026-11-01). With frames flowing, the relay's 300s idle
+/// window keeps re-arming and the ingest may take as long as it
+/// takes. Used by the single-shot upload and both chunked
+/// completions (vault + private vault).
+pub(crate) fn streaming_ingest_response<F>(fut: F) -> axum::response::Response
+where
+    F: std::future::Future<Output = Result<serde_json::Value, ApiError>> + Send + 'static,
+{
+    use axum::body::Body;
+    use axum::response::IntoResponse as _;
+    let (tx, rx) = tokio::sync::mpsc::channel::<
+        Result<axum::body::Bytes, std::convert::Infallible>,
+    >(16);
+    tokio::spawn(async move {
+        // The first frame goes out immediately — that is the one
+        // the relay's 55s first-frame deadline is waiting for.
+        if tx
+            .send(Ok(axum::body::Bytes::from_static(b"\n")))
+            .await
+            .is_err()
+        {
+            return;
+        }
+        tokio::pin!(fut);
+        loop {
+            tokio::select! {
+                done = &mut fut => {
+                    let payload = match done {
+                        Ok(v) => serde_json::to_vec(&v).unwrap_or_default(),
+                        Err(e) => serde_json::to_vec(
+                            &serde_json::json!({ "error": e.0.to_string() }),
+                        )
+                        .unwrap_or_default(),
+                    };
+                    let _ = tx.send(Ok(axum::body::Bytes::from(payload))).await;
+                    break;
+                }
+                _ = tokio::time::sleep(std::time::Duration::from_secs(10)) => {
+                    if tx
+                        .send(Ok(axum::body::Bytes::from_static(b"\n")))
+                        .await
+                        .is_err()
+                    {
+                        break;
+                    }
+                }
+            }
+        }
+    });
+    let stream = futures::stream::unfold(rx, |mut rx| async move {
+        rx.recv().await.map(|item| (item, rx))
+    });
+    (
+        [(axum::http::header::CONTENT_TYPE, "application/json")],
+        Body::from_stream(stream),
+    )
+        .into_response()
+}
+
 pub async fn upload_document(
     State(state): State<AppState>,
     AuthUser(user): AuthUser,
     Json(mut body): Json<UploadRequest>,
-) -> Result<Json<IngestReport>, ApiError> {
+) -> Result<axum::response::Response, ApiError> {
     use base64::Engine as _;
     crate::routes::billing::ensure_quota(&state, &user.id)?;
     // `pasted` distinguishes typed/pasted text from an uploaded file:
@@ -215,7 +283,11 @@ pub async fn upload_document(
             .into())
         }
     };
-    run_upload(&state, &user, body, bytes, pasted).await.map(Json)
+    Ok(streaming_ingest_response(async move {
+        run_upload(&state, &user, body, bytes, pasted)
+            .await
+            .map(|r| serde_json::to_value(&r).unwrap_or(serde_json::Value::Null))
+    }))
 }
 
 /// Shared completion for every vault upload path — the single-shot
