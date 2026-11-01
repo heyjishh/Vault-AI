@@ -1,10 +1,10 @@
 import { useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, FileText, FolderUp, Paperclip, Trash2, X } from 'lucide-react'
+import { ArrowLeft, Check, FileText, FolderUp, ListChecks, Paperclip, Trash2, X } from 'lucide-react'
 import { dashboardApi, mattersApi, vaultApi } from '../api/client'
 import { useSession } from '../stores/session'
 import { useAuth } from '../stores/auth'
-import { ConfirmDialog, EmptyState, Spinner, StatCard } from './ui'
+import { ConfirmDialog, DateChips, dateInRange, EmptyState, Pager, Spinner, StatCard, usePagination, type DateRange } from './ui'
 import { StatusPill } from './MattersPage'
 import AssistantPage from './AssistantPage'
 import InteractPage from './InteractPage'
@@ -156,7 +156,15 @@ function Overview({ matterId, notes }: { matterId: string; notes: string }) {
   )
 }
 
-function TimelineList({ items, loading, matterId }: { items: import('../api/types').TimelineItem[]; loading?: boolean; matterId?: string }) {
+function TimelineList({ items, loading, matterId, full = false }: {
+  items: import('../api/types').TimelineItem[]
+  loading?: boolean
+  matterId?: string
+  /** Piece 69: the History tab gets the Dashboard treatment —
+   *  date/kind filters, pagination and multi-select delete. The
+   *  Overview's "Recent history" preview stays the simple list. */
+  full?: boolean
+}) {
   const myEmail = useAuth((s) => s.user?.email)
   const toast = useSession((s) => s.toast)
   const qc = useQueryClient()
@@ -168,8 +176,22 @@ function TimelineList({ items, loading, matterId }: { items: import('../api/type
   // explicit confirm click.
   const [pending, setPending] = useState<import('../api/types').TimelineItem | null>(null)
   const [deleting, setDeleting] = useState(false)
+  // Piece 69 state (used only in full mode).
+  const [range, setRange] = useState<DateRange>('all')
+  const [kindFilter, setKindFilter] = useState('all')
+  const [selecting, setSelecting] = useState(false)
+  const [selected, setSelected] = useState<ReadonlySet<string>>(new Set())
+  const [confirmingBulk, setConfirmingBulk] = useState(false)
+  const [deletingBulk, setDeletingBulk] = useState(false)
+  const kinds = [...new Set(items.map((t) => t.kind))]
+  const filtered = full
+    ? items.filter((t) => dateInRange(t.at, range) && (kindFilter === 'all' || t.kind === kindFilter))
+    : items
+  const pg = usePagination(filtered, 5)
+  const shown = full ? pg.pageItems : items
   if (loading) return <Spinner />
   if (items.length === 0) return <EmptyState title="Nothing here yet" hint="Work done inside this brief will appear in its history." />
+  const deletable = (t: import('../api/types').TimelineItem) => !!t.id && !!myEmail && t.user_email === myEmail
   async function remove(id: string) {
     setDeleting(true)
     try {
@@ -184,12 +206,109 @@ function TimelineList({ items, loading, matterId }: { items: import('../api/type
       setPending(null)
     }
   }
+  function toggleSelect(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+  function exitSelecting() {
+    setSelecting(false)
+    setSelected(new Set())
+  }
+  async function deleteSelected() {
+    setDeletingBulk(true)
+    try {
+      const n = await dashboardApi.deleteActivities([...selected])
+      await qc.invalidateQueries({ queryKey: ['matter-timeline', matterId] })
+      await qc.invalidateQueries({ queryKey: ['dashboard'] })
+      toast('success', n === 1 ? '1 history entry deleted' : `${n} history entries deleted`)
+      setConfirmingBulk(false)
+      exitSelecting()
+    } catch (err) {
+      toast('error', `Could not delete: ${(err as Error).message}`)
+    } finally {
+      setDeletingBulk(false)
+    }
+  }
   return (
+    <div>
+      {full && (
+        <>
+          <div className="flex items-center gap-2 flex-wrap mb-3">
+            <DateChips value={range} onChange={(r) => { setRange(r); pg.setPage(1) }} />
+            <select
+              value={kindFilter}
+              onChange={(e) => { setKindFilter(e.target.value); pg.setPage(1) }}
+              className="rounded-lex border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] px-2.5 py-1.5 text-[12.5px] outline-none"
+              title="Filter by type"
+            >
+              <option value="all">All types</option>
+              {kinds.map((k) => <option key={k} value={k}>{KIND_LABEL[k] ?? k}</option>)}
+            </select>
+            {!selecting && filtered.some(deletable) && (
+              <button
+                onClick={() => setSelecting(true)}
+                title="Select several history entries to delete them together"
+                className="ml-auto flex items-center gap-1.5 rounded-lex border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] px-3 py-1.5 text-[12.5px] font-medium text-stone-500 dark:text-stone-400 hover:text-ink hover:border-stone-300 transition-colors"
+              >
+                <ListChecks size={13} /> Select
+              </button>
+            )}
+          </div>
+          {selecting && (
+            <div className="flex items-center gap-2 flex-wrap mb-3 rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] px-4 py-2.5">
+              <span className="text-[13px] font-medium">{selected.size} selected</span>
+              <button
+                onClick={() => setSelected((prev) => new Set([...prev, ...pg.pageItems.filter(deletable).map((t) => t.id as string)]))}
+                className="rounded-lex border border-stone-200 dark:border-white/10 px-2.5 py-1 text-[12px] text-stone-600 dark:text-stone-300 hover:text-ink hover:border-stone-300 transition-colors"
+              >
+                Select this page
+              </button>
+              <button
+                onClick={() => setSelected(new Set())}
+                disabled={selected.size === 0}
+                className="rounded-lex border border-stone-200 dark:border-white/10 px-2.5 py-1 text-[12px] text-stone-600 dark:text-stone-300 hover:text-ink hover:border-stone-300 transition-colors disabled:opacity-40"
+              >
+                Clear
+              </button>
+              <span className="ml-auto flex items-center gap-2">
+                <button
+                  onClick={() => setConfirmingBulk(true)}
+                  disabled={selected.size === 0}
+                  className="flex items-center gap-1.5 rounded-lex bg-[#a02c2c] text-white px-3 py-1.5 text-[12.5px] font-medium hover:bg-[#8a2424] transition-colors disabled:opacity-40"
+                >
+                  <Trash2 size={13} /> Delete selected
+                </button>
+                <button
+                  onClick={exitSelecting}
+                  className="rounded-lex border border-stone-200 dark:border-white/10 px-3 py-1.5 text-[12.5px] text-stone-600 dark:text-stone-300 hover:text-ink hover:border-stone-300 transition-colors"
+                >
+                  Done
+                </button>
+              </span>
+            </div>
+          )}
+        </>
+      )}
+      {full && filtered.length === 0 ? (
+        <EmptyState title="Nothing in this period" hint="Try a wider date range or a different type — the brief's older history is still here." />
+      ) : (
     <div className="space-y-2">
-      {items.map((t, i) => {
-        const mine = !!t.id && !!myEmail && t.user_email === myEmail
+      {shown.map((t, i) => {
+        const mine = deletable(t)
+        const checked = !!t.id && selected.has(t.id)
         return (
-          <div key={t.id ?? i} className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] px-4 py-3 flex gap-3">
+          <div key={t.id ?? i} className={`rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] px-4 py-3 flex gap-3 ${checked ? 'bg-stone-100/70 dark:bg-white/5' : ''}`}>
+            {selecting && mine && t.id && (
+              <button onClick={() => toggleSelect(t.id as string)} title={checked ? 'Deselect this entry' : 'Select this entry'} className="shrink-0 self-start mt-0.5">
+                <span className={`w-[18px] h-[18px] rounded-[5px] border flex items-center justify-center transition-colors ${checked ? 'bg-ink border-ink text-ivory' : 'border-stone-300 dark:border-white/25 text-transparent'}`}>
+                  <Check size={12} strokeWidth={3} />
+                </span>
+              </button>
+            )}
             <div className="min-w-0 flex-1">
               <p className="text-[14px] font-medium truncate">{t.title}</p>
               {t.excerpt && <p className="text-[13px] text-stone-500 dark:text-stone-400 mt-0.5 line-clamp-2">{t.excerpt}</p>}
@@ -204,7 +323,7 @@ function TimelineList({ items, loading, matterId }: { items: import('../api/type
               <span className="text-[11px] font-medium text-stone-500 dark:text-stone-400 h-fit whitespace-nowrap">
                 {KIND_LABEL[t.kind] ?? t.kind}
               </span>
-              {mine && t.id && (
+              {mine && t.id && !selecting && (
                 <button
                   onClick={() => setPending(t)}
                   title="Delete this history entry"
@@ -217,6 +336,11 @@ function TimelineList({ items, loading, matterId }: { items: import('../api/type
           </div>
         )
       })}
+    </div>
+      )}
+      {full && filtered.length > 0 && (
+        <Pager page={pg.page} pages={pg.pages} from={pg.from} to={pg.to} total={pg.total} onPage={pg.setPage} />
+      )}
       {pending?.id && (
         <ConfirmDialog
           title="Delete this history entry permanently?"
@@ -226,13 +350,22 @@ function TimelineList({ items, loading, matterId }: { items: import('../api/type
           onCancel={() => setPending(null)}
         />
       )}
+      {confirmingBulk && (
+        <ConfirmDialog
+          title={`Delete ${selected.size} history ${selected.size === 1 ? 'entry' : 'entries'} permanently?`}
+          body="The selected entries will be removed from this brief's history for good. Your token usage and billing records are not affected."
+          busy={deletingBulk}
+          onConfirm={() => { void deleteSelected() }}
+          onCancel={() => setConfirmingBulk(false)}
+        />
+      )}
     </div>
   )
 }
 
 function History({ matterId }: { matterId: string }) {
   const timeline = useQuery({ queryKey: ['matter-timeline', matterId], queryFn: () => mattersApi.timeline(matterId) })
-  return <TimelineList items={timeline.data ?? []} loading={timeline.isLoading} matterId={matterId} />
+  return <TimelineList items={timeline.data ?? []} loading={timeline.isLoading} matterId={matterId} full />
 }
 
 function Documents({ matterId }: { matterId: string }) {
