@@ -14,6 +14,16 @@ live**, what is **built but unverified**, and what is **roadmap**.
 
 ## [Unreleased]
 
+### Changed
+- **No more + button — library pills like Refine (1 Nov 2026,
+  Piece 71).** JISHAN: "remove the plus button, and put prompt
+  and template should be look like refine button". Every chat
+  composer (Ask, Interact, Research, both Agents boxes) now
+  carries a **Prompts** pill styled exactly like the Refine
+  pill, opening the prompt library directly; **Draft** carries
+  both **Prompts** and **Templates** pills. The + button and
+  its menu (Pieces 65–66) are gone.
+
 ### Added
 - **Document-source connectors (1 Nov 2026, Piece 70).**
   JISHAN, pointing at Harvey's "Connected to everything that

@@ -1,79 +1,50 @@
 import { useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { BookOpen, LayoutTemplate, Plus, Search, Star, X } from 'lucide-react'
+import { BookOpen, LayoutTemplate, Search, Star, X } from 'lucide-react'
 import { promptsApi, type PromptItem } from '../api/client'
 import { TemplatePicker } from './TemplatePicker'
 
-/** Piece 65: the + button that lives in every chat input's toolbar
- *  (Ask, Interact, Draft, Research, both Agents boxes, the
- *  dashboard hero). JISHAN: prompt selection should come from a
- *  plus button in the input box, opening the library as a modal —
- *  in every section, not just Ask/Interact. (Piece 63 shipped the
- *  sidebar page + picker, but the composer wiring never landed;
- *  this replaces the planned chip with the + button he asked for.) */
-export function PromptPlusButton({ onPick, withTemplates = false }: {
+/** The Prompt library modal + the composers' library pills.
+ *  Piece 63 shipped the sidebar page + picker; Piece 65 wired
+ *  the picker into every chat input (then via a + button);
+ *  Piece 66 put the + behind a menu; Piece 71 (below) replaced
+ *  the + with explicit Refine-style pills, per JISHAN. */
+/** Piece 71: NO plus button (JISHAN: "remove the plus button,
+ *  and put prompt and template should be look like refine
+ *  button"). The composers now carry explicit library pills
+ *  styled exactly like the Refine pill — a "Prompts" pill in
+ *  every chat input, plus a "Templates" pill in Draft only —
+ *  each opening its library modal directly. */
+export function ComposerLibraryButtons({ onPick, withTemplates = false }: {
   onPick: (body: string) => void
-  /** Piece 68: Draft only — the + menu also lists Templates,
-   *  which exist in Draft and nowhere else. */
+  /** Draft only — Templates exist in Draft and nowhere else. */
   withTemplates?: boolean
 }) {
-  // Piece 66: the + button opens a small MENU first (JISHAN: the
-  // library must not open directly — the menu will hold more
-  // things later); choosing "Prompts" in the menu opens the
-  // library modal. New + menu items belong in the list below.
-  const [menuOpen, setMenuOpen] = useState(false)
   const [pickerOpen, setPickerOpen] = useState(false)
   const [tplOpen, setTplOpen] = useState(false)
+  const pill = 'flex items-center gap-1.5 rounded-lex border border-stone-200 dark:border-white/10 px-2.5 py-1 text-[12px] text-stone-500 dark:text-stone-400 transition-colors hover:border-stone-300 hover:text-ink'
   return (
-    <span className="relative inline-flex">
+    <span className="inline-flex items-center gap-2">
       <button
         type="button"
-        onClick={() => setMenuOpen((v) => !v)}
-        title="Add to your message"
-        className="w-7 h-7 shrink-0 rounded-full border border-stone-300 dark:border-white/15 text-stone-500 dark:text-stone-300 flex items-center justify-center hover:text-ink hover:border-stone-400 dark:hover:border-white/30 transition-colors"
+        onClick={() => setPickerOpen(true)}
+        title="Insert from the prompt library"
+        className={pill}
       >
-        <Plus size={15} />
+        <BookOpen size={12} /> Prompts
       </button>
-      {menuOpen && (
-        <span className="menu-pop absolute bottom-full mb-1.5 left-0 z-20 w-60 rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] shadow-lex-md py-1">
-          <button
-            type="button"
-            onClick={() => { setMenuOpen(false); setPickerOpen(true) }}
-            className="w-full flex items-center gap-2.5 px-3.5 py-2 text-left hover:bg-stone-100 dark:hover:bg-white/10 transition-colors"
-          >
-            <BookOpen size={15} className="text-stone-500 dark:text-stone-400 shrink-0" />
-            <span>
-              <span className="block text-[13px] font-medium">Prompts</span>
-              <span className="block text-[11.5px] text-stone-400 dark:text-stone-500">Insert from the prompt library</span>
-            </span>
-          </button>
-          {withTemplates && (
-            <button
-              type="button"
-              onClick={() => { setMenuOpen(false); setTplOpen(true) }}
-              className="w-full flex items-center gap-2.5 px-3.5 py-2 text-left hover:bg-stone-100 dark:hover:bg-white/10 transition-colors"
-            >
-              <LayoutTemplate size={15} className="text-stone-500 dark:text-stone-400 shrink-0" />
-              <span>
-                <span className="block text-[13px] font-medium">Templates</span>
-                <span className="block text-[11.5px] text-stone-400 dark:text-stone-500">Use a drafting template</span>
-              </span>
-            </button>
-          )}
-        </span>
+      {withTemplates && (
+        <button
+          type="button"
+          onClick={() => setTplOpen(true)}
+          title="Use a drafting template"
+          className={pill}
+        >
+          <LayoutTemplate size={12} /> Templates
+        </button>
       )}
-      {pickerOpen && (
-        <PromptPicker
-          onClose={() => setPickerOpen(false)}
-          onUse={(body) => { onPick(body); setPickerOpen(false) }}
-        />
-      )}
-      {tplOpen && (
-        <TemplatePicker
-          onClose={() => setTplOpen(false)}
-          onUse={(body) => { onPick(body); setTplOpen(false) }}
-        />
-      )}
+      {pickerOpen && <PromptPicker onUse={onPick} onClose={() => setPickerOpen(false)} />}
+      {tplOpen && <TemplatePicker onUse={onPick} onClose={() => setTplOpen(false)} />}
     </span>
   )
 }

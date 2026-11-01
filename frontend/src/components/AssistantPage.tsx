@@ -9,7 +9,7 @@ import { useQuery } from '@tanstack/react-query'
 import { mattersApi, openOriginalDocument, privateVaultApi, publicSettingsApi, queryStream, ragApi } from '../api/client'
 import AssistantAvatar from './AssistantAvatar'
 import { RefineControls, useRefine, type RefineCtl } from './RefineControls'
-import { PromptPlusButton, promptInsert } from './PromptPicker'
+import { ComposerLibraryButtons, promptInsert } from './PromptPicker'
 import { SourceModal, citeMarkdownComponents, linkifyCitations } from './SourceModal'
 import { ResponseDownload, exportCitations } from './ResponseDownload'
 import { DocInsightButton } from './DocInsight'
@@ -816,7 +816,7 @@ function Composer(props: {
       />
       <div className="flex items-center justify-between px-3 pb-3">
         <div className="flex items-center gap-2">
-          <PromptPlusButton onPick={promptInsert(input, setInput, 'ask-composer-input')} />
+          <ComposerLibraryButtons onPick={promptInsert(input, setInput, 'ask-composer-input')} />
           <button
             onClick={() => setWeb(!web)}
             title="Blend live web results into the answer"

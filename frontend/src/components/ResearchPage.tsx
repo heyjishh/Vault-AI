@@ -4,7 +4,7 @@ import { FlaskConical, Globe, Lightbulb, AlertTriangle } from 'lucide-react'
 import { ragApi } from '../api/client'
 import { useSession } from '../stores/session'
 import { RefineControls, useRefine } from './RefineControls'
-import { PromptPlusButton, promptInsert } from './PromptPicker'
+import { ComposerLibraryButtons, promptInsert } from './PromptPicker'
 import type { ResearchReport } from '../api/types'
 import { CitationCard, Spinner, StatusBadge } from './ui'
 import { CitedText, SourceModal } from './SourceModal'
@@ -59,7 +59,7 @@ export default function ResearchPage({ go }: { go?: (view: string) => void } = {
         />
         <div className="flex items-center justify-between px-3 pb-3 pt-1">
           <div className="flex items-center gap-2">
-            <PromptPlusButton onPick={promptInsert(q, setQ, 'research-input')} />
+            <ComposerLibraryButtons onPick={promptInsert(q, setQ, 'research-input')} />
             <button
               onClick={() => setWeb(!web)}
               className={`flex items-center gap-1.5 rounded-lex border px-2.5 py-1 text-meta transition-colors ${
