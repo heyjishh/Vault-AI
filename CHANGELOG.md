@@ -15,6 +15,53 @@ live**, what is **built but unverified**, and what is **roadmap**.
 ## [Unreleased]
 
 ### Added
+- **Document-source connectors (1 Nov 2026, Piece 70).**
+  JISHAN, pointing at Harvey's "Connected to everything that
+  matters": connectors like SharePoint, Google Drive, OneDrive.
+  New **Connectors** sidebar tab: Google Drive, OneDrive
+  (Microsoft) and Dropbox connect via OAuth (per-user tokens in
+  `data/connectors.json`, refreshed transparently), then a file
+  browser with search imports any file into the Vault through
+  the exact upload pipeline (indexing, original retention,
+  filing, billing); Google Workspace files export as PDF on
+  import. Each provider needs an OAuth app registered by the
+  operator — credentials come from the environment / `.env`
+  (`GOOGLE_CLIENT_ID`/`_SECRET`, `MICROSOFT_*`, `DROPBOX_*`) or
+  `data/connector_apps.json`, redirect URI
+  `{LEGAL_RAG_PUBLIC_URL}/api/v1/connectors/{provider}/callback`;
+  unconfigured providers say "setup required" in the UI.
+  SharePoint rides the Microsoft connection (Graph) — noted on
+  its card, site picker next. NetDocuments is partner-only: its
+  API requires a NetDocuments partnership, so its card says so
+  instead of faking a connect button.
+- **Brief history parity with the Dashboard (1 Nov 2026,
+  Piece 69).** JISHAN: a brief's History tab had no pagination,
+  no multi-delete and no filters. It now has the Dashboard's
+  full treatment: date-range chips (All time / Today / This
+  week / This month), a type filter, 5-per-page pagination with
+  the same "Showing X–Y of Z" pager, and a Select mode with
+  checkboxes, Select-this-page, and Delete selected behind the
+  typed-DELETE consent — reusing the bulk-delete endpoint; only
+  the user's own activity entries are selectable (system items
+  like "Document filed" and other members' entries stay
+  untouchable, as before). The Overview's "Recent history"
+  preview remains the simple 6-item list.
+- **Template Library — Draft only (1 Nov 2026, Piece 68).**
+  JISHAN: add a Templates section the same as Prompts — a new
+  sidebar tab — and templates should exist only in Draft.
+  Shipped as the prompt library's twin: a **Templates page** in
+  the sidebar (Juris Vault Collection of 12 curated drafting
+  templates — legal notices, NDA, services agreement, plaint and
+  written-statement skeletons, affidavit of evidence, board
+  resolution, offer and termination letters — by category, plus
+  My Templates with Created By Me / Starred / Shared With Me,
+  search, Preview, create/edit/share, typed-DELETE delete) backed
+  by its own store and `/api/v1/templates` endpoints with the
+  same ownership rules. In the app, templates appear **only in
+  Draft**: its + menu gains a Templates item (Ask, Interact,
+  Research and Agents keep Prompts only), and picking one — or
+  "Use" on the Templates page — loads the template into the
+  Draft instructions, highlighted, ready to fill and generate.
 - **Dashboard hero tidy-up (1 Nov 2026, Piece 67).** Per
   JISHAN's screenshot: the prompt + button is removed from the
   Dashboard hero box (it stays in the actual chat inputs — Ask,
