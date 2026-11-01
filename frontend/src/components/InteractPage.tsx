@@ -7,6 +7,7 @@ import { createApi, privateVaultApi, vaultApi, type InteractDocumentResult, type
 import type { Citation } from '../api/types'
 import { useSession } from '../stores/session'
 import { RefineControls, useRefine } from './RefineControls'
+import { PromptPlusButton, promptInsert } from './PromptPicker'
 import AssistantAvatar from './AssistantAvatar'
 import { SourceModal, citeMarkdownComponents, linkifyCitations } from './SourceModal'
 import { ResponseDownload, exportCitations } from './ResponseDownload'
@@ -593,6 +594,7 @@ export default function InteractPage({ matterId, go }: { matterId?: string; go?:
       {/* ---- Composer (Ask-style) ---- */}
       <div className="running-border mt-5 rounded-lex-lg border border-stone-300 dark:border-white/10 bg-white dark:bg-[#0a1a12]">
         <textarea
+          id="interact-input"
           value={question}
           onChange={(e) => setQuestion(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat() } }}
@@ -606,6 +608,7 @@ export default function InteractPage({ matterId, go }: { matterId?: string; go?:
         />
         <div className="flex items-center justify-between px-3 pb-3">
           <div className="flex items-center gap-2">
+            <PromptPlusButton onPick={promptInsert(question, setQuestion, 'interact-input')} />
             <span className="inline-flex items-center gap-1.5 rounded-lex bg-ink text-ivory px-2.5 py-1 text-[12px]">
               {source === 'private' ? <Lock size={13} /> : source === 'both' ? <Briefcase size={13} /> : <FileSearch size={13} />}
               {SOURCES.find((s) => s.id === source)?.label}

@@ -6,6 +6,7 @@ import { Bot, ChevronDown, Compass, Play } from 'lucide-react'
 import { mattersApi, ragApi } from '../api/client'
 import { useSession } from '../stores/session'
 import { RefineControls, useRefine } from './RefineControls'
+import { PromptPlusButton, promptInsert } from './PromptPicker'
 import type { AutonomousRun, Citation, WorkflowDef, WorkflowRun } from '../api/types'
 import { CitationCard, EmptyState, Spinner } from './ui'
 import { CitedText, SourceModal, citeMarkdownComponents, linkifyCitations } from './SourceModal'
@@ -105,12 +106,14 @@ export default function AgentsPage({ go }: { go?: (view: string) => void } = {})
           <label className="block text-meta font-medium text-stone-600 dark:text-stone-300 mb-1.5">{selected.input_label}</label>
           <div className="running-border rounded-lex-lg border border-stone-300 dark:border-white/10 bg-white dark:bg-[#0a1a12]">
           <textarea
+            id="agents-workflow-input"
             value={input} onChange={(e) => setInput(e.target.value)} rows={4}
             placeholder="Paste the contract text, deal summary, or legal question…"
             className="w-full resize-none px-4 pt-4 pb-2 text-[15px] outline-none placeholder:text-stone-400 bg-transparent"
           />
           <div className="flex items-center justify-between px-3 pb-3 pt-1">
             <div className="flex items-center gap-3">
+              <PromptPlusButton onPick={promptInsert(input, setInput, 'agents-workflow-input')} />
               <p className="text-meta text-stone-400 dark:text-stone-500">Steps: {selected.steps.map((s) => s.name).join(' → ')}</p>
               <RefineControls ctl={refineWf} disabled={!input.trim()} />
             </div>
@@ -134,11 +137,13 @@ export default function AgentsPage({ go }: { go?: (view: string) => void } = {})
         </p>
         <div className="running-border mt-3 rounded-lex-lg border border-stone-300 dark:border-white/10 bg-white dark:bg-[#0a1a12]">
         <textarea
+          id="agents-goal-input"
           value={goal} onChange={(e) => setGoal(e.target.value)} rows={3}
           placeholder="e.g. What does the vault say about compensation for delayed possession, and what is the current law on the web?"
           className="w-full resize-none px-4 pt-4 pb-2 text-[15px] outline-none placeholder:text-stone-400 bg-transparent"
         />
         <div className="flex flex-wrap items-center gap-3 px-3 pb-3 pt-1">
+          <PromptPlusButton onPick={promptInsert(goal, setGoal, 'agents-goal-input')} />
           <select value={autoMatter} onChange={(e) => setAutoMatter(e.target.value)}
             className="rounded-lex border border-stone-300 dark:border-white/10 px-2.5 py-2 text-meta2 bg-white dark:bg-[#0a1a12] outline-none focus:border-ink max-w-[220px]">
             <option value="">Whole vault</option>

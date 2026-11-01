@@ -1,21 +1,26 @@
 import { useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { BookOpen, Search, Star, X } from 'lucide-react'
+import { BookOpen, Plus, Search, Star, X } from 'lucide-react'
 import { promptsApi, type PromptItem } from '../api/client'
 
-/** Piece 63: the Prompts chip that sits in a chat composer (Ask,
- *  Interact) and opens the library picker — the input-box entry point
- *  JISHAN asked for, mirroring the reference product's Prompts button. */
-export function PromptsButton({ onPick }: { onPick: (body: string) => void }) {
+/** Piece 65: the + button that lives in every chat input's toolbar
+ *  (Ask, Interact, Draft, Research, both Agents boxes, the
+ *  dashboard hero). JISHAN: prompt selection should come from a
+ *  plus button in the input box, opening the library as a modal —
+ *  in every section, not just Ask/Interact. (Piece 63 shipped the
+ *  sidebar page + picker, but the composer wiring never landed;
+ *  this replaces the planned chip with the + button he asked for.) */
+export function PromptPlusButton({ onPick }: { onPick: (body: string) => void }) {
   const [open, setOpen] = useState(false)
   return (
     <>
       <button
+        type="button"
         onClick={() => setOpen(true)}
         title="Insert a prompt from the library"
-        className="flex items-center gap-1.5 rounded-lex border px-2.5 py-1 text-[12px] transition-colors border-stone-200 dark:border-white/10 text-stone-500 dark:text-stone-400 hover:text-ink hover:border-stone-300"
+        className="w-7 h-7 shrink-0 rounded-full border border-stone-300 dark:border-white/15 text-stone-500 dark:text-stone-300 flex items-center justify-center hover:text-ink hover:border-stone-400 dark:hover:border-white/30 transition-colors"
       >
-        <BookOpen size={13} /> Prompts
+        <Plus size={15} />
       </button>
       {open && (
         <PromptPicker
@@ -25,6 +30,29 @@ export function PromptsButton({ onPick }: { onPick: (body: string) => void }) {
       )}
     </>
   )
+}
+
+/** Build the pick handler for a composer: appends the prompt to the
+ *  input's current text (or fills an empty input), then focuses the
+ *  field and HIGHLIGHTS the inserted prompt text in the input, as
+ *  JISHAN asked — the selection shows exactly what was inserted and
+ *  typing replaces it. */
+export function promptInsert(
+  current: string,
+  setValue: (v: string) => void,
+  elementId: string,
+): (body: string) => void {
+  return (body: string) => {
+    const prefix = current.trim() ? `${current.replace(/\s+$/, '')}\n` : ''
+    const next = prefix + body
+    setValue(next)
+    window.setTimeout(() => {
+      const el = document.getElementById(elementId) as HTMLTextAreaElement | HTMLInputElement | null
+      if (!el) return
+      el.focus()
+      try { el.setSelectionRange(prefix.length, next.length) } catch { /* input type rejects selection */ }
+    }, 40)
+  }
 }
 
 export function promptInGroup(p: PromptItem, group: string): boolean {

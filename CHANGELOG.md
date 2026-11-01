@@ -15,6 +15,47 @@ live**, what is **built but unverified**, and what is **roadmap**.
 ## [Unreleased]
 
 ### Added
+- **Prompt + button in every chat input (1 Nov 2026, Piece 65).**
+  JISHAN: prompt selection was not appearing in the sections —
+  Ask, Draft, Interact, Agents — and it should come from a plus
+  button in the input box, with the chosen prompt highlighted in
+  the input. (Piece 63 shipped the library, the sidebar page and
+  the picker modal, but the composer wiring never actually
+  landed.) Now every chat input carries a round **+ button** in
+  its toolbar — Ask, Interact, Draft, Research, both Agents boxes
+  (workflow input and autonomous goal) and the Dashboard hero —
+  opening the same Prompt Library modal; picking a prompt appends
+  it to the input's text and the inserted text is **highlighted
+  (selected) in the input**, so it's obvious what was inserted
+  and typing replaces it. "Use" on the Prompts page now also
+  works as intended: Ask opens with the prompt filled in and
+  highlighted. The sidebar library is unchanged. Also at his
+  direction, the duplicated stats line under the Dashboard
+  greeting ("…tokens left this period · N documents in your
+  vault · N briefs") is removed — the same figures are shown in
+  the cards below it; and the greeting name is sentence-cased
+  ("Good afternoon, Admin", not "admin").
+- **History pagination fix + multi-select delete (1 Nov 2026,
+  Piece 64).** JISHAN: the history pager's "Showing 26–30 of 60"
+  was not the correct history number, and history needs a
+  multi-select delete. Root cause of the number: the dashboard
+  API returned `recent_activity` as a separate **60-entry window**
+  while the section's counts were computed over 500 — so "of 60"
+  was the cap, not his history, older entries were unreachable,
+  and deleting rows made hidden ones pop in. The API now returns
+  the same list the counts are computed from, so the pager's
+  total is the real history count. Multi-select: the history
+  section gains a **Select** mode — a checkbox on every row
+  (clicking a row toggles it), a selection bar with the count,
+  Select-this-page and Clear, and **Delete selected** behind the
+  shared typed-DELETE consent dialog. Backed by a new bulk
+  endpoint (`POST /api/v1/dashboard/activity/delete-many`) with
+  the store's usual ownership rules: only the caller's own
+  entries are removed, system purge records never, foreign or
+  unknown ids skipped; the response reports how many went.
+  Billing/token-usage records are untouched, as with the
+  single-entry delete. One new store test; the full workspace
+  suite is green (274 tests); verified live.
 - **Prompt Library (1 Nov 2026, Piece 63).** JISHAN pointed at a
   reference product's prompt library (photos: a library modal with
   a curated collection by category + My Prompts, and a Prompts

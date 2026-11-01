@@ -6,6 +6,7 @@ import { Copy, Download, PenLine } from 'lucide-react'
 import { createApi, type DraftResponse } from '../api/client'
 import type { Citation } from '../api/types'
 import { RefineControls, useRefine } from './RefineControls'
+import { PromptPlusButton, promptInsert } from './PromptPicker'
 import { CitationCard, EmptyState, Spinner } from './ui'
 import { SourceModal, citeMarkdownComponents, linkifyCitations } from './SourceModal'
 import { useSession } from '../stores/session'
@@ -87,6 +88,7 @@ export default function DraftPage({ matterId: fixedMatterId, go }: { matterId?: 
         </div>
         <div className="running-border mt-4 rounded-lex-lg border border-stone-300 dark:border-white/10 bg-white dark:bg-[#0a1a12]">
           <textarea
+            id="draft-input"
             value={instructions}
             onChange={(e) => setInstructions(e.target.value)}
             rows={5}
@@ -95,6 +97,7 @@ export default function DraftPage({ matterId: fixedMatterId, go }: { matterId?: 
           />
           <div className="flex items-center justify-between px-3 pb-3 pt-1 flex-wrap gap-3">
           <div className="flex items-center gap-3 flex-wrap">
+            <PromptPlusButton onPick={promptInsert(instructions, setInstructions, 'draft-input')} />
             <label className="flex items-center gap-2 text-[13.5px] text-stone-600 dark:text-stone-300">
               <input type="checkbox" checked={useCorpus} onChange={(e) => setUseCorpus(e.target.checked)} className="accent-[#0f0e0d]" />
               Ground in the vault (search sources first, cite them in the draft)

@@ -1,13 +1,14 @@
 import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  ArrowRight, ArrowUp, Bot, Briefcase, FileSearch, FlaskConical, Lock, MessageSquare, PenLine, Sparkles, Trash2, Upload,
+  ArrowRight, ArrowUp, Bot, Briefcase, Check, FileSearch, FlaskConical, ListChecks, Lock, MessageSquare, PenLine, Sparkles, Trash2, Upload,
 } from 'lucide-react'
 import { dashboardApi, mattersApi, type ActivityEvent } from '../api/client'
 import { useAuth } from '../stores/auth'
 import { useSession } from '../stores/session'
 import type { View } from './AppShell'
 import AssistantAvatar from './AssistantAvatar'
+import { PromptPlusButton, promptInsert } from './PromptPicker'
 import { ConfirmDialog, DateChips, dateInRange, EmptyState, Pager, Spinner, usePagination, type DateRange } from './ui'
 
 const KIND_META: Record<string, { label: string; icon: React.ElementType; view: View }> = {
@@ -54,7 +55,15 @@ const ACTIONS: { view: View; icon: React.ElementType; title: string; hint: strin
   { view: 'private', icon: Lock, title: 'Private Vault', hint: 'Sealed documents only you can open' },
 ]
 
-function ActivityRow({ e, go }: { e: ActivityEvent; go: (v: View) => void }) {
+function ActivityRow({ e, go, selecting = false, checked = false, onToggle }: {
+  e: ActivityEvent
+  go: (v: View) => void
+  /** Piece 64: multi-select mode — rows show a checkbox and a click
+   *  toggles selection instead of opening the entry. */
+  selecting?: boolean
+  checked?: boolean
+  onToggle?: (id: string) => void
+}) {
   const meta = KIND_META[e.kind] ?? KIND_META.query
   const Icon = meta.icon
   const setRestore = useSession((s) => s.setRestore)
@@ -91,9 +100,20 @@ function ActivityRow({ e, go }: { e: ActivityEvent; go: (v: View) => void }) {
     go(meta.view)
   }
   return (
-    <div className="flex items-start border-b border-stone-100 dark:border-white/10 last:border-0 hover:bg-ivory transition-colors">
+    <div className={`flex items-start border-b border-stone-100 dark:border-white/10 last:border-0 hover:bg-ivory transition-colors ${checked ? 'bg-stone-100/70 dark:bg-white/5' : ''}`}>
+      {selecting && (
+        <button
+          onClick={() => onToggle?.(e.id)}
+          title={checked ? 'Deselect this entry' : 'Select this entry'}
+          className="ml-4 mt-[18px] shrink-0"
+        >
+          <span className={`w-[18px] h-[18px] rounded-[5px] border flex items-center justify-center transition-colors ${checked ? 'bg-ink border-ink text-ivory' : 'border-stone-300 dark:border-white/25 text-transparent'}`}>
+            <Check size={12} strokeWidth={3} />
+          </span>
+        </button>
+      )}
       <button
-        onClick={open}
+        onClick={() => (selecting ? onToggle?.(e.id) : open())}
         className="min-w-0 flex-1 text-left px-5 py-3.5 flex gap-3.5"
       >
         <span className="w-8 h-8 rounded-full bg-ivory dark:bg-[#14120f] border border-stone-200 dark:border-white/10 flex items-center justify-center shrink-0 mt-0.5">
@@ -114,13 +134,15 @@ function ActivityRow({ e, go }: { e: ActivityEvent; go: (v: View) => void }) {
           </span>
         </span>
       </button>
-      <button
-        onClick={() => setConfirming(true)}
-        title="Delete this history entry"
-        className="mr-4 mt-3.5 shrink-0 p-1.5 rounded-lex text-stone-400 dark:text-stone-500 hover:text-[#a02c2c] hover:bg-stone-100 dark:hover:bg-white/10 transition-colors"
-      >
-        <Trash2 size={14} />
-      </button>
+      {!selecting && (
+        <button
+          onClick={() => setConfirming(true)}
+          title="Delete this history entry"
+          className="mr-4 mt-3.5 shrink-0 p-1.5 rounded-lex text-stone-400 dark:text-stone-500 hover:text-[#a02c2c] hover:bg-stone-100 dark:hover:bg-white/10 transition-colors"
+        >
+          <Trash2 size={14} />
+        </button>
+      )}
       {confirming && (
         <ConfirmDialog
           title="Delete this history entry permanently?"
@@ -175,13 +197,49 @@ export default function DashboardPage({ go, openMatter }: { go: (v: View) => voi
   const [range, setRange] = useState<DateRange>('all')
   const filteredActivity = (dash.data?.recent_activity ?? []).filter((e) => dateInRange(e.created_at, range))
   const act = usePagination(filteredActivity, 5)
+  // Piece 64: multi-select delete for the history list.
+  const qc = useQueryClient()
+  const toast = useSession((s) => s.toast)
+  const [selecting, setSelecting] = useState(false)
+  const [selected, setSelected] = useState<ReadonlySet<string>>(new Set())
+  const [confirmingBulk, setConfirmingBulk] = useState(false)
+  const [deletingBulk, setDeletingBulk] = useState(false)
+  function toggleSelect(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+  function exitSelecting() {
+    setSelecting(false)
+    setSelected(new Set())
+  }
+  async function deleteSelected() {
+    setDeletingBulk(true)
+    try {
+      const n = await dashboardApi.deleteActivities([...selected])
+      await qc.invalidateQueries({ queryKey: ['dashboard'] })
+      toast('success', n === 1 ? '1 history entry deleted' : `${n} history entries deleted`)
+      setConfirmingBulk(false)
+      exitSelecting()
+    } catch (err) {
+      toast('error', `Could not delete: ${(err as Error).message}`)
+    } finally {
+      setDeletingBulk(false)
+    }
+  }
 
   if (dash.isLoading) return <Spinner label="Loading your dashboard…" />
   if (dash.isError || !dash.data) return <EmptyState title="Dashboard unavailable" hint="Please try again in a moment." />
   const d = dash.data
   const pct = Math.min(100, Math.round((d.tokens_used / Math.max(1, d.token_quota)) * 100))
   const remaining = Math.max(0, d.token_quota - d.tokens_used)
-  const firstName = (user?.email ?? 'there').split('@')[0]
+  // Sentence case for the greeting name (JISHAN, 1 Nov): the email
+  // prefix arrives lowercase ("admin") — display "Admin".
+  const rawName = (user?.email ?? 'there').split('@')[0]
+  const firstName = rawName ? rawName.charAt(0).toUpperCase() + rawName.slice(1) : 'there'
   const isFree = d.plan_id === 'free'
 
   const askNow = (q: string) => {
@@ -207,9 +265,6 @@ export default function DashboardPage({ go, openMatter }: { go: (v: View) => voi
             <h1 className="font-display text-[30px] leading-tight tracking-tight">
               {greeting()}, {firstName}
             </h1>
-            <p className="text-stone-500 dark:text-stone-400 mt-1 text-[14px]">
-              {remaining.toLocaleString('en-IN')} tokens left this period · {d.documents.length} documents in your vault · {(matters.data ?? []).length} briefs
-            </p>
             <p className="text-stone-500 dark:text-stone-400 mt-1 text-[14.5px] max-w-xl">
               I'm <span className="font-semibold text-ink dark:text-[#f4f2ee]">Clause</span>, your legal research companion.
               Ask me anything across your briefs and vault — every answer cited to its source.
@@ -219,7 +274,9 @@ export default function DashboardPage({ go, openMatter }: { go: (v: View) => voi
               onSubmit={(e) => { e.preventDefault(); askNow(heroQ) }}
             >
               <Sparkles size={15} className="text-stone-400 dark:text-stone-500 shrink-0" />
+              <PromptPlusButton onPick={promptInsert(heroQ, setHeroQ, 'dashboard-hero-input')} />
               <input
+                id="dashboard-hero-input"
                 value={heroQ}
                 onChange={(e) => setHeroQ(e.target.value)}
                 placeholder="Ask Clause anything…"
@@ -314,8 +371,52 @@ export default function DashboardPage({ go, openMatter }: { go: (v: View) => voi
         <div className="lg:col-span-3">
           <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
             <h2 className="font-display text-xl">Pick up where you left off</h2>
-            <DateChips value={range} onChange={(r) => { setRange(r); act.setPage(1) }} />
+            <div className="flex items-center gap-2 flex-wrap">
+              <DateChips value={range} onChange={(r) => { setRange(r); act.setPage(1) }} />
+              {!selecting && filteredActivity.length > 0 && (
+                <button
+                  onClick={() => setSelecting(true)}
+                  title="Select several history entries to delete them together"
+                  className="flex items-center gap-1.5 rounded-lex border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] px-3 py-1.5 text-[12.5px] font-medium text-stone-500 dark:text-stone-400 hover:text-ink hover:border-stone-300 transition-colors"
+                >
+                  <ListChecks size={13} /> Select
+                </button>
+              )}
+            </div>
           </div>
+          {selecting && (
+            <div className="flex items-center gap-2 flex-wrap mb-3 rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] px-4 py-2.5">
+              <span className="text-[13px] font-medium">{selected.size} selected</span>
+              <button
+                onClick={() => setSelected((prev) => new Set([...prev, ...act.pageItems.map((e) => e.id)]))}
+                className="rounded-lex border border-stone-200 dark:border-white/10 px-2.5 py-1 text-[12px] text-stone-600 dark:text-stone-300 hover:text-ink hover:border-stone-300 transition-colors"
+              >
+                Select this page
+              </button>
+              <button
+                onClick={() => setSelected(new Set())}
+                disabled={selected.size === 0}
+                className="rounded-lex border border-stone-200 dark:border-white/10 px-2.5 py-1 text-[12px] text-stone-600 dark:text-stone-300 hover:text-ink hover:border-stone-300 transition-colors disabled:opacity-40"
+              >
+                Clear
+              </button>
+              <span className="ml-auto flex items-center gap-2">
+                <button
+                  onClick={() => setConfirmingBulk(true)}
+                  disabled={selected.size === 0}
+                  className="flex items-center gap-1.5 rounded-lex bg-[#a02c2c] text-white px-3 py-1.5 text-[12.5px] font-medium hover:bg-[#8a2424] transition-colors disabled:opacity-40"
+                >
+                  <Trash2 size={13} /> Delete selected
+                </button>
+                <button
+                  onClick={exitSelecting}
+                  className="rounded-lex border border-stone-200 dark:border-white/10 px-3 py-1.5 text-[12.5px] text-stone-600 dark:text-stone-300 hover:text-ink hover:border-stone-300 transition-colors"
+                >
+                  Done
+                </button>
+              </span>
+            </div>
+          )}
           {d.recent_activity.length === 0 ? (
             <EmptyState title="Nothing yet" hint="Ask Clause your first question and it will appear here." />
           ) : filteredActivity.length === 0 ? (
@@ -323,9 +424,23 @@ export default function DashboardPage({ go, openMatter }: { go: (v: View) => voi
           ) : (
             <>
               <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] overflow-hidden">
-                {act.pageItems.map((e) => <ActivityRow key={e.id} e={e} go={go} />)}
+                {act.pageItems.map((e) => (
+                  <ActivityRow
+                    key={e.id} e={e} go={go}
+                    selecting={selecting} checked={selected.has(e.id)} onToggle={toggleSelect}
+                  />
+                ))}
               </div>
               <Pager page={act.page} pages={act.pages} from={act.from} to={act.to} total={act.total} onPage={act.setPage} />
+              {confirmingBulk && (
+                <ConfirmDialog
+                  title={`Delete ${selected.size} history ${selected.size === 1 ? 'entry' : 'entries'} permanently?`}
+                  body="The selected entries will be removed from your history for good — they will no longer appear here or be restorable. Your token usage and billing records are not affected."
+                  busy={deletingBulk}
+                  onConfirm={() => { void deleteSelected() }}
+                  onCancel={() => setConfirmingBulk(false)}
+                />
+              )}
             </>
           )}
         </div>

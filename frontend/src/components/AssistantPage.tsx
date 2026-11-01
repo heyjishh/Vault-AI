@@ -9,6 +9,7 @@ import { useQuery } from '@tanstack/react-query'
 import { mattersApi, openOriginalDocument, privateVaultApi, publicSettingsApi, queryStream, ragApi } from '../api/client'
 import AssistantAvatar from './AssistantAvatar'
 import { RefineControls, useRefine, type RefineCtl } from './RefineControls'
+import { PromptPlusButton, promptInsert } from './PromptPicker'
 import { SourceModal, citeMarkdownComponents, linkifyCitations } from './SourceModal'
 import { ResponseDownload, exportCitations } from './ResponseDownload'
 import { DocInsightButton } from './DocInsight'
@@ -182,6 +183,23 @@ export default function AssistantPage({ matterId: fixedMatterId, go }: { matterI
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingQuestion])
+
+  // Piece 65: "Use" on the Prompts page seeds the Ask composer with
+  // the prompt, highlighted in the input.
+  useEffect(() => {
+    const seed = sessionStorage.getItem('jurisvault.promptSeed')
+    if (!seed) return
+    sessionStorage.removeItem('jurisvault.promptSeed')
+    setInput(seed)
+    window.setTimeout(() => {
+      const el = document.getElementById('ask-composer-input') as HTMLTextAreaElement | null
+      if (el) {
+        el.focus()
+        try { el.setSelectionRange(0, seed.length) } catch { /* noop */ }
+      }
+    }, 80)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // History restore: a dashboard click reopens the exact turn — original
   // answer, citations, and mode, with no new generation or billing.
@@ -787,6 +805,7 @@ function Composer(props: {
   return (
     <div className="running-border mt-8 rounded-lex-lg border border-stone-300 dark:border-white/10 bg-white dark:bg-[#0a1a12]">
       <textarea
+        id="ask-composer-input"
         value={input}
         onChange={(e) => setInput(e.target.value)}
         onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); onSubmit() } }}
@@ -797,6 +816,7 @@ function Composer(props: {
       />
       <div className="flex items-center justify-between px-3 pb-3">
         <div className="flex items-center gap-2">
+          <PromptPlusButton onPick={promptInsert(input, setInput, 'ask-composer-input')} />
           <button
             onClick={() => setWeb(!web)}
             title="Blend live web results into the answer"
