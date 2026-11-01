@@ -43,6 +43,22 @@ live**, what is **built but unverified**, and what is **roadmap**.
   facts; write fresh from the user's matter.
 
 ### Fixed
+- **Uploads orphaned by a restart no longer sit at
+  "processing" forever (2 Nov 2026, Piece 75).** Ingest runs
+  inside the server process, so when the process died
+  mid-upload (VM replacement / memory pressure), the upload's
+  status record stayed at "processing" permanently — the
+  stalled "57Th meeting of The GST Council.pdf" sat that way
+  from 1 Nov, one of 7 such ghosts on prod. At boot, before any
+  new upload can start, the server now sweeps every record
+  still marked processing/pending to **failed** with the error
+  "interrupted — the server restarted during this upload;
+  please re-upload the file". Documents themselves are
+  untouched. Verified live: the test instance's 6 ghost records
+  and all 7 prod ghosts (GST Council PDF and the Section 2 RTF
+  included) flipped on the new binary's first boot; workspace
+  suite green incl. a new unit test
+  (`sweep_interrupted_uploads_flips_only_stale_states`).
 - **Large uploads no longer die with 504 at the last step
   (1 Nov 2026, Piece 72).** JISHAN's
   `income-tax-act-1961-section-2.rtf` uploaded, then failed

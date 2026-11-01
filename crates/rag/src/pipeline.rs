@@ -480,6 +480,35 @@ impl RagAnything {
         *self.doc_status.write().expect("lock poisoned") = status;
     }
 
+    /// Piece 75: flip uploads orphaned mid-ingest to Failed.
+    /// Ingest runs inside this process, so at boot — before any new
+    /// upload starts — a record still marked Processing (or Pending)
+    /// can only belong to a previous process that died during that
+    /// upload (VM replacement / OOM kill). Without this sweep the
+    /// record sits at "processing" forever (the stalled GST Council
+    /// PDF, 2026-11-01) and the user waits on an upload that will
+    /// never finish. The document itself is untouched: only the
+    /// status record changes, and its error tells the user to
+    /// re-upload. Returns how many records were swept. Boot-only:
+    /// calling this while an ingest is live would mislabel it.
+    pub fn sweep_interrupted_uploads(&self) -> usize {
+        let now = Utc::now();
+        let mut map = self.doc_status.write().expect("lock poisoned");
+        let mut swept = 0;
+        for rec in map.values_mut() {
+            if matches!(rec.status, DocStatus::Processing | DocStatus::Pending) {
+                rec.status = DocStatus::Failed;
+                rec.error = Some(
+                    "interrupted — the server restarted during this upload; please re-upload the file"
+                        .to_string(),
+                );
+                rec.updated_at = now;
+                swept += 1;
+            }
+        }
+        swept
+    }
+
     pub fn list_documents(&self) -> Vec<DocumentInfo> {
         let mut docs: Vec<DocumentInfo> =
             self.documents.read().expect("lock poisoned").values().cloned().collect();
@@ -1660,6 +1689,45 @@ mod tests {
             500,
             50,
         )
+    }
+
+    #[test]
+    fn sweep_interrupted_uploads_flips_only_stale_states() {
+        // Piece 75: records a dead process left at Processing/Pending
+        // become Failed with a re-upload explanation; Ready and
+        // already-Failed records are untouched.
+        let r = rag();
+        let rec = |id: &str, status: DocStatus| DocStatusRecord {
+            doc_id: id.to_string(),
+            file_name: format!("{id}.pdf"),
+            status,
+            error: None,
+            chunks: 0,
+            modal_items: 0,
+            updated_at: Utc::now(),
+        };
+        let mut status = HashMap::new();
+        status.insert("doc-proc".to_string(), rec("doc-proc", DocStatus::Processing));
+        status.insert("doc-pend".to_string(), rec("doc-pend", DocStatus::Pending));
+        status.insert("doc-ready".to_string(), rec("doc-ready", DocStatus::Ready));
+        let mut failed = rec("doc-failed", DocStatus::Failed);
+        failed.error = Some("bad request: unsupported file type".to_string());
+        status.insert("doc-failed".to_string(), failed);
+        r.restore_documents(HashMap::new(), status);
+
+        assert_eq!(r.sweep_interrupted_uploads(), 2);
+        let proc = r.get_document_processing_status("doc-proc").unwrap();
+        assert_eq!(proc.status, DocStatus::Failed);
+        assert!(proc.error.unwrap().contains("interrupted"));
+        let pend = r.get_document_processing_status("doc-pend").unwrap();
+        assert_eq!(pend.status, DocStatus::Failed);
+        let ready = r.get_document_processing_status("doc-ready").unwrap();
+        assert_eq!(ready.status, DocStatus::Ready);
+        assert!(ready.error.is_none());
+        let failed = r.get_document_processing_status("doc-failed").unwrap();
+        assert_eq!(failed.error.as_deref(), Some("bad request: unsupported file type"));
+        // A second sweep is a no-op.
+        assert_eq!(r.sweep_interrupted_uploads(), 0);
     }
 
     #[test]

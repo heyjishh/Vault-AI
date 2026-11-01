@@ -678,6 +678,14 @@ async fn restore_snapshots(
                 .unwrap_or_default();
             rag.restore_documents(documents, status);
             info!("restored document registry snapshot");
+            // Piece 75: no ingest is running yet in this process, so
+            // any upload still marked processing was orphaned by the
+            // previous process dying mid-upload — mark it failed
+            // instead of leaving it "processing" forever.
+            let swept = rag.sweep_interrupted_uploads();
+            if swept > 0 {
+                info!(swept, "marked interrupted uploads as failed (server restarted mid-upload)");
+            }
         }
         Ok(None) => {}
         Err(e) => tracing::warn!(error = %e, "document snapshot load failed"),
