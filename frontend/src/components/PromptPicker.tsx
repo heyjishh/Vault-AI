@@ -11,24 +11,44 @@ import { promptsApi, type PromptItem } from '../api/client'
  *  sidebar page + picker, but the composer wiring never landed;
  *  this replaces the planned chip with the + button he asked for.) */
 export function PromptPlusButton({ onPick }: { onPick: (body: string) => void }) {
-  const [open, setOpen] = useState(false)
+  // Piece 66: the + button opens a small MENU first (JISHAN: the
+  // library must not open directly — the menu will hold more
+  // things later); choosing "Prompts" in the menu opens the
+  // library modal. New + menu items belong in the list below.
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [pickerOpen, setPickerOpen] = useState(false)
   return (
-    <>
+    <span className="relative inline-flex">
       <button
         type="button"
-        onClick={() => setOpen(true)}
-        title="Insert a prompt from the library"
+        onClick={() => setMenuOpen((v) => !v)}
+        title="Add to your message"
         className="w-7 h-7 shrink-0 rounded-full border border-stone-300 dark:border-white/15 text-stone-500 dark:text-stone-300 flex items-center justify-center hover:text-ink hover:border-stone-400 dark:hover:border-white/30 transition-colors"
       >
         <Plus size={15} />
       </button>
-      {open && (
+      {menuOpen && (
+        <span className="menu-pop absolute bottom-full mb-1.5 left-0 z-20 w-60 rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] shadow-lex-md py-1">
+          <button
+            type="button"
+            onClick={() => { setMenuOpen(false); setPickerOpen(true) }}
+            className="w-full flex items-center gap-2.5 px-3.5 py-2 text-left hover:bg-stone-100 dark:hover:bg-white/10 transition-colors"
+          >
+            <BookOpen size={15} className="text-stone-500 dark:text-stone-400 shrink-0" />
+            <span>
+              <span className="block text-[13px] font-medium">Prompts</span>
+              <span className="block text-[11.5px] text-stone-400 dark:text-stone-500">Insert from the prompt library</span>
+            </span>
+          </button>
+        </span>
+      )}
+      {pickerOpen && (
         <PromptPicker
-          onClose={() => setOpen(false)}
-          onUse={(body) => { onPick(body); setOpen(false) }}
+          onClose={() => setPickerOpen(false)}
+          onUse={(body) => { onPick(body); setPickerOpen(false) }}
         />
       )}
-    </>
+    </span>
   )
 }
 

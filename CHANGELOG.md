@@ -15,6 +15,14 @@ live**, what is **built but unverified**, and what is **roadmap**.
 ## [Unreleased]
 
 ### Added
+- **The + button opens a menu first (1 Nov 2026, Piece 66).**
+  JISHAN: clicking + should not open the Prompt Library
+  directly — the + opens a small menu listing **Prompts**
+  (with more items to come inside the + button later), and
+  only choosing Prompts opens the library modal. The menu uses
+  the composers' existing popover pattern and appears above
+  the + in every chat input; the insert-and-highlight behaviour
+  is unchanged.
 - **Prompt + button in every chat input (1 Nov 2026, Piece 65).**
   JISHAN: prompt selection was not appearing in the sections —
   Ask, Draft, Interact, Agents — and it should come from a plus
