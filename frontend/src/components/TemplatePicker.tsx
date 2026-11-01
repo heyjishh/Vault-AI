@@ -18,7 +18,7 @@ export function templateInGroup(p: TemplateItem, group: string): boolean {
 
 /** Piece 73: the format-only wrapper applied EVERY time a
  *  template is used (JISHAN's rule: whoever uses a template —
- *  in Draft today — takes ONLY its format and layout; no
+ *  in Draft or Interact — takes ONLY its format and layout; no
  *  template content may flow into the work). The instruction
  *  travels with the inserted text so the model sees the
  *  constraint next to the skeleton itself. */
@@ -31,11 +31,10 @@ export function templateUseText(body: string): string {
   ].join('\n')
 }
 
-/** The template picker modal — opened from Draft's Templates
- *  pill (the only place templates can be picked; JISHAN:
- *  templates exist in Draft only). Mirrors the prompt picker:
+/** The template picker modal — opened from the Templates pill
+ *  in Draft and Interact (Piece 74). Mirrors the prompt picker:
  *  search, group chips, star, Use inserts the template body
- *  (format-wrapped, Piece 73) into the Draft input. */
+ *  (format-wrapped, Piece 73) into the composer's input. */
 export function TemplatePicker({ onClose, onUse }: { onClose: () => void; onUse: (body: string) => void }) {
   const { data, isLoading } = useQuery({ queryKey: ['templates'], queryFn: templatesApi.list })
   const qc = useQueryClient()
