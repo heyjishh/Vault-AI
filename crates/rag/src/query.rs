@@ -253,6 +253,35 @@ impl AskOptions {
 }
 
 /// Scope note for a brief-vault answer that found in-brief evidence.
+/// Reconcile a cached answer's governing-authority line with a
+/// fresh V2 resolution (Piece 83). The fresh path appends the line
+/// as the answer's final paragraph ("Governing authority (V2): …"),
+/// so a trailing paragraph with that exact prefix is citator
+/// furniture, never answer prose: drop it, then append the fresh
+/// line when the new resolution has one. All other text is
+/// untouched, byte for byte.
+pub fn reconcile_governing_line(answer: &mut String, fresh: Option<&str>) {
+    let trimmed = answer.trim_end();
+    let stripped = if trimmed.starts_with("Governing authority (V2): ") {
+        ""
+    } else {
+        match trimmed.rfind("\n\n") {
+            Some(idx) if trimmed[idx + 2..].starts_with("Governing authority (V2): ") => {
+                &trimmed[..idx]
+            }
+            _ => trimmed,
+        }
+    };
+    let mut out = stripped.to_string();
+    if let Some(line) = fresh {
+        if !out.is_empty() {
+            out.push_str("\n\n");
+        }
+        out.push_str(line);
+    }
+    *answer = out;
+}
+
 pub fn brief_vault_note_hit(label: &str) -> String {
     format!("Workspace vault: answered only from {label}'s documents — the full vault was not searched.")
 }
@@ -1100,7 +1129,19 @@ impl QueryService {
     /// current edge set. Used for cache hits (edges may have landed
     /// after the answer was cached, e.g. via backfill) — verified
     /// annotations are never rewritten.
-    fn refresh_treatments(&self, answer: &mut QueryAnswer, scope: Option<&DocScope>, ctx: &CitatorContext) {
+    ///
+    /// Piece 83: the V2 half gets the SAME inputs as the fresh
+    /// path. Cached citations carry only positional `doc:N` ids,
+    /// so the real document ids are recovered through the chunk
+    /// store (each citation's chunk knows its document), letting
+    /// `v2_resolution_for` build the real metadata map and the
+    /// real→positional map instead of resolving over empty maps
+    /// by title inference. The governing-authority line is
+    /// reconciled too: a stale trailing line is replaced by the
+    /// fresh resolution's (or removed when nothing governs now).
+    /// Citation ORDER never moves — the cached text's [doc:N]
+    /// markers already fixed it.
+    async fn refresh_treatments(&self, answer: &mut QueryAnswer, scope: Option<&DocScope>, ctx: &CitatorContext) {
         if answer.verified {
             return;
         }
@@ -1120,21 +1161,33 @@ impl QueryService {
                 c.treatment = Some(crate::citator::CitationTreatment::unknown());
             }
         }
-        // V2 status refresh only (cache path): statuses may change, but
-        // citation order never moves — the cached text's [doc:N] markers
-        // already fixed the order.
+        // V2 refresh (cache path, Piece 83): full resolution over
+        // the recovered real document ids — the same core the fresh
+        // path and the orchestrated runs use.
         if crate::citator_v2::citator_v2_enabled() {
-            let edges = self.treatments.read().expect("lock poisoned").all();
-            let stored_v2 = self.v2_treatments.read().expect("lock poisoned").all();
-            // Cached citations lost their real document ids when they
-            // were built (positional "doc:N" only), so refresh falls
-            // back to title inference; fresh queries use stored
-            // metadata via prepare_context.
-            let meta_empty: std::collections::HashMap<String, crate::pipeline::DocMeta> =
-                std::collections::HashMap::new();
-            let map_empty: std::collections::HashMap<String, String> =
-                std::collections::HashMap::new();
-            let res = crate::citator_v2::resolve_v2(&answer.citations, &edges, &stored_v2, effective.as_ref(), &meta_empty, ctx, &map_empty);
+            let chunk_ids: Vec<String> = answer
+                .citations
+                .iter()
+                .filter(|c| c.doc_id.starts_with("doc:"))
+                .map(|c| c.chunk_id.clone())
+                .collect();
+            let records = self.store.get_by_ids(&chunk_ids).await.unwrap_or_default();
+            let by_chunk: std::collections::HashMap<&str, &str> = records
+                .iter()
+                .map(|r| (r.id.as_str(), r.doc_id.as_str()))
+                .collect();
+            let real_doc_ids: Vec<Option<String>> = answer
+                .citations
+                .iter()
+                .map(|c| {
+                    if c.doc_id.starts_with("doc:") {
+                        by_chunk.get(c.chunk_id.as_str()).map(|d| d.to_string())
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            let res = self.v2_resolution_for(&answer.citations, &real_doc_ids, effective.as_ref(), ctx);
             let by_id: std::collections::HashMap<&str, crate::citator::CitationTreatment> = res
                 .treatments
                 .iter()
@@ -1145,6 +1198,7 @@ impl QueryService {
                     c.treatment = Some(t.clone());
                 }
             }
+            reconcile_governing_line(&mut answer.answer, res.governing_line.as_deref());
         }
     }
 
@@ -2056,7 +2110,7 @@ impl QueryService {
                         info!("semantic answer cache hit (zero LLM cost)");
                         // Edges may have landed since this answer was
                         // cached (ingest / backfill): refresh statuses.
-                        self.refresh_treatments(&mut hit, scope.as_ref(), ctx);
+                        self.refresh_treatments(&mut hit, scope.as_ref(), ctx).await;
                         return Ok(hit);
                     }
                     cache_slot = Some((qvec, key));
@@ -2229,7 +2283,7 @@ impl QueryService {
                         }
                         // Same refresh as the blocking path: statuses
                         // track the current edge set, not cache time.
-                        self.refresh_treatments(&mut hit, scope.as_ref(), &ctx);
+                        self.refresh_treatments(&mut hit, scope.as_ref(), &ctx).await;
                         let _ = tx.send(QueryEvent::Sources {
                             citations: hit.citations.clone(),
                             mode,
@@ -4815,6 +4869,33 @@ mod tests {
         fn dims(&self) -> usize {
             2
         }
+    }
+
+    #[test]
+    fn governing_line_reconciliation() {
+        // Stale line replaced by the fresh one; prose untouched.
+        let mut a = "The notice was valid [doc:0].\n\nGoverning authority (V2): Old Case [High Court] — latest in chain.".to_string();
+        reconcile_governing_line(&mut a, Some("Governing authority (V2): New Case [Supreme Court] — highest binding forum."));
+        assert_eq!(
+            a,
+            "The notice was valid [doc:0].\n\nGoverning authority (V2): New Case [Supreme Court] — highest binding forum."
+        );
+        // Nothing governs now: the stale line is removed, not kept.
+        let mut b = "Answer text.\n\nGoverning authority (V2): Old Case [High Court] — latest in chain.".to_string();
+        reconcile_governing_line(&mut b, None);
+        assert_eq!(b, "Answer text.");
+        // No line before, fresh line appended.
+        let mut c = "Answer text.".to_string();
+        reconcile_governing_line(&mut c, Some("Governing authority (V2): New Case [Supreme Court] — highest binding forum."));
+        assert_eq!(
+            c,
+            "Answer text.\n\nGoverning authority (V2): New Case [Supreme Court] — highest binding forum."
+        );
+        // No line either way: byte-identical (including a paragraph
+        // that merely mentions governing authority mid-text).
+        let mut d = "Governing authority is discussed here.\n\nMore prose.".to_string();
+        reconcile_governing_line(&mut d, None);
+        assert_eq!(d, "Governing authority is discussed here.\n\nMore prose.");
     }
 
     /// LLM that answers differently on every call, so a cache hit is

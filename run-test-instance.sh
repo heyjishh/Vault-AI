@@ -12,4 +12,7 @@ export LEGAL_RAG_LLM_MODEL=gemini-3.6-flash
 export LEGAL_RAG_EMBEDDING_URL=http://127.0.0.1:8083/v1/embeddings
 export LEGAL_RAG_EMBEDDING_MODEL=BAAI/bge-m3
 export LEGAL_RAG_EMBEDDING_DIMS=1024
+# Citator V2 on for the test instance (Piece 83) — set here, in the
+# launch script, so restores stop wiping it.
+export LEGAL_RAG_CITATOR_V2=1
 exec ./target/release/legal-rag-server >> server-test.log 2>&1

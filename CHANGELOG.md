@@ -15,6 +15,34 @@ live**, what is **built but unverified**, and what is **roadmap**.
 ## [Unreleased]
 
 ### Added
+- **Citator V2 completed: cached answers get full V2 treatment, and
+  the flag is durable and on in prod (3 Nov 2026, Piece 83).**
+  The semantic-cache-hit path (`refresh_treatments` in
+  `crates/rag/src/query.rs`) previously ran its V2 half over empty
+  metadata maps — cached citations carry only positional `doc:N`
+  ids — so cached answers got title-inferred treatment only and
+  kept whatever governing line had been baked into the cached
+  text. It now recovers real document ids from each citation's
+  chunk id through the chunk store and runs the same V2
+  resolution core as the fresh path; citation order still never
+  moves (the cached text's `[doc:N]` markers fix it). A new
+  `reconcile_governing_line` step drops any stale trailing
+  "Governing authority (V2):" paragraph from the cached answer
+  and appends the fresh resolution's line (or none) — unit-tested
+  for replace / remove / append / no-op. Flag durability:
+  `LEGAL_RAG_CITATOR_V2=1` is now set in both launch paths
+  (`run-test-instance.sh` for :3001 and the prod launch line in
+  `restore-stack.sh`), so restores no longer wipe it, and prod
+  runs with V2 on from this piece. **Verified live on :3001**:
+  both instances restarted on the new binary with the flag
+  present in each process environment; a fresh Ask returned 4
+  citations each carrying a treatment object, and an immediate
+  repeat (semantic-cache hit, byte-identical answer) returned
+  the same 4 citations with treatments refreshed through the new
+  path. Honest limit: the test corpus has no real citator edges,
+  so treatments there resolve to "unknown" and no governing line
+  arises — the reconciliation branches are covered by unit
+  tests. Full workspace suite: **293 passed / 0 failed**.
 - **Connectors: full code-path audit + wiring proof + nonce
   hardening (3 Nov 2026, Piece 82).** Every connector path was
   audited end to end (provider defs, app config from env or
