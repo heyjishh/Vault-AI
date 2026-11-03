@@ -6,6 +6,7 @@
 //! - `/api/v1/knowledge/*` — RAG query over the indexed corpus
 
 pub mod activity;
+pub mod alerts;
 pub mod annotations;
 pub mod matters;
 pub mod originals;

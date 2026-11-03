@@ -6,6 +6,7 @@ import { useSession } from '../stores/session'
 import { useAuth } from '../stores/auth'
 import { ConfirmDialog, DateChips, dateInRange, EmptyState, Pager, Spinner, StatCard, usePagination, type DateRange } from './ui'
 import { StatusPill } from './MattersPage'
+import AlertsPanel from './AlertsPanel'
 import AssistantPage from './AssistantPage'
 import InteractPage from './InteractPage'
 import DraftPage from './DraftPage'
@@ -14,7 +15,7 @@ import {
   UPLOAD_FORMATS_HINT, MAX_BATCH_FILES, MAX_BATCH_FOLDERS, type ProgressItemView,
 } from './UploadProgress'
 
-const TABS = ['Overview', 'Documents', 'Knowledge', 'Intelligence', 'Draft', 'History', 'Notes'] as const
+const TABS = ['Overview', 'Documents', 'Knowledge', 'Intelligence', 'Draft', 'History', 'Alerts', 'Notes'] as const
 type Tab = (typeof TABS)[number]
 
 const KIND_LABEL: Record<string, string> = {
@@ -71,6 +72,7 @@ export default function MatterPage({ matterId, back, go }: { matterId: string; b
             {tab === 'Intelligence' && <InteractPage matterId={matterId} go={go} />}
             {tab === 'Draft' && <DraftPage matterId={matterId} />}
             {tab === 'History' && <History matterId={matterId} />}
+            {tab === 'Alerts' && <AlertsPanel matterId={matterId} />}
             {tab === 'Notes' && <Notes matterId={matterId} initial={m.notes} />}
           </div>
         </>

@@ -15,6 +15,28 @@ live**, what is **built but unverified**, and what is **roadmap**.
 ## [Unreleased]
 
 ### Added
+- **Workspace case/query alerts (3 Nov 2026, Piece 79).**
+  From Prism's Case/Query Alerts, at JISHAN's direction: a
+  watch anchored to a Workspace re-runs its question through
+  the same retrieval as Knowledge (corpus leg) plus a web
+  leg; citations it has never seen become hits in the
+  Workspace's new Alerts tab (unread badge, Check now, mark
+  read, two-step delete). The first check only sets the
+  baseline — a new watch never floods with what already
+  exists. Checks are deliberately unbilled (monitoring, like
+  the health watch), and a background loop re-checks each
+  watch every 6 hours. **Verified live** on :3001, twice
+  end-to-end: create → first check baselined (0 hits, both
+  legs ran) → a matching upload produced 3 new hits (the
+  corpus hit was the uploaded document itself) → mark-read
+  returned `{"read": true}` with the list showing unread 0
+  and all hits read → delete → list empty. The alerts route
+  is live on prod (auth-gated 401). Workspace suite 284
+  passed / 0 failed, including 3 new alerts-store tests.
+  Honest limit: the web leg inherits the reader proxy's
+  Cloudflare-challenge noise — 2 of the 3 hits in each run
+  were "Just a moment..." pages; the diff mechanism is
+  exact, the web source is the weak leg.
 - **Counter-argument brief workflow (3 Nov 2026,
   Piece 78).** A fourth builtin Agents workflow, taken from
   Prism's Counter Argument Generator at JISHAN's direction:

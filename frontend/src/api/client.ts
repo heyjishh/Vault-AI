@@ -4,6 +4,7 @@ import type {
   IngestReport, Matter, MatterDetail, MatterMemory, MatterSummary, PrivateDocMeta, PublicSettings,
   QueryAnswer, QueryMode, ResearchReport, SourceDocument, TimelineItem, TokenPair,
   WorkflowDef, WorkflowRun, AutonomousRun,
+  AlertCheckResult, WatchView,
 } from './types'
 
 const ACCESS_KEY = 'jurisvault.access'
@@ -697,6 +698,30 @@ export interface TemplateItem {
   updated_at: string
   mine: boolean
   starred: boolean
+}
+
+export const alertsApi = {
+  async list(matterId: string): Promise<{ watches: WatchView[] }> {
+    const r = await api.get<{ watches: WatchView[] }>(`/matters/${matterId}/alerts`); return r.data
+  },
+  async create(matterId: string, kind: string, text: string): Promise<WatchView> {
+    try {
+      const r = await api.post<WatchView>(`/matters/${matterId}/alerts`, { kind, text }); return r.data
+    } catch (e) { throw new Error(err(e)) }
+  },
+  async remove(id: string): Promise<{ deleted: boolean }> {
+    try {
+      const r = await api.delete<{ deleted: boolean }>(`/alerts/${id}`); return r.data
+    } catch (e) { throw new Error(err(e)) }
+  },
+  async check(id: string): Promise<AlertCheckResult> {
+    try {
+      const r = await api.post<AlertCheckResult>(`/alerts/${id}/check`, {}); return r.data
+    } catch (e) { throw new Error(err(e)) }
+  },
+  async read(id: string): Promise<{ read: boolean }> {
+    const r = await api.post<{ read: boolean }>(`/alerts/${id}/read`, {}); return r.data
+  },
 }
 
 export const templatesApi = {

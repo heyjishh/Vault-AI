@@ -40,6 +40,7 @@ pub struct AppState {
     pub feedback: Arc<crate::feedback::FeedbackStore>,
     pub prompts: Arc<crate::prompts::PromptStore>,
     pub templates: Arc<crate::templates::TemplateStore>,
+    pub alerts: Arc<crate::alerts::AlertStore>,
     pub connectors: Arc<crate::connectors::ConnectorStore>,
     pub annotations: Arc<crate::annotations::AnnotationStore>,
     pub matters: Arc<crate::matters::MatterStore>,

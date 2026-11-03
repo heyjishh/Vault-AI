@@ -394,6 +394,9 @@ async fn main() -> anyhow::Result<()> {
     let connectors = std::sync::Arc::new(
         legal_rag_server::connectors::ConnectorStore::load(data_dir.join("connectors.json")),
     );
+    let alerts = std::sync::Arc::new(
+        legal_rag_server::alerts::AlertStore::load(data_dir.join("alerts.json")),
+    );
     let annotations = std::sync::Arc::new(
         legal_rag_server::annotations::AnnotationStore::load(data_dir.join("annotations.json")),
     );
@@ -456,6 +459,7 @@ async fn main() -> anyhow::Result<()> {
         feedback,
         prompts,
         templates,
+        alerts,
         connectors,
         annotations,
         matters,
@@ -468,6 +472,39 @@ async fn main() -> anyhow::Result<()> {
         default_llm_model: config.llm.model.clone(),
         boot_embedding_model: boot_embedding_model.clone(),
     };
+    // Workspace alerts (Piece 79): re-check watches whose last check is
+    // older than 6 hours (or has never run — the first check sets the
+    // baseline). Sequential on purpose: checks spend provider calls,
+    // and a burst helps no one.
+    {
+        let alert_state = state.clone();
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(std::time::Duration::from_secs(1800));
+            loop {
+                interval.tick().await;
+                for watch in alert_state.alerts.all_watches() {
+                    let due = watch
+                        .last_checked_at
+                        .map(|t| chrono::Utc::now() - t > chrono::Duration::hours(6))
+                        .unwrap_or(true);
+                    if due {
+                        let view = legal_rag_server::routes::alerts::run_watch_check(
+                            &alert_state,
+                            &watch,
+                        )
+                        .await;
+                        if view.new_hits > 0 {
+                            tracing::info!(
+                                watch = %watch.id,
+                                hits = view.new_hits,
+                                "alert watch found new material"
+                            );
+                        }
+                    }
+                }
+            }
+        });
+    }
     // Push verified annotations into the query service.
     legal_rag_server::routes::annotations::sync(&state);
     // Apply the admin's prompt overrides, if any are saved.

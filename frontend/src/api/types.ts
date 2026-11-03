@@ -344,3 +344,39 @@ export interface CacheStats {
   llm: { hits: number; misses: number; entries: number } | null
   embeddings: { hits: number; misses: number; entries: number } | null
 }
+
+/** Workspace alerts (Piece 79): a case/query watch on a Workspace. */
+export interface AlertWatch {
+  id: string
+  owner_email: string
+  matter_id: string
+  kind: string // case | query
+  text: string
+  created_at: string
+  last_checked_at?: string | null
+  seen_keys: string[]
+}
+
+export interface AlertHit {
+  id: string
+  watch_id: string
+  key: string
+  title: string
+  snippet: string
+  url?: string | null
+  source: string // corpus | web
+  found_at: string
+  read: boolean
+}
+
+export interface WatchView extends AlertWatch {
+  hits: AlertHit[]
+  unread: number
+}
+
+export interface AlertCheckResult {
+  baseline: boolean
+  new_hits: number
+  legs_failed: string[]
+  watch: WatchView
+}

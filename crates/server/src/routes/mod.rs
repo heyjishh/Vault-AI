@@ -5,6 +5,7 @@ use axum::{Json, Router};
 use crate::state::AppState;
 
 pub mod admin;
+pub mod alerts;
 pub mod annotations;
 pub mod auth;
 pub mod billing;
@@ -165,6 +166,13 @@ pub fn router(state: AppState) -> Router {
         .route("/api/v1/templates/from-document", post(templates::from_document))
         .route("/api/v1/templates/{id}/star", post(templates::star_template))
         .route("/api/v1/templates/{id}/share", post(templates::share_template))
+        // Workspace alerts (Piece 79): case/query watches anchored to a
+        // Workspace; a background loop re-checks them every 6 hours and
+        // the owner can check on demand.
+        .route("/api/v1/matters/{id}/alerts", get(alerts::list_alerts).post(alerts::create_alert))
+        .route("/api/v1/alerts/{id}", delete(alerts::delete_alert))
+        .route("/api/v1/alerts/{id}/check", post(alerts::check_alert))
+        .route("/api/v1/alerts/{id}/read", post(alerts::read_alert))
         // Document-source connectors (Piece 70): OAuth connect +
         // browse + import into the Vault. The callback carries no
         // session — the state nonce identifies the user.
