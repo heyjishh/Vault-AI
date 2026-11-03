@@ -35,12 +35,19 @@ pub async fn submit_vote(
     if body.vote != "up" && body.vote != "down" {
         return Err(legal_rag_common::Error::BadRequest("vote must be \"up\" or \"down\"".into()).into());
     }
-    Ok(Json(state.feedback.vote(
+    let saved = state.feedback.vote(
         &user.email,
         body.question.trim(),
         &body.answer,
         &body.vote,
-    )))
+    );
+    // Piece 81: a downvote closes the feedback loop by itself — the
+    // question becomes a candidate golden rule for an admin to
+    // refine, instead of waiting for a manual promotion.
+    if body.vote == "down" {
+        crate::routes::golden::capture_from_downvote(&state, &user, body.question.trim());
+    }
+    Ok(Json(saved))
 }
 
 #[derive(Serialize)]

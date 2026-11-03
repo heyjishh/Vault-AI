@@ -115,6 +115,7 @@ pub fn router(state: AppState) -> Router {
         .route("/api/v1/knowledge/graph", get(knowledge::graph_view))
         // Create: Interact with a document + Draft generation.
         .route("/api/v1/knowledge/interact", post(create::interact))
+        .route("/api/v1/knowledge/interact/stream", post(create::interact_stream))
         .route("/api/v1/knowledge/draft", post(create::draft))
         // Matters: workspaces with living memory.
         .route("/api/v1/matters", get(matters::list_matters).post(matters::create_matter))

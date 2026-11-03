@@ -28,7 +28,7 @@ pub struct GoldenRule {
     pub expected_terms: Vec<String>,
     pub expected_sources: Vec<String>,
     pub notes: String,
-    /// manual | captured
+    /// manual | captured | feedback (auto-captured from a downvote, Piece 81)
     pub source: String,
     pub created_at: DateTime<Utc>,
     pub last_result: Option<RuleResult>,
@@ -174,6 +174,35 @@ const STOPWORDS: &[&str] = &[
     "the", "a", "an", "that", "this", "those", "these", "of", "to", "in", "on", "for", "is",
     "are", "was", "were", "be", "been", "it", "its", "by", "at", "as",
 ];
+
+/// Canonical question form for dedupe (Piece 81): normalized words,
+/// so "What is Section 106?" and "what  is section 106" collide.
+pub fn normalize_question(question: &str) -> String {
+    normalize(question)
+}
+
+/// Statutory references in a question — "section 106", "article 21",
+/// "order 7 rule 11" yields both "order 7" and "rule 11" — as
+/// candidate expected terms for an auto-captured rule (Piece 81).
+/// A good answer to a question that names a provision almost always
+/// has to engage that provision, so these are the one expectation an
+/// automatic capture can state honestly; everything else is for a
+/// human to refine in the Golden page.
+pub fn statute_terms(question: &str) -> Vec<String> {
+    const MARKERS: &[&str] = &["section", "article", "order", "rule", "chapter", "schedule"];
+    let norm = normalize(question);
+    let tokens: Vec<&str> = norm.split(' ').collect();
+    let mut out: Vec<String> = Vec::new();
+    for w in tokens.windows(2) {
+        if MARKERS.contains(&w[0]) && w[1].chars().next().is_some_and(|c| c.is_ascii_digit()) {
+            let term = format!("{} {}", w[0], w[1]);
+            if !out.contains(&term) {
+                out.push(term);
+            }
+        }
+    }
+    out
+}
 
 /// An expected term matches when its normalized form appears in the
 /// answer, OR when every content token of the term appears somewhere in
@@ -451,5 +480,39 @@ mod tests {
         let bad = evaluate(&r3, "The court awarded full compensation.", &[], 0);
         assert!(!bad.passed);
         assert_eq!(bad.missing_terms.len(), 1);
+    }
+
+    #[test]
+    fn statute_terms_extracts_provisions() {
+        assert_eq!(
+            statute_terms("What does Section 106 of the Transfer of Property Act say about notice?"),
+            vec!["section 106".to_string()]
+        );
+        assert_eq!(
+            statute_terms("Article 21 and section 482 BNSS — order 7 rule 11 CPC"),
+            vec![
+                "article 21".to_string(),
+                "section 482".to_string(),
+                "order 7".to_string(),
+                "rule 11".to_string()
+            ]
+        );
+        // No provision named, none invented; duplicates collapse.
+        assert!(statute_terms("What is a tenancy?").is_empty());
+        assert_eq!(statute_terms("section 5, section 5").len(), 1);
+        // A marker word with no number after it is not a provision.
+        assert!(statute_terms("which section applies here").is_empty());
+    }
+
+    #[test]
+    fn normalize_question_dedupes_variants() {
+        assert_eq!(
+            normalize_question("What is Section 106?"),
+            normalize_question("what  is   section 106")
+        );
+        assert_ne!(
+            normalize_question("section 106 notice period"),
+            normalize_question("section 107 notice period")
+        );
     }
 }

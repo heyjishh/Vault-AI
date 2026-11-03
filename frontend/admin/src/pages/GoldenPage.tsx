@@ -89,11 +89,11 @@ export default function GoldenPage() {
     <div className="w-full px-6 py-10">
       <PageHead
         title="Golden Ruleset"
-        sub="The evaluation set that keeps the RAG honest. Promote real user questions into rules with expected terms and sources, then run the set — a rule passes only if the live answer contains every expected term and cites every expected source."
+        sub="The evaluation set that keeps the RAG honest. Promote real user questions into rules with expected terms and sources, then run the set — a rule passes only if the live answer contains every expected term and cites every expected source. Downvoted answers auto-capture as draft rules, and the set re-runs itself every 6 hours."
       />
 
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-4 mt-6">
-        <StatCard label="Rules" value={list.length} sub={`${list.filter((r) => r.source === 'captured').length} promoted from real queries`} />
+        <StatCard label="Rules" value={list.length} sub={`${list.filter((r) => r.source === 'captured').length} promoted from real queries · ${list.filter((r) => r.source === 'feedback').length} auto-captured from downvotes`} />
         <StatCard label="Passing" value={last_run ? `${passing} / ${list.length}` : '—'} sub={last_run ? `last run ${new Date(last_run.ran_at).toLocaleString('en-IN')}` : 'run the set to score it'} />
         <StatCard label="Pass rate" value={last_run && last_run.total > 0 ? `${Math.round((last_run.passed / last_run.total) * 100)}%` : '—'} sub="of the last full run" />
         <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] px-5 py-4 flex flex-col justify-center">
@@ -171,7 +171,7 @@ export default function GoldenPage() {
                   <td className="px-5 py-3">
                     <span className="font-medium">{r.question}</span>
                     <span className="block text-meta text-stone-400 dark:text-stone-500 mt-0.5">
-                      {r.source === 'captured' ? 'promoted from a user query' : 'written by admin'}
+                      {r.source === 'captured' ? 'promoted from a user query' : r.source === 'feedback' ? 'auto-captured from a downvote' : 'written by admin'}
                       {r.notes ? ` · ${r.notes}` : ''}
                     </span>
                   </td>

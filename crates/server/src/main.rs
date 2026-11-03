@@ -509,6 +509,40 @@ async fn main() -> anyhow::Result<()> {
             }
         });
     }
+    // Golden ruleset auto-run (Piece 81): on a 30-minute tick, when
+    // rules exist and the last run is over 6 hours old (or never
+    // ran), re-run the full ruleset so rule results stay current
+    // without an admin pressing the button. Unbilled system
+    // evaluation — the same precedent as the alert checks — and
+    // bounded by the ruleset's size.
+    {
+        let golden_state = state.clone();
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(std::time::Duration::from_secs(1800));
+            loop {
+                interval.tick().await;
+                if golden_state.golden.list().is_empty() {
+                    continue;
+                }
+                let stale = golden_state
+                    .golden
+                    .last_run()
+                    .map(|s| chrono::Utc::now() - s.ran_at > chrono::Duration::hours(6))
+                    .unwrap_or(true);
+                if stale {
+                    let scope = legal_rag_rag::usage::new_scope();
+                    let run =
+                        legal_rag_server::routes::golden::run_ruleset(&golden_state, &scope)
+                            .await;
+                    tracing::info!(
+                        total = run.summary.total,
+                        passed = run.summary.passed,
+                        "golden ruleset auto-run complete"
+                    );
+                }
+            }
+        });
+    }
     // Push verified annotations into the query service.
     legal_rag_server::routes::annotations::sync(&state);
     // Apply the admin's prompt overrides, if any are saved.

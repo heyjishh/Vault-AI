@@ -914,3 +914,90 @@ export async function queryStream(
   }
   return attempt(false)
 }
+
+export interface InteractStreamHandlers {
+  onStatus?: (message: string) => void
+  onSources?: (citations: Citation[]) => void
+  onDelta?: (text: string) => void
+  onDone?: (response: InteractResponse) => void
+  onError?: (message: string) => void
+}
+
+/**
+ * Streaming Interact over SSE (Piece 81): sources → delta… → done,
+ * where done carries the full InteractResponse. Mirrors queryStream's
+ * transport, including the 401 refresh retry and the rule that a
+ * stream which delivered a real error does not throw for the
+ * missing Done.
+ */
+export async function interactStream(
+  payload: { document_ids: string[]; action: string; question?: string; refine_terms?: string[]; source: InteractSource },
+  handlers: InteractStreamHandlers,
+  signal?: AbortSignal,
+): Promise<void> {
+  async function attempt(isRetry: boolean): Promise<void> {
+    const res = await fetch('/api/v1/knowledge/interact/stream', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(tokens.access ? { Authorization: `Bearer ${tokens.access}` } : {}),
+      },
+      body: JSON.stringify({
+        document_id: payload.document_ids[0],
+        document_ids: payload.document_ids,
+        action: payload.action,
+        question: payload.question,
+        refine_terms: payload.refine_terms?.length ? payload.refine_terms : undefined,
+        source: payload.source,
+      }),
+      signal,
+    })
+    if (res.status === 401 && !isRetry && tokens.refresh) {
+      const r = await axios.post('/api/v1/auth/refresh', { refresh_token: tokens.refresh })
+      tokens.save(r.data)
+      return attempt(true)
+    }
+    if (!res.ok || !res.body) {
+      const text = await res.text().catch(() => '')
+      throw new Error(text || `stream failed (${res.status})`)
+    }
+    const reader = res.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+    let sawDone = false
+    let sawError = false
+    for (;;) {
+      const { value, done } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+      let idx
+      while ((idx = buffer.indexOf('\n\n')) >= 0) {
+        const rawEvent = buffer.slice(0, idx)
+        buffer = buffer.slice(idx + 2)
+        let event = 'message'
+        let data = ''
+        for (const line of rawEvent.split('\n')) {
+          if (line.startsWith('event:')) event = line.slice(6).trim()
+          else if (line.startsWith('data:')) data += line.slice(5).trim()
+        }
+        if (!data) continue
+        let parsed: Record<string, unknown>
+        try { parsed = JSON.parse(data) } catch { continue }
+        if (event === 'status') {
+          const msg = String(parsed.message ?? '')
+          if (msg.startsWith('error:')) { sawError = true; handlers.onError?.(msg.slice(6).trim()) }
+          else handlers.onStatus?.(msg)
+        } else if (event === 'sources') {
+          handlers.onSources?.((parsed.citations as Citation[]) ?? [])
+        } else if (event === 'delta') {
+          handlers.onDelta?.(String(parsed.text ?? ''))
+        } else if (event === 'done') {
+          sawDone = true
+          handlers.onDone?.(parsed.response as InteractResponse)
+        }
+      }
+    }
+    if (!sawDone && !sawError) throw new Error('stream ended unexpectedly')
+  }
+  return attempt(false)
+}

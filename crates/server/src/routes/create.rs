@@ -408,12 +408,37 @@ fn doc_treatment(
         .map(|(_, t)| t)
 }
 
-pub async fn interact(
-    State(state): State<AppState>,
-    AuthUser(user): AuthUser,
-    Json(body): Json<InteractRequest>,
-) -> Result<Json<InteractResponse>, ApiError> {
-    crate::routes::billing::ensure_quota(&state, &user.id)?;
+/// Piece 81: everything an Interact run needs, computed once and
+/// shared by the blocking and streaming handlers so the two can
+/// never drift — same prompt, same citations, same LLM choice,
+/// same billing scope.
+struct PreparedInteract {
+    prompt: String,
+    analyst_system: String,
+    gen_llm: std::sync::Arc<dyn legal_rag_rag::LlmClient>,
+    touches_private: bool,
+    /// Grounded refusal for Private mode with no matching material:
+    /// returned (or replayed) without any generation call.
+    refusal: Option<String>,
+    citations: Vec<Citation>,
+    documents: Vec<InteractDocumentResult>,
+    first_id: String,
+    first_title: String,
+    activity_title: String,
+    any_truncated: bool,
+    first_treatment: Option<legal_rag_rag::CitationTreatment>,
+    ids: Vec<String>,
+    source: InteractSource,
+    scope: legal_rag_rag::usage::UsageScope,
+    action: String,
+}
+
+async fn prepare_interact(
+    state: &AppState,
+    user: &legal_rag_auth::User,
+    body: &InteractRequest,
+) -> Result<PreparedInteract, ApiError> {
+    crate::routes::billing::ensure_quota(state, &user.id)?;
     let source = parse_source(body.source.as_deref())?;
     ensure_action_allowed(source, &body.action)?;
     let mut instruction = interact_instruction(&body.action, body.question.as_deref())?;
@@ -453,7 +478,7 @@ pub async fn interact(
     let ids = if source == InteractSource::Private {
         Vec::new()
     } else {
-        resolve_selection(&body)?
+        resolve_selection(body)?
     };
     // Load every selected document with its share of the budget. Any
     // missing or text-less document fails the run with a clear error
@@ -550,73 +575,228 @@ pub async fn interact(
     // else the undecorated client. Vault-only runs (and Both-mode
     // actions, which retrieve nothing private) keep the cached one.
     let touches_private = is_chat && source.uses_private();
-    let output = if source == InteractSource::Private && private_hits.is_empty() {
-        // Grounded refusal with no generation call: the owner's
-        // vault holds nothing at/above the retrieval threshold for
-        // this question, and nothing outside it may be searched.
-        "Your Confidential Vault has no material matching this question — \
-         nothing outside it was searched."
-            .to_string()
+    let gen_llm: std::sync::Arc<dyn legal_rag_rag::LlmClient> = if touches_private {
+        match &state.private_llm {
+            Some(p) => p.clone(),
+            None => state.llm_uncached.clone(),
+        }
     } else {
-        let gen_llm: std::sync::Arc<dyn legal_rag_rag::LlmClient> = if touches_private {
-            match &state.private_llm {
-                Some(p) => p.clone(),
-                None => state.llm_uncached.clone(),
-            }
-        } else {
-            state.llm.clone()
-        };
-        scope_usage(scope.clone(), async {
-            gen_llm.complete(&analyst_system, &prompt).await
-        })
-        .await?
+        state.llm.clone()
     };
+    // Grounded refusal with no generation call: in Private mode
+    // with no hits, the owner's vault holds nothing at/above the
+    // retrieval threshold for this question, and nothing outside
+    // it may be searched.
+    let refusal = if source == InteractSource::Private && private_hits.is_empty() {
+        Some(
+            "Your Confidential Vault has no material matching this question — \
+             nothing outside it was searched."
+                .to_string(),
+        )
+    } else {
+        None
+    };
+    Ok(PreparedInteract {
+        prompt,
+        analyst_system,
+        gen_llm,
+        touches_private,
+        refusal,
+        citations,
+        documents,
+        first_id,
+        first_title,
+        activity_title,
+        any_truncated,
+        first_treatment,
+        ids,
+        source,
+        scope,
+        action: body.action.clone(),
+    })
+}
+
+/// Settle billing + activity for a finished Interact run and build
+/// its response. Shared by the blocking and streaming handlers.
+fn finish_interact(
+    state: &AppState,
+    user: &legal_rag_auth::User,
+    prep: PreparedInteract,
+    output: String,
+) -> InteractResponse {
     // Activity redaction mirrors Ask's private path exactly: when a
     // run read the Confidential Vault, neither its output nor a
     // restorable payload is written to the plaintext activity log.
-    let (activity_result, payload) = if touches_private {
+    let (activity_result, payload) = if prep.touches_private {
         (String::new(), None)
     } else {
         (
             output.clone(),
             Some(serde_json::json!({
-                "document_id": first_id,
-                "document_title": first_title,
-                "document_ids": ids,
-                "action": body.action,
+                "document_id": prep.first_id.clone(),
+                "document_title": prep.first_title.clone(),
+                "document_ids": prep.ids.clone(),
+                "action": prep.action.clone(),
                 "output": output,
-                "truncated": any_truncated,
+                "truncated": prep.any_truncated,
             })),
         )
     };
     crate::routes::billing::settle_matter_payload(
-        &state,
-        &user,
-        &scope,
+        state,
+        user,
+        &prep.scope,
         "interact",
-        &activity_title,
-        &body.action,
+        &prep.activity_title,
+        &prep.action,
         &activity_result,
-        citations.len(),
+        prep.citations.len(),
         // Interact work belongs to the matter holding the (first) document.
-        if source == InteractSource::Private {
+        if prep.source == InteractSource::Private {
             None
         } else {
-            state.matters.matter_of_document(&first_id)
+            state.matters.matter_of_document(&prep.first_id)
         },
         payload,
     );
-    Ok(Json(InteractResponse {
-        document_id: first_id,
-        document_title: first_title,
-        action: body.action,
+    InteractResponse {
+        document_id: prep.first_id,
+        document_title: prep.first_title,
+        action: prep.action,
         output,
-        truncated: any_truncated,
-        documents,
-        source: source.as_str().to_string(),
-        citations,
-        treatment: first_treatment,
-    }))
+        truncated: prep.any_truncated,
+        documents: prep.documents,
+        source: prep.source.as_str().to_string(),
+        citations: prep.citations,
+        treatment: prep.first_treatment,
+    }
+}
+
+pub async fn interact(
+    State(state): State<AppState>,
+    AuthUser(user): AuthUser,
+    Json(body): Json<InteractRequest>,
+) -> Result<Json<InteractResponse>, ApiError> {
+    let prep = prepare_interact(&state, &user, &body).await?;
+    let output = match &prep.refusal {
+        Some(text) => text.clone(),
+        None => {
+            scope_usage(prep.scope.clone(), async {
+                prep.gen_llm.complete(&prep.analyst_system, &prep.prompt).await
+            })
+            .await?
+        }
+    };
+    Ok(Json(finish_interact(&state, &user, prep, output)))
+}
+
+/// One event in a streaming Interact run (Piece 81): the citation
+/// set first (chat runs), then generated deltas, then the full
+/// structured response — the same wire shape as Ask's QueryEvent.
+#[derive(Serialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+enum InteractEvent {
+    Status { message: String },
+    Sources { citations: Vec<Citation> },
+    Delta { text: String },
+    Done { response: InteractResponse },
+}
+
+/// Streaming Interact (Piece 81): identical preparation, billing,
+/// and redaction as the blocking handler — only the generation is
+/// streamed. Preparation errors (quota, locked vault, missing
+/// document) are real HTTP errors returned before the stream opens.
+pub async fn interact_stream(
+    State(state): State<AppState>,
+    AuthUser(user): AuthUser,
+    Json(body): Json<InteractRequest>,
+) -> Result<
+    axum::response::Sse<
+        impl futures::Stream<
+            Item = Result<axum::response::sse::Event, std::convert::Infallible>,
+        >,
+    >,
+    ApiError,
+> {
+    use axum::response::sse::{Event, KeepAlive, Sse};
+    let prep = prepare_interact(&state, &user, &body).await?;
+    let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<InteractEvent>();
+    let user_rec = user.clone();
+    tokio::spawn(async move {
+        if !prep.citations.is_empty() {
+            let _ = tx.send(InteractEvent::Sources {
+                citations: prep.citations.clone(),
+            });
+        }
+        let _ = tx.send(InteractEvent::Status {
+            message: "Writing…".to_string(),
+        });
+        let result: Result<String, legal_rag_common::Error> = match &prep.refusal {
+            Some(text) => {
+                // Replay the refusal word by word, like a cache hit.
+                for chunk in text.split_inclusive(' ').filter(|c| !c.is_empty()) {
+                    let _ = tx.send(InteractEvent::Delta {
+                        text: chunk.to_string(),
+                    });
+                }
+                Ok(text.clone())
+            }
+            None => {
+                let gen_llm = prep.gen_llm.clone();
+                let system = prep.analyst_system.clone();
+                let prompt = prep.prompt.clone();
+                let tx2 = tx.clone();
+                scope_usage(prep.scope.clone(), async move {
+                    let mut sink = |chunk: &str| {
+                        let _ = tx2.send(InteractEvent::Delta {
+                            text: chunk.to_string(),
+                        });
+                    };
+                    // Piece 23's safety net: providers that cannot
+                    // stream (the Gemini bridge) fall back to a
+                    // blocking completion revealed in word chunks.
+                    legal_rag_rag::llm::generate_with_fallback(
+                        gen_llm.as_ref(),
+                        &system,
+                        &prompt,
+                        &mut sink,
+                    )
+                    .await
+                })
+                .await
+            }
+        };
+        match result {
+            Ok(output) => {
+                let response = finish_interact(&state, &user_rec, prep, output);
+                let _ = tx.send(InteractEvent::Done { response });
+            }
+            Err(e) => {
+                let message = if e.to_string().contains("429") {
+                    "error: The AI provider is rate-limiting requests right now — wait a few seconds and press Retry.".to_string()
+                } else {
+                    format!("error: {e}")
+                };
+                let _ = tx.send(InteractEvent::Status { message });
+            }
+        }
+    });
+    let stream = futures::stream::unfold(rx, |mut rx| async move {
+        match rx.recv().await {
+            Some(ev) => {
+                let name = match &ev {
+                    InteractEvent::Status { .. } => "status",
+                    InteractEvent::Sources { .. } => "sources",
+                    InteractEvent::Delta { .. } => "delta",
+                    InteractEvent::Done { .. } => "done",
+                };
+                let data = serde_json::to_string(&ev).unwrap_or_default();
+                Some((Ok(Event::default().event(name).data(data)), rx))
+            }
+            None => None,
+        }
+    });
+    Ok(Sse::new(stream).keep_alive(KeepAlive::default()))
 }
 
 // ------------------------------------------------------------ draft

@@ -146,14 +146,22 @@ pub struct RunResponse {
     pub results: Vec<RuleRunView>,
 }
 
-/// Run every rule against the live RAG and score the answers. The token
-/// cost of the evaluation is billed to the admin running it.
-pub async fn run_rules(
-    State(state): State<AppState>,
-    AdminUser(admin): AdminUser,
-) -> Result<Json<RunResponse>, ApiError> {
+/// The outcome of one full ruleset run (Piece 81): the stored
+/// summary plus every rule's fresh result.
+pub struct RulesetRun {
+    pub summary: RunSummary,
+    pub results: Vec<RuleRunView>,
+}
+
+/// Run every rule against the live RAG and score the answers,
+/// storing each result and the run summary. Shared by the admin
+/// endpoint (which bills the admin) and the background auto-run
+/// loop (unbilled system evaluation, Piece 81).
+pub async fn run_ruleset(
+    state: &AppState,
+    scope: &legal_rag_rag::usage::UsageScope,
+) -> RulesetRun {
     let rules = state.golden.list();
-    let scope = new_scope();
     let mut results = Vec::new();
     let mut passed = 0usize;
     for rule in &rules {
@@ -185,12 +193,91 @@ pub async fn run_rules(
         state.golden.set_result(&rule.id, result.clone());
         results.push(RuleRunView { rule_id: rule.id.clone(), question: rule.question.clone(), result });
     }
+    let summary = RunSummary { ran_at: Utc::now(), total: rules.len(), passed };
+    state.golden.set_run_summary(summary.clone());
+    RulesetRun { summary, results }
+}
+
+/// Run every rule against the live RAG and score the answers. The token
+/// cost of the evaluation is billed to the admin running it.
+pub async fn run_rules(
+    State(state): State<AppState>,
+    AdminUser(admin): AdminUser,
+) -> Result<Json<RunResponse>, ApiError> {
+    let scope = new_scope();
+    let run = run_ruleset(&state, &scope).await;
     if let Ok(totals) = scope.lock() {
         state.billing.add_usage(&admin.id, &totals);
     }
-    let summary = RunSummary { ran_at: Utc::now(), total: rules.len(), passed };
-    state.golden.set_run_summary(summary.clone());
-    Ok(Json(RunResponse { ran_at: summary.ran_at, total: summary.total, passed, results }))
+    Ok(Json(RunResponse {
+        ran_at: run.summary.ran_at,
+        total: run.summary.total,
+        passed: run.summary.passed,
+        results: run.results,
+    }))
+}
+
+/// Auto-capture a golden rule from a downvoted answer (Piece 81):
+/// the feedback loop closes itself. The rule is deduped on the
+/// normalized question, its expected terms are the statutory
+/// provisions the question itself names, and its expected sources
+/// are pre-filled from the asker's own activity record for that
+/// question — labelled `feedback` so an admin can refine it in the
+/// Golden page like any other rule.
+pub fn capture_from_downvote(state: &AppState, user: &legal_rag_auth::User, question: &str) {
+    let norm = crate::golden::normalize_question(question);
+    if norm.is_empty() {
+        return;
+    }
+    if state
+        .golden
+        .list()
+        .iter()
+        .any(|r| crate::golden::normalize_question(&r.question) == norm)
+    {
+        return;
+    }
+    let mut expected_sources: Vec<String> = Vec::new();
+    for ev in state.activity.for_user(&user.id, 100) {
+        if ev.kind != "query" || crate::golden::normalize_question(&ev.title) != norm {
+            continue;
+        }
+        if let Some(citations) = ev
+            .payload
+            .as_ref()
+            .and_then(|p| p.get("citations"))
+            .and_then(|c| c.as_array())
+        {
+            for c in citations {
+                let label = c
+                    .get("doc_title")
+                    .and_then(|t| t.as_str())
+                    .filter(|s| !s.is_empty())
+                    .or_else(|| c.get("doc_id").and_then(|t| t.as_str()));
+                if let Some(l) = label {
+                    let l = l.to_string();
+                    if !expected_sources.contains(&l) {
+                        expected_sources.push(l);
+                    }
+                }
+            }
+        }
+        break;
+    }
+    let rule = GoldenRule {
+        id: legal_rag_common::new_id(),
+        question: question.to_string(),
+        expected_terms: crate::golden::statute_terms(question),
+        expected_sources,
+        notes: format!(
+            "auto-captured from a downvote by {} — refine the expected terms to what a good answer must contain",
+            user.email
+        ),
+        source: "feedback".into(),
+        created_at: Utc::now(),
+        last_result: None,
+    };
+    state.golden.add(rule);
 }
 
 #[derive(Serialize)]

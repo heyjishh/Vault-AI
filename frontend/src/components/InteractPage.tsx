@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { ArrowUp, Briefcase, CalendarClock, Copy, FileSearch, FolderUp, ListTree, Lock, RotateCcw, ScanSearch, ShieldAlert, Upload } from 'lucide-react'
-import { createApi, privateVaultApi, vaultApi, type InteractDocumentResult, type InteractResponse, type InteractSource } from '../api/client'
+import { createApi, interactStream, privateVaultApi, vaultApi, type InteractDocumentResult, type InteractResponse, type InteractSource } from '../api/client'
 import type { Citation } from '../api/types'
 import { useSession } from '../stores/session'
 import { RefineControls, useRefine } from './RefineControls'
@@ -79,7 +79,7 @@ interface ITurn {
   docIds: string[]
   /** Piece 13 refinement terms captured at send time (chat only). */
   refineTerms?: string[]
-  status: 'pending' | 'done' | 'error'
+  status: 'pending' | 'streaming' | 'done' | 'error'
   output: string
   citations: Citation[]
   documents: InteractDocumentResult[]
@@ -187,41 +187,84 @@ export default function InteractPage({ matterId, go }: { matterId?: string; go?:
   // Prompt refinement (Piece 13) for the chat question.
   const refineCtl = useRefine({ value: question, setValue: setQuestion, surface: 'interact' })
 
-  const run = useMutation({
-    mutationFn: async (turn: ITurn) => {
-      const r = await createApi.interact(
-        turn.source === 'private' ? [] : turn.docIds,
-        turn.action,
-        turn.action === 'chat' ? turn.question ?? undefined : undefined,
-        turn.action === 'chat' ? turn.refineTerms : undefined,
-        turn.source,
+  // Piece 81: turns run over the streaming endpoint; if the stream
+  // never gets going (transport failure), the turn falls back to
+  // the blocking call instead of failing.
+  const [busy, setBusy] = useState(false)
+  const applyResult = (turnId: number, r: InteractResponse) =>
+    setTurns((ts) => ts.map((t) => (t.id === turnId ? {
+      ...t,
+      status: 'done' as const,
+      output: r.output,
+      citations: r.citations ?? [],
+      documents: r.documents ?? [],
+      documentTitle: r.document_title,
+      truncated: r.truncated,
+      elapsedMs: Date.now() - t.startedAt,
+    } : t)))
+  const applyError = (turnId: number, message: string) =>
+    setTurns((ts) => ts.map((t) => (t.id === turnId ? {
+      ...t,
+      status: 'error' as const,
+      error: message,
+      elapsedMs: Date.now() - t.startedAt,
+    } : t)))
+
+  const executeTurn = async (turn: ITurn) => {
+    setBusy(true)
+    let streamed = false
+    let doneReceived = false
+    let serverError: string | null = null
+    try {
+      await interactStream(
+        {
+          document_ids: turn.source === 'private' ? [] : turn.docIds,
+          action: turn.action,
+          question: turn.action === 'chat' ? turn.question ?? undefined : undefined,
+          refine_terms: turn.action === 'chat' ? turn.refineTerms : undefined,
+          source: turn.source,
+        },
+        {
+          onSources: (citations) =>
+            setTurns((ts) => ts.map((t) => (t.id === turn.id ? { ...t, citations } : t))),
+          onDelta: (text) => {
+            streamed = true
+            setTurns((ts) => ts.map((t) => (t.id === turn.id
+              ? { ...t, status: 'streaming' as const, output: t.output + text }
+              : t)))
+          },
+          onDone: (r) => { doneReceived = true; applyResult(turn.id, r) },
+          onError: (message) => { serverError = message },
+        },
       )
-      return r
-    },
-    onSuccess: (r: InteractResponse, turn) => {
-      setTurns((ts) => ts.map((t) => (t.id === turn.id ? {
-        ...t,
-        status: 'done',
-        output: r.output,
-        citations: r.citations ?? [],
-        documents: r.documents ?? [],
-        documentTitle: r.document_title,
-        truncated: r.truncated,
-        elapsedMs: Date.now() - t.startedAt,
-      } : t)))
-    },
-    onError: (e, turn) => {
-      setTurns((ts) => ts.map((t) => (t.id === turn.id ? {
-        ...t,
-        status: 'error',
-        error: (e as Error).message,
-        elapsedMs: Date.now() - t.startedAt,
-      } : t)))
-    },
-  })
+    } catch {
+      // Transport failure — handled by the fallback logic below.
+    }
+    if (!doneReceived) {
+      if (serverError) {
+        applyError(turn.id, serverError)
+      } else if (!streamed) {
+        try {
+          const r = await createApi.interact(
+            turn.source === 'private' ? [] : turn.docIds,
+            turn.action,
+            turn.action === 'chat' ? turn.question ?? undefined : undefined,
+            turn.action === 'chat' ? turn.refineTerms : undefined,
+            turn.source,
+          )
+          applyResult(turn.id, r)
+        } catch (e) {
+          applyError(turn.id, (e as Error).message)
+        }
+      } else {
+        applyError(turn.id, 'The stream ended unexpectedly — press Retry.')
+      }
+    }
+    setBusy(false)
+  }
 
   const startTurn = (action: string, q: string | null, src: InteractSource, docIds: string[], refineTerms?: string[]) => {
-    if (run.isPending) return
+    if (busy) return
     const turn: ITurn = {
       id: ++turnSeq,
       action,
@@ -240,7 +283,7 @@ export default function InteractPage({ matterId, go }: { matterId?: string; go?:
       elapsedMs: null,
     }
     setTurns((ts) => [...ts, turn])
-    run.mutate(turn)
+    void executeTurn(turn)
   }
 
   const sendChat = () => {
@@ -267,7 +310,7 @@ export default function InteractPage({ matterId, go }: { matterId?: string; go?:
   }
 
   const hasSelection = selectedIds.length > 0
-  const chatBlocked = run.isPending
+  const chatBlocked = busy
     || !question.trim()
     || (source !== 'private' && !hasSelection)
     || privateLocked
@@ -559,11 +602,12 @@ export default function InteractPage({ matterId, go }: { matterId?: string; go?:
             key={turn.id}
             turn={turn}
             onRetry={() => {
-              setTurns((ts) => ts.map((t) => (t.id === turn.id ? { ...t, status: 'pending', error: null, startedAt: Date.now() } : t)))
-              run.mutate({ ...turn, status: 'pending', error: null, startedAt: Date.now() })
+              const fresh: ITurn = { ...turn, status: 'pending', error: null, output: '', startedAt: Date.now() }
+              setTurns((ts) => ts.map((t) => (t.id === turn.id ? fresh : t)))
+              void executeTurn(fresh)
             }}
             onCite={(c) => setSourceModal(c)}
-            retryDisabled={run.isPending}
+            retryDisabled={busy}
           />
         ))}
       </div>
@@ -579,7 +623,7 @@ export default function InteractPage({ matterId, go }: { matterId?: string; go?:
           {ACTION_BUTTONS.map((a) => (
             <button
               key={a.id}
-              disabled={run.isPending || !hasSelection}
+              disabled={busy || !hasSelection}
               onClick={() => startTurn(a.id, null, source, [...selectedIds])}
               className="rounded-lex border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] px-3.5 py-3 text-left hover:border-ink disabled:opacity-40 transition-colors"
             >
@@ -657,7 +701,7 @@ function TurnView({ turn, onRetry, onCite, retryDisabled }: {
   const toast = useSession((s) => s.toast)
   const [tick, setTick] = useState(0)
   useEffect(() => {
-    if (turn.status !== 'pending') return
+    if (turn.status !== 'pending' && turn.status !== 'streaming') return
     const h = setInterval(() => setTick((v) => v + 1), 500)
     return () => clearInterval(h)
   }, [turn.status])
@@ -672,11 +716,13 @@ function TurnView({ turn, onRetry, onCite, retryDisabled }: {
     <div className="mb-10">
       <h2 className="font-display text-[1.6rem] leading-snug tracking-tight">{heading}</h2>
 
-      {turn.status === 'pending' && (
+      {(turn.status === 'pending' || turn.status === 'streaming') && (
         <div className="mt-3 flex items-center gap-2.5 text-stone-500 dark:text-stone-400 text-[13px]">
           <AssistantAvatar size={22} playing float={false} />
           <span className="font-medium text-ink dark:text-[#f4f2ee]">Clause</span>
-          {turn.source === 'private' ? 'Reading your Confidential Vault…' : 'Reading the documents…'}
+          {turn.status === 'streaming'
+            ? 'Writing…'
+            : turn.source === 'private' ? 'Reading your Confidential Vault…' : 'Reading the documents…'}
           <span className="text-stone-300">·</span>
           <span className="tabular-nums">{secs}s</span>
         </div>
@@ -689,7 +735,7 @@ function TurnView({ turn, onRetry, onCite, retryDisabled }: {
             <RotateCcw size={13} /> Retry
           </button>
         </div>
-      ) : turn.status === 'done' ? (
+      ) : (turn.status === 'done' || (turn.status === 'streaming' && turn.output.length > 0)) ? (
         <>
           {turn.documents.length > 0 && (
             <div className="flex gap-1.5 flex-wrap mt-3">

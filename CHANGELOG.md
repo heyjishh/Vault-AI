@@ -15,6 +15,42 @@ live**, what is **built but unverified**, and what is **roadmap**.
 ## [Unreleased]
 
 ### Added
+- **Interact streaming + automated feedback → golden loop
+  (3 Nov 2026, Piece 81).** The two manual/partial loops named
+  in the 3 Nov patchwork inventory are closed. **Interact
+  streams**: `POST /knowledge/interact/stream` shares one
+  preparation with the blocking handler (same prompt,
+  citations, LLM choice, billing scope, and Confidential Vault
+  redaction — the handler was refactored into
+  prepare/finish halves so the two paths cannot drift), then
+  streams sources → deltas → a Done event carrying the full
+  structured response. Generation uses Piece 23's
+  `generate_with_fallback`, so providers that cannot stream
+  (the Gemini bridge) reveal a blocking completion in word
+  chunks instead of dying. Preparation errors (quota, locked
+  vault, missing document) stay real HTTP errors before the
+  stream opens. The Intelligence page consumes the stream with
+  live output and a blocking fallback when the stream never
+  gets going. **Feedback loop automated**: a downvote on an Ask
+  answer now auto-captures a golden rule (source `feedback`,
+  deduped on the normalized question) — expected terms are
+  the statutory provisions the question itself names
+  ("section 106", "article 21"), expected sources are
+  pre-filled from the asker's own activity record for that
+  question, and the note tells the admin to refine it.
+  **Ruleset auto-run**: a background loop re-runs the full
+  golden ruleset whenever the last run is over 6 hours old
+  (30-minute tick, unbilled system evaluation like the alert
+  checks, bounded by the ruleset's size), storing per-rule
+  results and the run summary; the admin endpoint and the
+  loop share one `run_ruleset`. **Verified live** on :3001:
+  a streamed chat run delivered sources → 189 deltas → done,
+  with the deltas concatenating exactly to the final output;
+  a downvote on a Section 106 answer created the rule with
+  `expected_terms: ["section 106"]` and the three cited
+  document titles as expected sources; the auto-run fired at
+  boot against the stale (26 Oct) ruleset without any manual
+  trigger. Suite: 292 passed / 0 failed.
 - **Agents orchestration: run history, per-run budgets, plan
   approval, drift fix (3 Nov 2026, Piece 80).** The
   orchestration gaps named in the 3 Nov patchwork inventory
