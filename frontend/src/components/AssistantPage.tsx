@@ -128,7 +128,7 @@ export default function AssistantPage({ matterId: fixedMatterId, go }: { matterI
             setTurns((ts) =>
               ts.map((t) =>
                 t.id === id
-                  ? { ...t, status: message, scopeNote: message.includes('full vault') || message.includes('Brief vault') ? message : t.scopeNote }
+                  ? { ...t, status: message, scopeNote: message.includes('full vault') || message.includes('Workspace vault') ? message : t.scopeNote }
                   : t,
               ),
             ),
@@ -248,21 +248,21 @@ export default function AssistantPage({ matterId: fixedMatterId, go }: { matterI
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 flex-shrink-0" />
           {briefVault ? (
             <span className="text-stone-600 dark:text-stone-300">
-              <span className="font-medium text-ink dark:text-[#f4f2ee]">Brief vault is on</span>
-              {' '}— answers come only from <span className="font-medium text-ink dark:text-[#f4f2ee]">{scopeMatter?.title ?? 'this brief'}</span>'s documents, with no full-vault fallback.
+              <span className="font-medium text-ink dark:text-[#f4f2ee]">Workspace vault is on</span>
+              {' '}— answers come only from <span className="font-medium text-ink dark:text-[#f4f2ee]">{scopeMatter?.title ?? 'this workspace'}</span>'s documents, with no full-vault fallback.
             </span>
           ) : (
             <span className="text-stone-600 dark:text-stone-300">
-              Asking within <span className="font-medium text-ink dark:text-[#f4f2ee]">{scopeMatter?.title ?? 'this brief'}</span>
-              {' '}— answers draw only on this brief's documents.
+              Asking within <span className="font-medium text-ink dark:text-[#f4f2ee]">{scopeMatter?.title ?? 'this workspace'}</span>
+              {' '}— answers draw only on this workspace's documents.
             </span>
           )}
           {!fixedMatterId && (briefVault ? (
             <button
-              onClick={() => { setBriefVault(false); setStoreMatter(null); toast('success', 'Brief vault off — Ask now searches the full vault') }}
+              onClick={() => { setBriefVault(false); setStoreMatter(null); toast('success', 'Workspace vault off — Knowledge now searches the full vault') }}
               className="ml-auto text-stone-500 dark:text-stone-400 hover:text-ink font-medium whitespace-nowrap"
             >
-              Turn off Brief vault &amp; search full vault
+              Turn off Workspace vault &amp; search full vault
             </button>
           ) : (
             <button onClick={() => setStoreMatter(null)} className="ml-auto text-stone-500 dark:text-stone-400 hover:text-ink font-medium whitespace-nowrap">
@@ -589,7 +589,7 @@ function SourcesSidebar({ turn, selectedChunkId, onClose, go, onOpenSource }: {
                       className="flex items-center gap-1.5 text-[12.5px] font-medium text-ink dark:text-[#f4f2ee] hover:underline underline-offset-2"
                     >
                       <PanelRight size={12} />
-                      Open this document in Interact
+                      Open this document in Intelligence
                     </button>
                   )}
                 </div>
@@ -841,13 +841,13 @@ function Composer(props: {
             onClick={() => setBriefVault(!briefVault)}
             disabled={!briefAvailable}
             title={briefAvailable
-              ? `Answer only from ${briefName ?? 'this brief'}'s vault — if the brief has no answer, Ask says so instead of searching the full vault`
-              : 'Open a brief to answer from its vault only'}
+              ? `Answer only from ${briefName ?? 'this workspace'}'s vault — if the workspace has no answer, Knowledge says so instead of searching the full vault`
+              : 'Open a workspace to answer from its vault only'}
             className={`flex items-center gap-1.5 rounded-lex border px-2.5 py-1 text-[12px] transition-colors disabled:opacity-40 ${
               briefVault ? 'bg-ink text-ivory border-ink' : 'border-stone-200 dark:border-white/10 text-stone-500 dark:text-stone-400 hover:text-ink hover:border-stone-300'
             }`}
           >
-            <Briefcase size={13} /> Brief vault
+            <Briefcase size={13} /> Workspace vault
           </button>
           <RefineControls ctl={refineCtl} disabled={!input.trim()} />
           <div className="relative">
@@ -934,7 +934,7 @@ function Composer(props: {
           <button
             onClick={onSubmit} disabled={!input.trim()}
             className="btn-brand w-8 h-8 rounded-lex text-ivory flex items-center justify-center disabled:opacity-40 transition-colors"
-            title="Ask (Enter)"
+            title="Send (Enter)"
           >
             <ArrowUp size={16} />
           </button>

@@ -14,11 +14,11 @@ import {
   UPLOAD_FORMATS_HINT, MAX_BATCH_FILES, MAX_BATCH_FOLDERS, type ProgressItemView,
 } from './UploadProgress'
 
-const TABS = ['Overview', 'Documents', 'Ask', 'Interact', 'Draft', 'History', 'Notes'] as const
+const TABS = ['Overview', 'Documents', 'Knowledge', 'Intelligence', 'Draft', 'History', 'Notes'] as const
 type Tab = (typeof TABS)[number]
 
 const KIND_LABEL: Record<string, string> = {
-  query: 'Asked', research: 'Researched', workflow: 'Workflow', interact: 'Interact',
+  query: 'Asked', research: 'Researched', workflow: 'Workflow', interact: 'Intelligence',
   draft: 'Draft', upload: 'Upload', document: 'Document filed', created: 'Created',
 }
 
@@ -30,11 +30,11 @@ export default function MatterPage({ matterId, back, go }: { matterId: string; b
   return (
     <div className="w-full px-6 py-8">
       <button onClick={back} className="flex items-center gap-1.5 text-[13px] text-stone-500 dark:text-stone-400 hover:text-ink">
-        <ArrowLeft size={14} /> All briefs
+        <ArrowLeft size={14} /> All workspaces
       </button>
 
       {detail.isLoading || !m ? (
-        <div className="mt-10"><Spinner label="Opening brief…" /></div>
+        <div className="mt-10"><Spinner label="Opening workspace…" /></div>
       ) : (
         <>
           <div className="mt-4 flex flex-wrap items-start gap-3">
@@ -67,8 +67,8 @@ export default function MatterPage({ matterId, back, go }: { matterId: string; b
           <div className="mt-6">
             {tab === 'Overview' && <Overview matterId={matterId} notes={m.notes} />}
             {tab === 'Documents' && <Documents matterId={matterId} />}
-            {tab === 'Ask' && <AssistantPage matterId={matterId} />}
-            {tab === 'Interact' && <InteractPage matterId={matterId} go={go} />}
+            {tab === 'Knowledge' && <AssistantPage matterId={matterId} />}
+            {tab === 'Intelligence' && <InteractPage matterId={matterId} go={go} />}
             {tab === 'Draft' && <DraftPage matterId={matterId} />}
             {tab === 'History' && <History matterId={matterId} />}
             {tab === 'Notes' && <Notes matterId={matterId} initial={m.notes} />}
@@ -95,7 +95,7 @@ function StatusSelect({ matterId, status }: { matterId: string; status: string }
       value={status}
       onChange={(e) => update.mutate(e.target.value)}
       className="rounded-lex border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] px-2.5 py-1.5 text-[13px] outline-none focus:border-stone-400"
-      title="Brief status"
+      title="Workspace status"
     >
       {['Active', 'On hold', 'Closed'].map((s) => <option key={s}>{s}</option>)}
     </select>
@@ -128,12 +128,12 @@ function Overview({ matterId, notes }: { matterId: string; notes: string }) {
 
       <div className="mt-6">
         <p className="text-[12.5px] text-stone-400 dark:text-stone-500 font-medium">
-          Brief memory — who &amp; what this brief is about
+          Workspace memory — who &amp; what this workspace is about
         </p>
         {memory.isLoading ? (
           <div className="mt-3"><Spinner /></div>
         ) : !d || d.entities.length === 0 ? (
-          <p className="text-[13px] text-stone-500 dark:text-stone-400 mt-2">No entities yet — file documents into this brief and its memory builds itself.</p>
+          <p className="text-[13px] text-stone-500 dark:text-stone-400 mt-2">No entities yet — file documents into this workspace and its memory builds itself.</p>
         ) : (
           <div className="mt-3 flex flex-wrap gap-2">
             {d.entities.map((e) => (
@@ -190,7 +190,7 @@ function TimelineList({ items, loading, matterId, full = false }: {
   const pg = usePagination(filtered, 5)
   const shown = full ? pg.pageItems : items
   if (loading) return <Spinner />
-  if (items.length === 0) return <EmptyState title="Nothing here yet" hint="Work done inside this brief will appear in its history." />
+  if (items.length === 0) return <EmptyState title="Nothing here yet" hint="Work done inside this workspace will appear in its history." />
   const deletable = (t: import('../api/types').TimelineItem) => !!t.id && !!myEmail && t.user_email === myEmail
   async function remove(id: string) {
     setDeleting(true)
@@ -294,7 +294,7 @@ function TimelineList({ items, loading, matterId, full = false }: {
         </>
       )}
       {full && filtered.length === 0 ? (
-        <EmptyState title="Nothing in this period" hint="Try a wider date range or a different type — the brief's older history is still here." />
+        <EmptyState title="Nothing in this period" hint="Try a wider date range or a different type — the workspace's older history is still here." />
       ) : (
     <div className="space-y-2">
       {shown.map((t, i) => {
@@ -344,7 +344,7 @@ function TimelineList({ items, loading, matterId, full = false }: {
       {pending?.id && (
         <ConfirmDialog
           title="Delete this history entry permanently?"
-          body={`"${pending.title}" will be removed from this brief's history for good. Your token usage and billing records are not affected.`}
+          body={`"${pending.title}" will be removed from this workspace's history for good. Your token usage and billing records are not affected.`}
           busy={deleting}
           onConfirm={() => { void remove(pending.id as string) }}
           onCancel={() => setPending(null)}
@@ -353,7 +353,7 @@ function TimelineList({ items, loading, matterId, full = false }: {
       {confirmingBulk && (
         <ConfirmDialog
           title={`Delete ${selected.size} history ${selected.size === 1 ? 'entry' : 'entries'} permanently?`}
-          body="The selected entries will be removed from this brief's history for good. Your token usage and billing records are not affected."
+          body="The selected entries will be removed from this workspace's history for good. Your token usage and billing records are not affected."
           busy={deletingBulk}
           onConfirm={() => { void deleteSelected() }}
           onCancel={() => setConfirmingBulk(false)}
@@ -468,7 +468,7 @@ function Documents({ matterId }: { matterId: string }) {
   }
   const attach = useMutation({
     mutationFn: () => mattersApi.attach(matterId, attachId),
-    onSuccess: () => { invalidate(); setAttachId(''); toast('success', 'Document filed in this brief') },
+    onSuccess: () => { invalidate(); setAttachId(''); toast('success', 'Document filed in this workspace') },
     onError: (e) => toast('error', (e as Error).message),
   })
   const detach = useMutation({
@@ -486,7 +486,7 @@ function Documents({ matterId }: { matterId: string }) {
       {detail.isLoading ? (
         <Spinner label="Loading documents…" />
       ) : docs.length === 0 ? (
-        <EmptyState title="No documents in this brief yet" hint="Upload a file, paste text, or file an existing Vault document below." />
+        <EmptyState title="No documents in this workspace yet" hint="Upload a file, paste text, or file an existing Vault document below." />
       ) : (
         <div className="space-y-2">
           {docs.map((d) => (
@@ -501,7 +501,7 @@ function Documents({ matterId }: { matterId: string }) {
               </div>
               <button
                 onClick={() => detach.mutate(d.id)}
-                title="Remove from this brief (document stays in the Vault)"
+                title="Remove from this workspace (document stays in the Vault)"
                 className="text-stone-400 dark:text-stone-500 hover:text-ink p-1"
               >
                 <X size={15} />
@@ -610,19 +610,19 @@ function Notes({ matterId, initial }: { matterId: string; initial: string }) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['matter', matterId] })
       qc.invalidateQueries({ queryKey: ['matters'] })
-      toast('success', 'Notes saved to the brief memory')
+      toast('success', 'Notes saved to the workspace memory')
     },
     onError: (e) => toast('error', (e as Error).message),
   })
   return (
     <div>
       <p className="text-[13px] text-stone-500 dark:text-stone-400">
-        Brief notes are part of its living memory — key facts, forum, next dates, strategy.
+        Workspace notes are part of its living memory — key facts, forum, next dates, strategy.
       </p>
       <textarea
         value={notes} onChange={(e) => setNotes(e.target.value)}
         rows={10}
-        placeholder="What should anyone opening this brief know?"
+        placeholder="What should anyone opening this workspace know?"
         className="mt-3 w-full rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] px-4 py-3 text-[14px] outline-none focus:border-stone-400"
       />
       <button

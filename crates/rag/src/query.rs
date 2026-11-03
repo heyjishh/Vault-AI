@@ -254,14 +254,14 @@ impl AskOptions {
 
 /// Scope note for a brief-vault answer that found in-brief evidence.
 pub fn brief_vault_note_hit(label: &str) -> String {
-    format!("Brief vault: answered only from {label}'s documents — the full vault was not searched.")
+    format!("Workspace vault: answered only from {label}'s documents — the full vault was not searched.")
 }
 
 /// Scope note for a brief-vault answer with no in-brief evidence: the
 /// grounded refusal declares the restriction instead of widening.
 pub fn brief_vault_note_empty(label: &str) -> String {
     format!(
-        "Brief vault: no documents in {label} matched — nothing outside this brief was searched."
+        "Workspace vault: no documents in {label} matched — nothing outside this workspace was searched."
     )
 }
 
@@ -1759,7 +1759,7 @@ impl QueryService {
                 graph_context = g2;
                 fell_back = true;
                 scope_note =
-                    Some("No documents in this brief matched — answered from the full vault.".to_string());
+                    Some("No documents in this workspace matched — answered from the full vault.".to_string());
             }
         }
         // Brief-vault mode declares itself on EVERY answer, not just
@@ -4355,7 +4355,7 @@ mod tests {
             "corpus citations stay inside the brief"
         );
         let note = ans.scope_note.clone().unwrap_or_default();
-        assert!(note.contains("Brief vault"), "note: {note}");
+        assert!(note.contains("Workspace vault"), "note: {note}");
         assert!(
             note.contains("Live web search"),
             "the web outcome note composes after the brief note: {note}"
@@ -4385,7 +4385,7 @@ mod tests {
             cross.citations.iter().map(|c| &c.doc_title).collect::<Vec<_>>()
         );
         assert!(
-            cross.scope_note.as_deref().is_some_and(|n| n.contains("Brief vault")),
+            cross.scope_note.as_deref().is_some_and(|n| n.contains("Workspace vault")),
             "note: {:?}",
             cross.scope_note
         );

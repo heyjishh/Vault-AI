@@ -228,7 +228,7 @@ export default function VaultPage() {
       </p>
       {matterId && (
         <p className="mt-2 text-stone-600 dark:text-stone-300 text-[12px] font-medium">
-          Showing documents in {scopeTitle ?? 'the active brief'} — uploads file here
+          Showing documents in {scopeTitle ?? 'the active workspace'} — uploads file here
         </p>
       )}
 
@@ -360,7 +360,7 @@ export default function VaultPage() {
           <p className="text-[13px] text-stone-500 dark:text-stone-400 mt-2 leading-relaxed">
             Pulls every supported file under a prefix from the bucket configured on the server
             (works with AWS S3 and Cloudflare R2 endpoints). Bulk-ingested documents are filed
-            into the default brief.
+            into the default workspace.
           </p>
           <input
             value={prefix} onChange={(e) => setPrefix(e.target.value)}
@@ -390,7 +390,7 @@ export default function VaultPage() {
       {isLoading ? (
         <Spinner label="Loading vault…" />
       ) : !docs || docs.length === 0 ? (
-        <EmptyState title="No documents in this brief yet" hint="Drop a PDF above to file the first one here — documents live inside briefs, and this page shows only the active brief." />
+        <EmptyState title="No documents in this workspace yet" hint="Drop a PDF above to file the first one here — documents live inside workspaces, and this page shows only the active workspace." />
       ) : filteredDocs.length === 0 ? (
         <EmptyState title="No documents match" hint="Try a different search term." />
       ) : (
@@ -549,7 +549,7 @@ function MetaEditor(props: {
           <div>
             <p className="text-[15px] font-semibold text-ink dark:text-[#f4f2ee]">Validity — {doc.title}</p>
             <p className="text-[12.5px] text-stone-500 dark:text-stone-400 mt-0.5">
-              Ask cites a document only when it is in force on the requested date and matches the jurisdiction.
+              Knowledge cites a document only when it is in force on the requested date and matches the jurisdiction.
               Leave everything empty to clear.
             </p>
           </div>

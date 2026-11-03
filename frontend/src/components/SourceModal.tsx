@@ -152,7 +152,7 @@ export function SourceModal({ citation: c, onClose, go }: {
           {isPrivate ? (
             <div>
               <p className="text-[13.5px] leading-relaxed text-stone-600 dark:text-stone-300">
-                This source lives in your Confidential Vault. Its full text is only shown inside the vault, never in the Ask view.
+                This source lives in your Confidential Vault. Its full text is only shown inside the vault, never in the Knowledge view.
               </p>
               <div className="mt-4 rounded-lex border border-stone-200 dark:border-white/10 bg-[#fafaf9] dark:bg-white/5 px-4 py-3 text-[13px] leading-relaxed text-stone-600 dark:text-stone-300">
                 <span className="font-medium text-ink dark:text-[#f4f2ee]">Cited passage — </span>
@@ -259,7 +259,7 @@ export function SourceModal({ citation: c, onClose, go }: {
                   }}
                   className="inline-flex items-center gap-1.5 text-[12.5px] font-medium text-ink dark:text-[#f4f2ee] hover:underline underline-offset-2"
                 >
-                  <PanelRight size={12} /> Open in Interact
+                  <PanelRight size={12} /> Open in Intelligence
                 </button>
               )}
             </span>

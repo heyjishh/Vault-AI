@@ -75,7 +75,7 @@ export default function SearchPage({ go }: { go: (v: View) => void }) {
         ) : results.isLoading ? (
           <Spinner label="Searching the corpus…" />
         ) : (results.data ?? []).length === 0 ? (
-          <EmptyState title={`No matches for “${q}”`} hint="Try a different spelling, a shorter term, or ask Clause instead — Ask searches by meaning, not just words." />
+          <EmptyState title={`No matches for “${q}”`} hint="Try a different spelling, a shorter term, or ask Clause instead — Knowledge searches by meaning, not just words." />
         ) : (
           <>
             <p className="text-[13px] text-stone-400 dark:text-stone-500 mb-3">
@@ -98,7 +98,7 @@ export default function SearchPage({ go }: { go: (v: View) => void }) {
                   <span className="block mt-2.5 space-y-1.5">
                     {hit.snippets.map((s, i) => <Snippet key={i} text={s} needle={q} />)}
                   </span>
-                  <span className="block mt-2.5 text-[12.5px] font-medium text-stone-400 dark:text-stone-500">Open in Interact →</span>
+                  <span className="block mt-2.5 text-[12.5px] font-medium text-stone-400 dark:text-stone-500">Open in Intelligence →</span>
                 </button>
               ))}
             </div>

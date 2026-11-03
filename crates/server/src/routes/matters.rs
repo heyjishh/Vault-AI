@@ -272,7 +272,7 @@ pub async fn delete_matter(
         history_removed,
         documents_rehomed = adopted,
         brief = %id,
-        "deleted brief: history removed, orphaned documents re-filed into the default brief"
+        "deleted workspace: history removed, orphaned documents re-filed into the default workspace"
     );
     Ok(Json(serde_json::json!({
         "deleted": true,
@@ -382,7 +382,7 @@ pub async fn matter_timeline(
                 at: doc.ingested_at,
                 kind: "document".to_string(),
                 title: doc.title.clone(),
-                detail: "filed in this brief".to_string(),
+                detail: "filed in this workspace".to_string(),
                 excerpt: format!("{} chunks · {} chars", doc.chunks, doc.chars),
                 citations: 0,
                 tokens: 0,
@@ -394,7 +394,7 @@ pub async fn matter_timeline(
     items.push(TimelineItem {
         at: matter.created_at,
         kind: "created".to_string(),
-        title: format!("Brief opened: {}", matter.title),
+        title: format!("Workspace opened: {}", matter.title),
         detail: matter.kind.clone(),
         excerpt: String::new(),
         citations: 0,

@@ -30,7 +30,7 @@ function PurgePanel({ user, onClose }: { user: AdminUser; onClose: () => void })
         <>
           <p className="text-[14px] mt-2">
             Done. Removed <strong>{receipt.documents_removed}</strong> documents ({receipt.chunks_removed} chunks,{' '}
-            {receipt.brief_filings_removed} brief filings) and <strong>{receipt.history_entries_removed}</strong> history
+            {receipt.brief_filings_removed} workspace filings) and <strong>{receipt.history_entries_removed}</strong> history
             entries. The account, feedback, Private Vault and payment data were not touched.
           </p>
           <button onClick={onClose} className="mt-4 rounded-lex border border-stone-300 dark:border-white/10 bg-white dark:bg-[#0a1a12] px-3 py-1.5 text-[13px] font-medium">
@@ -43,7 +43,7 @@ function PurgePanel({ user, onClose }: { user: AdminUser; onClose: () => void })
         <>
           <p className="text-[14px] mt-2 leading-relaxed">
             This permanently deletes <strong>{summary.data.documents} uploaded document(s)</strong> — including the ones
-            filed in their Briefs, removed from the corpus, vectors, graph and brief filings — and{' '}
+            filed in their Workspaces, removed from the corpus, vectors, graph and workspace filings — and{' '}
             <strong>{summary.data.history_entries} history entries</strong>. It cannot be undone.
           </p>
           <p className="text-[13px] text-stone-500 dark:text-stone-400 mt-1.5">

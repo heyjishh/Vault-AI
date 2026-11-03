@@ -77,7 +77,7 @@ export default function AuthPage() {
             {mode === 'login' ? 'Welcome back' : 'Create your workspace'}
           </h2>
           <p className="text-stone-500 dark:text-stone-400 mt-2 text-[15px]">
-            {mode === 'login' ? 'Sign in to continue to your briefs.' : 'Set up your account to start researching.'}
+            {mode === 'login' ? 'Sign in to continue to your workspaces.' : 'Set up your account to start researching.'}
           </p>
 
           <form onSubmit={submit} className="mt-8 space-y-4">

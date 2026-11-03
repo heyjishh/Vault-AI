@@ -55,9 +55,9 @@ const ACTION_BUTTONS = ACTIONS.filter((a) => a.id !== 'chat')
 /** Piece 16: the only places Interact may read from — no Web, no
  *  system data, ever. Server-enforced via the request's source. */
 const SOURCES: { id: InteractSource; label: string; hint: string }[] = [
-  { id: 'vault', label: 'Vault', hint: "This brief's documents only" },
+  { id: 'vault', label: 'Vault', hint: "This workspace's documents only" },
   { id: 'private', label: 'Private Vault', hint: 'Only your Confidential Vault' },
-  { id: 'both', label: 'Both', hint: 'Brief documents + Private Vault, labelled by source' },
+  { id: 'both', label: 'Both', hint: 'Workspace documents + Private Vault, labelled by source' },
 ]
 
 /** Mirrors the server cap (MAX_INTERACT_DOCS in routes/create.rs):
@@ -259,7 +259,7 @@ export default function InteractPage({ matterId, go }: { matterId?: string; go?:
     setSelectedIds((prev) => {
       if (prev.includes(id)) return prev.filter((x) => x !== id)
       if (prev.length >= MAX_INTERACT_DOCS) {
-        toast('error', `Interact covers at most ${MAX_INTERACT_DOCS} documents at once — the analysis budget is split across the selection.`)
+        toast('error', `Intelligence covers at most ${MAX_INTERACT_DOCS} documents at once — the analysis budget is split across the selection.`)
         return prev
       }
       return [...prev, id]
@@ -369,10 +369,10 @@ export default function InteractPage({ matterId, go }: { matterId?: string; go?:
       onDragLeave={() => setDragging(false)}
       onDrop={onDrop}
     >
-      <h1 className="font-display text-[2rem] tracking-tight">Interact</h1>
+      <h1 className="font-display text-[2rem] tracking-tight">Intelligence</h1>
       <p className="text-stone-500 dark:text-stone-400 mt-1.5 text-[15px]">
-        Chat with your documents the way Ask chats with the vault — but Interact reads only what you point it at:
-        this brief's documents, your Confidential Vault, or both. Never the web, never system data.
+        Chat with your documents the way Knowledge chats with the vault — but Intelligence reads only what you point it at:
+        this workspace's documents, your Confidential Vault, or both. Never the web, never system data.
       </p>
 
       {/* ---- Piece 16: source selector ---- */}
@@ -398,7 +398,7 @@ export default function InteractPage({ matterId, go }: { matterId?: string; go?:
         </div>
         {source === 'private' && (
           <p className="text-[12.5px] text-stone-500 dark:text-stone-400 mt-3">
-            Private mode reads only your Confidential Vault — this brief's documents are not used, and the
+            Private mode reads only your Confidential Vault — this workspace's documents are not used, and the
             answer is never cached or written into history.
           </p>
         )}
@@ -425,7 +425,7 @@ export default function InteractPage({ matterId, go }: { matterId?: string; go?:
         <div className="flex items-baseline justify-between gap-3 flex-wrap">
           <span className="text-[13px] text-stone-500 dark:text-stone-400 font-medium">
             Documents — {selectedIds.length} selected (max {MAX_INTERACT_DOCS})
-            {effectiveMatterId && briefWide ? ' · all of this brief' : ''}
+            {effectiveMatterId && briefWide ? ' · all of this workspace' : ''}
           </span>
         </div>
         {effectiveMatterId && docs.data && (
@@ -442,19 +442,19 @@ export default function InteractPage({ matterId, go }: { matterId?: string; go?:
               />
               <span>
                 <span className="text-[13.5px] font-medium">
-                  All documents in this brief ({docs.data.length})
+                  All documents in this workspace ({docs.data.length})
                 </span>
                 {docs.data.length > MAX_INTERACT_DOCS && (
                   <span className="block text-[12px] text-amber-700 mt-0.5">
-                    Interact covers the first {MAX_INTERACT_DOCS} of {docs.data.length} —{' '}
+                    Intelligence covers the first {MAX_INTERACT_DOCS} of {docs.data.length} —{' '}
                     {docs.data.length - MAX_INTERACT_DOCS} document
                     {docs.data.length - MAX_INTERACT_DOCS === 1 ? ' is' : 's are'} not covered.
                   </span>
                 )}
                 <span className="block text-[12px] text-stone-400 dark:text-stone-500 mt-0.5">
                   {briefWide
-                    ? 'Interact works across the whole brief. Untick any document below to narrow the set manually.'
-                    : 'Manual selection — tick this to return to the whole brief.'}
+                    ? 'Intelligence works across the whole workspace. Untick any document below to narrow the set manually.'
+                    : 'Manual selection — tick this to return to the whole workspace.'}
                 </span>
               </span>
             </label>
@@ -474,7 +474,7 @@ export default function InteractPage({ matterId, go }: { matterId?: string; go?:
             <FolderUp size={14} /> Upload folder
           </button>
           <span className="text-[12.5px] text-stone-400 dark:text-stone-500">
-            or drop files/folders anywhere here — up to {MAX_BATCH_FILES} files and {MAX_BATCH_FOLDERS} folders per batch; uploads file into this brief and are selected automatically · {UPLOAD_FORMATS_HINT}
+            or drop files/folders anywhere here — up to {MAX_BATCH_FILES} files and {MAX_BATCH_FOLDERS} folders per batch; uploads file into this workspace and are selected automatically · {UPLOAD_FORMATS_HINT}
           </span>
           <input
             ref={fileInputRef}
@@ -539,13 +539,13 @@ export default function InteractPage({ matterId, go }: { matterId?: string; go?:
           ))}
           {!effectiveMatterId && (
             <p className="px-3 py-2.5 text-[13.5px] text-stone-500 dark:text-stone-400">
-              No brief is active yet — pick one in the “Working in” switcher.
+              No workspace is active yet — pick one in the “Working in” switcher.
             </p>
           )}
           {effectiveMatterId && docs.isPending && <p className="px-3 py-2.5 text-[13.5px] text-stone-400 dark:text-stone-500">Loading documents…</p>}
           {docs.data && docs.data.length === 0 && (
             <p className="px-3 py-2.5 text-[13.5px] text-stone-500 dark:text-stone-400">
-              No documents are filed in this brief yet — upload above, or file documents from the brief page.
+              No documents are filed in this workspace yet — upload above, or file documents from the workspace page.
             </p>
           )}
         </div>
@@ -619,7 +619,7 @@ export default function InteractPage({ matterId, go }: { matterId?: string; go?:
             onClick={sendChat}
             disabled={chatBlocked}
             className="btn-brand w-8 h-8 rounded-lex text-ivory flex items-center justify-center disabled:opacity-40 transition-colors"
-            title="Ask (Enter)"
+            title="Send (Enter)"
           >
             <ArrowUp size={16} />
           </button>
@@ -637,10 +637,10 @@ export default function InteractPage({ matterId, go }: { matterId?: string; go?:
       </div>
 
       {turns.length === 0 && source !== 'private' && !hasSelection && (
-        <div className="mt-5"><EmptyState title="Pick a document to begin" hint="Interact reads the documents themselves — not the whole corpus." /></div>
+        <div className="mt-5"><EmptyState title="Pick a document to begin" hint="Intelligence reads the documents themselves — not the whole corpus." /></div>
       )}
       {turns.length === 0 && source === 'private' && (
-        <div className="mt-5"><EmptyState title="Ask your Confidential Vault" hint="Only your private documents are read — nothing from this brief, nothing cached, nothing saved to history." /></div>
+        <div className="mt-5"><EmptyState title="Ask your Confidential Vault" hint="Only your private documents are read — nothing from this workspace, nothing cached, nothing saved to history." /></div>
       )}
 
       {sourceModal && <SourceModal citation={sourceModal} onClose={() => setSourceModal(null)} go={go} />}

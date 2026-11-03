@@ -116,7 +116,7 @@ const PAGES: Record<string, PageInfo> = {
     tips: [
       'Your plan, tokens left and renewal date live right here — no surprises later.',
       '“Pick up where you left off” reopens any past answer in one click.',
-      'The brief you pick in the sidebar scopes everything I do. Choose wisely.',
+      'The workspace you pick in the sidebar scopes everything I do. Choose wisely.',
     ],
     actions: [
       { label: 'Ask Clause something', kind: 'new' },
@@ -124,30 +124,30 @@ const PAGES: Record<string, PageInfo> = {
     ],
   },
   matters: {
-    name: 'Briefs',
+    name: 'Workspaces',
     mood: 'content',
-    greet: 'Briefs are living matters — each one remembers its own documents.',
+    greet: 'Workspaces are living matters — each one remembers its own documents.',
     tips: [
-      'A brief is a hard confidentiality boundary: scoped questions never leak across briefs.',
-      'Uploads, Interact and Draft all file into the brief you are working in.',
+      'A workspace is a hard confidentiality boundary: scoped questions never leak across workspaces.',
+      'Uploads, Intelligence and Draft all file into the workspace you are working in.',
     ],
     actions: [
-      { label: 'Ask within a brief', kind: 'go', view: 'assistant' },
+      { label: 'Ask within a workspace', kind: 'go', view: 'assistant' },
       { label: 'Open the Vault', kind: 'go', view: 'vault' },
     ],
   },
   matter: {
-    name: 'Brief',
+    name: 'Workspace',
     mood: 'content',
-    greet: 'Inside a brief, everything I retrieve stays inside it. Promise.',
+    greet: 'Inside a workspace, everything I retrieve stays inside it. Promise.',
     tips: [
-      'Ask from here and I only cite this brief’s documents — nothing outside it.',
+      'Ask from here and I only cite this workspace’s documents — nothing outside it.',
       'Add the other side’s filings here and I’ll contrast them for you.',
     ],
-    actions: [{ label: 'Ask about this brief', kind: 'go', view: 'assistant' }],
+    actions: [{ label: 'Ask about this workspace', kind: 'go', view: 'assistant' }],
   },
   assistant: {
-    name: 'Ask',
+    name: 'Knowledge',
     mood: 'content',
     greet: 'Ask against your whole vault — every claim I make carries a citation.',
     tips: [
@@ -162,7 +162,7 @@ const PAGES: Record<string, PageInfo> = {
     ],
   },
   interact: {
-    name: 'Interact',
+    name: 'Intelligence',
     mood: 'curious',
     greet: 'Pick a document and interrogate it — summary, chronology, clauses, risks.',
     tips: [
@@ -177,7 +177,7 @@ const PAGES: Record<string, PageInfo> = {
     greet: 'Drafts here are grounded in your vault — notices, agreements, IRAC memos, petitions.',
     tips: [
       'An IRAC memo from Draft is structured Issue–Rule–Analysis–Conclusion, citations included.',
-      'Draft inside a brief and I only lean on that brief’s documents.',
+      'Draft inside a workspace and I only lean on that workspace’s documents.',
     ],
     actions: [
       { label: 'Ask a question first', kind: 'go', view: 'assistant' },
@@ -192,7 +192,7 @@ const PAGES: Record<string, PageInfo> = {
       'Each hypothesis is tested separately — the verdict tells you which ones survived.',
       'Web evidence is blended in with authority tiers: courts and gazettes outrank blogs.',
     ],
-    actions: [{ label: 'Back to Ask', kind: 'go', view: 'assistant' }],
+    actions: [{ label: 'Back to Knowledge', kind: 'go', view: 'assistant' }],
   },
   agents: {
     name: 'Agents',
@@ -221,8 +221,8 @@ const PAGES: Record<string, PageInfo> = {
     name: 'Search',
     mood: 'curious',
     greet: 'Full-text search across every document — handy when you half-remember a phrase.',
-    tips: ['Found the doc? Open it in Interact and I’ll summarise it on the spot.'],
-    actions: [{ label: 'Open Interact', kind: 'go', view: 'interact' }],
+    tips: ['Found the doc? Open it in Intelligence and I’ll summarise it on the spot.'],
+    actions: [{ label: 'Open Intelligence', kind: 'go', view: 'interact' }],
   },
   private: {
     name: 'Private Vault',
@@ -235,10 +235,10 @@ const PAGES: Record<string, PageInfo> = {
     actions: [{ label: 'Back to the Vault', kind: 'go', view: 'vault' }],
   },
   graph: {
-    name: 'Knowledge',
+    name: 'Knowledge Graph',
     mood: 'thinking',
     greet: 'The knowledge graph — parties, provisions and precedents, wired together.',
-    tips: ['Entities extracted from your documents appear here; Ask uses these links to widen retrieval.'],
+    tips: ['Entities extracted from your documents appear here; Knowledge uses these links to widen retrieval.'],
     actions: [{ label: 'Ask with the graph', kind: 'go', view: 'assistant' }],
   },
   plans: {
@@ -255,7 +255,7 @@ const PAGES: Record<string, PageInfo> = {
     name: 'Page',
     mood: 'content',
     greet: 'A custom page your admin added. I’m still here if you need me.',
-    tips: ['Tap me anytime for Ask, Research and Draft shortcuts.'],
+    tips: ['Tap me anytime for Knowledge, Research and Draft shortcuts.'],
     actions: [{ label: 'Ask Clause', kind: 'new' }],
   },
 }

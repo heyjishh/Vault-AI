@@ -96,7 +96,7 @@ export default function PromptsPage({ go }: { go: (view: string) => void }) {
             <BookOpen size={24} /> Prompt Library
           </h1>
           <p className="text-stone-500 dark:text-stone-400 mt-1.5 text-[15px]">
-            Explore Juris Vault curated prompts or create your own. “Use” drops the prompt into Ask, ready to send.
+            Explore Juris Vault curated prompts or create your own. “Use” drops the prompt into Knowledge, ready to send.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -154,7 +154,7 @@ export default function PromptsPage({ go }: { go: (view: string) => void }) {
               <p className="text-[14px] font-medium">Nothing here yet</p>
               <p className="text-[13px] text-stone-500 dark:text-stone-400 mt-1">
                 {group === 'Created By Me'
-                  ? 'Create your first prompt — it will live here and in the Prompts button inside Ask and Interact.'
+                  ? 'Create your first prompt — it will live here and in the Prompts button inside Knowledge and Intelligence.'
                   : group === 'Shared With Me'
                     ? 'When a colleague shares a prompt, it appears here.'
                     : group === 'Starred'

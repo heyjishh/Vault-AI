@@ -35,9 +35,9 @@ export type View = 'dashboard' | 'matters' | 'matter' | 'assistant' | 'interact'
 
 const NAV: { id: View; label: string; icon: React.ElementType }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { id: 'matters', label: 'Briefs', icon: Briefcase },
-  { id: 'assistant', label: 'Ask', icon: MessageSquare },
-  { id: 'interact', label: 'Interact', icon: FileSearch },
+  { id: 'matters', label: 'Workspaces', icon: Briefcase },
+  { id: 'assistant', label: 'Knowledge', icon: MessageSquare },
+  { id: 'interact', label: 'Intelligence', icon: FileSearch },
   { id: 'draft', label: 'Draft', icon: PenLine },
   { id: 'research', label: 'Research', icon: FlaskConical },
   { id: 'agents', label: 'Agents', icon: Bot },
@@ -47,7 +47,7 @@ const NAV: { id: View; label: string; icon: React.ElementType }[] = [
   { id: 'connectors', label: 'Connectors', icon: Plug },
   { id: 'search', label: 'Search documents', icon: Search },
   { id: 'private', label: 'Private Vault', icon: Lock },
-  { id: 'graph', label: 'Knowledge', icon: Network },
+  { id: 'graph', label: 'Knowledge Graph', icon: Network },
   { id: 'plans', label: 'Plans & Billing', icon: CreditCard },
 ]
 
@@ -186,7 +186,7 @@ export default function AppShell() {
                 onClick={() => openMatter(effectiveMatterId)}
                 className="mt-1.5 px-1 text-[12px] text-stone-500 dark:text-stone-400 hover:text-ink font-medium"
               >
-                Open this brief →
+                Open this workspace →
               </button>
             )}
           </div>

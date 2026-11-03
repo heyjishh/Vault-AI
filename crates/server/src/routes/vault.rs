@@ -312,7 +312,7 @@ pub(crate) async fn run_upload(
             let matter = state
                 .matters
                 .get(mid)
-                .ok_or_else(|| legal_rag_common::Error::NotFound("brief not found".to_string()))?;
+                .ok_or_else(|| legal_rag_common::Error::NotFound("workspace not found".to_string()))?;
             crate::routes::matters::require_edit(state, user, &matter)?;
             Some(mid.clone())
         }
@@ -579,7 +579,7 @@ pub async fn list_documents(
             let matter = state
                 .matters
                 .get(&mid)
-                .ok_or_else(|| legal_rag_common::Error::NotFound("brief not found".to_string()))?;
+                .ok_or_else(|| legal_rag_common::Error::NotFound("workspace not found".to_string()))?;
             crate::routes::matters::require_read(&state, &user, &matter)?;
             let filed: std::collections::HashSet<String> =
                 matter.document_ids.into_iter().collect();

@@ -46,10 +46,10 @@ const SUGGESTIONS = [
 ]
 
 const ACTIONS: { view: View; icon: React.ElementType; title: string; hint: string }[] = [
-  { view: 'assistant', icon: MessageSquare, title: 'Ask Clause', hint: 'Cited answers from your vault' },
+  { view: 'assistant', icon: MessageSquare, title: 'Knowledge', hint: 'Cited answers from your vault' },
   { view: 'research', icon: FlaskConical, title: 'Research', hint: 'Hypotheses tested against evidence' },
   { view: 'agents', icon: Bot, title: 'Agents', hint: 'Contract review, due diligence, memos' },
-  { view: 'interact', icon: FileSearch, title: 'Interact', hint: 'Summaries, chronologies, clause maps' },
+  { view: 'interact', icon: FileSearch, title: 'Intelligence', hint: 'Summaries, chronologies, clause maps' },
   { view: 'draft', icon: PenLine, title: 'Draft', hint: 'Notices, agreements, petitions' },
   { view: 'private', icon: Lock, title: 'Private Vault', hint: 'Sealed documents only you can open' },
 ]
@@ -265,11 +265,16 @@ export default function DashboardPage({ go, openMatter }: { go: (v: View) => voi
           <div className="min-w-0 flex-1">
             <div className="h-[2px] w-[44px] bg-bronze mb-3" />
             <h1 className="font-display text-[30px] leading-tight tracking-tight">
-              {greeting()}, {firstName}
+              {greeting()}, {firstName}! 👋
             </h1>
-            <p className="text-stone-500 dark:text-stone-400 mt-1 text-[14.5px] max-w-xl">
-              I'm <span className="font-semibold text-ink dark:text-[#f4f2ee]">Clause</span>, your legal research companion.
-              Ask me anything across your briefs and vault — every answer cited to its source.
+            <p className="text-stone-500 dark:text-stone-400 mt-1 text-[14.5px] max-w-2xl">
+              I'm <span className="font-semibold text-ink dark:text-[#f4f2ee]">Clause</span>, your intelligent legal research companion.
+            </p>
+            <p className="text-stone-500 dark:text-stone-400 mt-1.5 text-[14.5px] max-w-2xl">
+              From case laws and legal precedents to workspaces, documents, and your research vault — I'm here to help you find answers, uncover insights, and navigate complex legal questions with ease.
+            </p>
+            <p className="text-ink dark:text-[#f4f2ee] mt-2 text-[14.5px] font-medium max-w-2xl">
+              Every question deserves a well-researched answer. Every answer deserves a citation.
             </p>
             <form
               className="running-border mt-4 flex items-center gap-2 rounded-lex border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] pl-4 pr-1.5 py-1.5 transition-colors"
@@ -366,7 +371,7 @@ export default function DashboardPage({ go, openMatter }: { go: (v: View) => voi
         ))}
       </div>
 
-      {/* ——— Recent work + briefs ——— */}
+      {/* ——— Recent work + workspaces ——— */}
       <div className="grid lg:grid-cols-5 gap-6 mt-9">
         <div className="lg:col-span-3">
           <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
@@ -446,13 +451,13 @@ export default function DashboardPage({ go, openMatter }: { go: (v: View) => voi
         </div>
         <div className="lg:col-span-2">
           <div className="flex items-baseline justify-between mb-3">
-            <h2 className="font-display text-xl">Your briefs</h2>
+            <h2 className="font-display text-xl">Your workspaces</h2>
             <button onClick={() => go('matters')} className="text-[13px] text-stone-500 dark:text-stone-400 hover:text-ink inline-flex items-center gap-1">
-              All briefs <ArrowRight size={13} />
+              All workspaces <ArrowRight size={13} />
             </button>
           </div>
           {(matters.data ?? []).length === 0 ? (
-            <EmptyState title="No briefs yet" hint="Briefs keep each matter's documents, memory, and history together." />
+            <EmptyState title="No workspaces yet" hint="Workspaces keep each matter's documents, memory, and history together." />
           ) : (
             <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] overflow-hidden">
               {(matters.data ?? []).slice(0, 3).map((m) => (

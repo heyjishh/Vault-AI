@@ -48,7 +48,7 @@ export default function MattersPage({ open }: { open: (id: string) => void }) {
       qc.invalidateQueries({ queryKey: ['matters'] })
       setCreating(false)
       setTitle(''); setClient(''); setNotes(''); setSpaceId('')
-      toast('success', 'Brief opened')
+      toast('success', 'Workspace opened')
       open(m.id)
     },
     onError: (e) => toast('error', (e as Error).message),
@@ -62,8 +62,8 @@ export default function MattersPage({ open }: { open: (id: string) => void }) {
       toast(
         'success',
         n != null
-          ? `Brief deleted — ${n} histor${n === 1 ? 'y entry' : 'y entries'} permanently removed; its documents moved to the default brief`
-          : 'Brief deleted — its history was permanently removed; its documents moved to the default brief',
+          ? `Workspace deleted — ${n} histor${n === 1 ? 'y entry' : 'y entries'} permanently removed; its documents moved to the default workspace`
+          : 'Workspace deleted — its history was permanently removed; its documents moved to the default workspace',
       )
     },
     onError: (e) => toast('error', (e as Error).message),
@@ -73,10 +73,10 @@ export default function MattersPage({ open }: { open: (id: string) => void }) {
     <div className="w-full px-6 py-8">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="font-display text-[2rem] tracking-tight">Briefs</h1>
+          <h1 className="font-display text-[2rem] tracking-tight">Workspaces</h1>
           <p className="text-stone-500 dark:text-stone-400 mt-1.5 text-[15px] max-w-xl">
-            Every brief is a living workspace — its documents, the entities they mention, and
-            everything asked, drafted, and filed inside it. The brief remembers, so you don't start cold.
+            A workspace remembers — its documents, the entities they mention, and
+            everything asked, drafted, and filed inside it — so you don't start cold.
           </p>
         </div>
         <button
@@ -84,7 +84,7 @@ export default function MattersPage({ open }: { open: (id: string) => void }) {
           className="btn-brand flex items-center gap-2 rounded-lex text-ivory px-3.5 py-2.5 text-[14px] font-medium transition-colors whitespace-nowrap"
         >
           {creating ? <X size={15} /> : <Plus size={15} />}
-          {creating ? 'Cancel' : 'New brief'}
+          {creating ? 'Cancel' : 'New workspace'}
         </button>
       </div>
 
@@ -92,7 +92,7 @@ export default function MattersPage({ open }: { open: (id: string) => void }) {
         <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] px-6 py-5 mt-6">
           <div className="grid sm:grid-cols-2 gap-4">
             <label className="block">
-              <span className="text-[12.5px] text-stone-400 dark:text-stone-500 font-medium">Brief title</span>
+              <span className="text-[12.5px] text-stone-400 dark:text-stone-500 font-medium">Workspace title</span>
               <input
                 value={title} onChange={(e) => setTitle(e.target.value)}
                 placeholder="e.g. Verma v. Kanpur Development Authority"
@@ -140,7 +140,7 @@ export default function MattersPage({ open }: { open: (id: string) => void }) {
             onClick={() => create.mutate()}
             className="btn-brand mt-4 rounded-lex text-ivory px-4 py-2 text-[14px] font-medium disabled:opacity-40 transition-colors"
           >
-            {create.isPending ? 'Opening…' : 'Open brief'}
+            {create.isPending ? 'Opening…' : 'Open workspace'}
           </button>
         </div>
       )}
@@ -148,11 +148,11 @@ export default function MattersPage({ open }: { open: (id: string) => void }) {
       <div className="mt-8">
         {matters && matters.length > 0 && (
           <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
-            <h2 className="font-display text-xl tracking-tight">Your briefs</h2>
+            <h2 className="font-display text-xl tracking-tight">Your workspaces</h2>
             <input
               value={briefQuery}
               onChange={(e) => setBriefQuery(e.target.value)}
-              placeholder="Search briefs…"
+              placeholder="Search workspaces…"
               className="rounded-lex border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] px-3.5 py-1.5 text-[13px] outline-none focus:border-stone-400 w-56"
             />
           </div>
@@ -167,7 +167,7 @@ export default function MattersPage({ open }: { open: (id: string) => void }) {
                   spaceFilter === f ? 'bg-ink text-ivory border-ink' : 'border-stone-200 dark:border-white/10 text-stone-500 dark:text-stone-400 hover:text-ink hover:border-stone-300'
                 }`}
               >
-                {f === 'all' ? 'All briefs' : 'No space'}
+                {f === 'all' ? 'All workspaces' : 'No space'}
               </button>
             ))}
             {spaces.map((s) => (
@@ -184,20 +184,20 @@ export default function MattersPage({ open }: { open: (id: string) => void }) {
           </div>
         )}
         {isLoading ? (
-          <Spinner label="Loading briefs…" />
+          <Spinner label="Loading workspaces…" />
         ) : !matters || matters.length === 0 ? (
-          <EmptyState title="No briefs yet" hint="Open your first brief to start filing documents and work inside it." />
+          <EmptyState title="No workspaces yet" hint="Open your first workspace to start filing documents and work inside it." />
         ) : filteredMatters.length === 0 ? (
-          <EmptyState title="No briefs match" hint="Try a different search term." />
+          <EmptyState title="No workspaces match" hint="Try a different search term." />
         ) : (
           <>
           <div className="grid sm:grid-cols-2 gap-3">
             {pagedMatters.pageItems.map((m) => (
               <MatterCard key={m.id} matter={m} spaceName={spaceName(m.space_id)} onOpen={() => open(m.id)} onDelete={() => {
                 if (window.confirm(
-                  `Delete brief “${m.title}”?\n\n` +
-                  `• Its history — every Ask, Interact, research and draft entry made in this brief — will be PERMANENTLY deleted.\n` +
-                  `• Its documents are not deleted: they move to the default brief.\n` +
+                  `Delete workspace “${m.title}”?\n\n` +
+                  `• Its history — every Knowledge, Intelligence, research and draft entry made in this workspace — will be PERMANENTLY deleted.\n` +
+                  `• Its documents are not deleted: they move to the default workspace.\n` +
                   `• Payment and token-usage records are not affected.`,
                 )) remove.mutate(m.id)
               }} />
@@ -241,7 +241,7 @@ function SpacesPanel({ spaces, myId }: { spaces: Space[]; myId?: string }) {
   })
   const deleteSpace = useMutation({
     mutationFn: (id: string) => spacesApi.remove(id),
-    onSuccess: () => { refresh(); setOpenId(null); toast('success', 'Space deleted — its briefs moved out and kept') },
+    onSuccess: () => { refresh(); setOpenId(null); toast('success', 'Space deleted — its workspaces moved out and kept') },
     onError: (e) => toast('error', (e as Error).message),
   })
 
@@ -250,7 +250,7 @@ function SpacesPanel({ spaces, myId }: { spaces: Space[]; myId?: string }) {
     <div className="mt-12">
       <h2 className="font-display text-xl tracking-tight">Spaces</h2>
       <p className="text-stone-500 dark:text-stone-400 mt-1 text-[13.5px] max-w-xl">
-        A space is a private container for a team or client. Briefs filed in a space — and questions
+        A space is a private container for a team or client. Workspaces filed in a space — and questions
         asked inside them — are visible only to its members.
       </p>
       <div className="mt-4 flex gap-2 max-w-md">
@@ -291,7 +291,7 @@ function SpacesPanel({ spaces, myId }: { spaces: Space[]; myId?: string }) {
                   </button>
                   {iOwn && (
                     <button
-                      onClick={() => { if (window.confirm(`Delete space “${s.name}”? Its briefs are kept and moved out of the space.`)) deleteSpace.mutate(s.id) }}
+                      onClick={() => { if (window.confirm(`Delete space “${s.name}”? Its workspaces are kept and moved out of the space.`)) deleteSpace.mutate(s.id) }}
                       className="text-[12.5px] text-stone-400 dark:text-stone-500 hover:text-[#a02c2c]"
                     >
                       Delete
@@ -391,7 +391,7 @@ function MatterCard({ matter: m, spaceName, onOpen, onDelete }: { matter: Matter
         {!m.is_default && (
           <button
             onClick={(e) => { e.stopPropagation(); onDelete() }}
-            title="Delete brief"
+            title="Delete workspace"
             className="text-stone-400 dark:text-stone-500 hover:text-[#a02c2c] p-0.5"
           >
             <Trash2 size={13} />

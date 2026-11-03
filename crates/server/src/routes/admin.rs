@@ -159,7 +159,7 @@ pub async fn delete_user_data(
         &format!("Purged uploaded data of {}", user.email),
         "admin user-data purge",
         &format!(
-            "{} documents · {} chunks · {} brief filings · {} history entries removed",
+            "{} documents · {} chunks · {} workspace filings · {} history entries removed",
             docs.len(),
             chunks_removed,
             filings_removed,

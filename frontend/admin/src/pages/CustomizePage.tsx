@@ -22,8 +22,8 @@ type Section = 'branding' | 'answering' | 'surfaces' | 'models' | 'tabs'
 
 const SECTIONS: { id: Section; label: string; icon: React.ElementType; blurb: string }[] = [
   { id: 'branding', label: 'Branding', icon: Palette, blurb: 'What the panel is called' },
-  { id: 'answering', label: 'Answering', icon: MessagesSquare, blurb: 'Default mode & the Ask prompt' },
-  { id: 'surfaces', label: 'AI Surfaces', icon: Waypoints, blurb: 'Interact, Draft, Research, Agents' },
+  { id: 'answering', label: 'Answering', icon: MessagesSquare, blurb: 'Default mode & the Knowledge prompt' },
+  { id: 'surfaces', label: 'AI Surfaces', icon: Waypoints, blurb: 'Intelligence, Draft, Research, Agents' },
   { id: 'models', label: 'Models', icon: SlidersHorizontal, blurb: 'LLM & embedding models' },
   { id: 'tabs', label: 'Sidebar Tabs', icon: MonitorSmartphone, blurb: 'Custom pages & links for users' },
 ]
@@ -40,7 +40,7 @@ interface PromptField {
 }
 
 const SURFACE_PROMPTS: PromptField[] = [
-  { key: 'interact', label: 'Interact — document analyst', rows: 7, hint: 'Drives Interact: summary, chronology, key clauses, risks, and document chat.' },
+  { key: 'interact', label: 'Intelligence — document analyst', rows: 7, hint: 'Drives Intelligence: summary, chronology, key clauses, risks, and document chat.' },
   { key: 'draft', label: 'Draft — drafting assistant', rows: 7, hint: 'Drives Draft: legal notices, agreements, memos, petitions, letters.' },
   { key: 'research_frame', label: 'Research — planner', rows: 6, hint: 'Breaks a research question into testable hypotheses. Caution: keep the JSON output format — change the voice, keep the structure.' },
   { key: 'research_adjudicate', label: 'Research — adjudicator', rows: 7, hint: 'Weighs the gathered evidence and writes the research report. Caution: keep the JSON verdict format — a prompt that drops it will fail adjudication.' },
@@ -235,9 +235,9 @@ export default function CustomizePage() {
               <div className="border-t border-stone-100 dark:border-white/10 mt-6 pt-6">
                 {promptField({
                   key: 'ask',
-                  label: 'Ask — answer prompt',
+                  label: 'Knowledge — answer prompt',
                   rows: 8,
-                  hint: 'The system prompt behind every Ask answer — shown below is the exact text in use. Edit it and save to customize; Reset returns to the built-in default.',
+                  hint: 'The system prompt behind every Knowledge answer — shown below is the exact text in use. Edit it and save to customize; Reset returns to the built-in default.',
                 })}
               </div>
             </>

@@ -26,7 +26,7 @@ function AnnotationRow({ a, currentFp }: { a: AnnotationRecord; currentFp: strin
             <span className="rounded-full bg-stone-100 dark:bg-[#122419] text-stone-500 dark:text-stone-400 px-2 py-0.5 text-[12px]">paused</span>
           )}
           <span className="rounded-full bg-stone-100 dark:bg-[#122419] text-stone-500 dark:text-stone-400 px-2 py-0.5 text-[12px]">
-            {a.scope_doc_ids ? `brief · ${a.scope_doc_ids.length} docs` : 'all unscoped'}
+            {a.scope_doc_ids ? `workspace · ${a.scope_doc_ids.length} docs` : 'all unscoped'}
           </span>
         </div>
       </div>

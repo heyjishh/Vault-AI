@@ -300,7 +300,7 @@ impl MatterStore {
                     client: String::new(),
                     kind: "General".to_string(),
                     status: "Active".to_string(),
-                    notes: "Default workspace for documents not filed under a specific brief."
+                    notes: "Default workspace for documents not filed under a specific workspace."
                         .to_string(),
                     document_ids: Vec::new(),
                     is_default: true,
@@ -319,7 +319,7 @@ impl MatterStore {
             tracing::info!(
                 adopted,
                 default_matter = %default_id,
-                "boot migration: adopted unfiled documents into the default brief"
+                "boot migration: adopted unfiled documents into the default workspace"
             );
         }
         self.save();

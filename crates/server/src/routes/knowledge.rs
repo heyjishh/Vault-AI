@@ -187,7 +187,7 @@ fn brief_vault_scope(
         .or_else(|| state.matters.default_id())
         .ok_or_else(|| {
             ApiError::from(legal_rag_common::Error::BadRequest(
-                "Brief vault mode needs an active brief".to_string(),
+                "Workspace vault mode needs an active workspace".to_string(),
             ))
         })?;
     let docs = crate::routes::matters::scope_docs(state, &mid, user)?;
@@ -195,7 +195,7 @@ fn brief_vault_scope(
         .matters
         .get(&mid)
         .map(|m| m.title)
-        .unwrap_or_else(|| "this brief".to_string());
+        .unwrap_or_else(|| "this workspace".to_string());
     Ok(BriefVaultScope {
         matter_id: Some(mid),
         docs: Some(docs),

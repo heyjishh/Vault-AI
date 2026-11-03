@@ -16,10 +16,10 @@ document vault, with every answer grounded in cited, verifiable sources.
 
 | Surface | Capability |
 |---|---|
-| **Ask** | Grounded Q&A over the vault (plus optional live web blending), streamed token-by-token, with sentence-level citation pinpoints, a citation-integrity audit, an in-app source viewer that highlights the exact cited sentence, and an "As of" control — ask as of a date and jurisdiction, applied as a hard legal-validity boundary. Every cited authority also carries a Citator treatment status with its passage as provenance (Overruled / Followed / Distinguished / Applied / Good law / Unknown — never asserted without a cited passage, never a silent drop), detected deterministically from judgments in the vault at ingest. Retrieval runs a Spice-grade fusion suite rewritten natively in Rust (RRF / weighted RRF / DBSF, an in-fusion statute term, rank-interleave leg merging, and a stale-while-revalidate retrieval cache) — no sidecar search runtime. |
+| **Knowledge** | Grounded Q&A over the vault (plus optional live web blending), streamed token-by-token, with sentence-level citation pinpoints, a citation-integrity audit, an in-app source viewer that highlights the exact cited sentence, and an "As of" control — ask as of a date and jurisdiction, applied as a hard legal-validity boundary. Every cited authority also carries a Citator treatment status with its passage as provenance (Overruled / Followed / Distinguished / Applied / Good law / Unknown — never asserted without a cited passage, never a silent drop), detected deterministically from judgments in the vault at ingest. Retrieval runs a Spice-grade fusion suite rewritten natively in Rust (RRF / weighted RRF / DBSF, an in-fusion statute term, rank-interleave leg merging, and a stale-while-revalidate retrieval cache) — no sidecar search runtime. |
 | **Vault** | Document ingestion: PDF (text layer + Surya OCR for scans, incl. Hindi/Devanagari), pasted text, S3 import. Parent-child chunking, knowledge-graph extraction, per-document status, and legal-validity metadata (jurisdiction, in-force dates, superseded-by) per document. Password-protected PDFs accepted via an optional `file_password` (decrypted in memory; wrong password is a distinct error; encrypted S3 objects are skipped per-file, never batch-halting). |
-| **Briefs** ("Living Brief") | Matter workspaces. Retrieval is hard-scoped to the brief's documents — a confidentiality boundary, not a filter hint. Briefs can be grouped into multi-tenant **Spaces** with owner/editor/viewer roles; non-members cannot even see that a space's briefs exist. |
-| **Interact** | Per-document summary, chronology, key clauses, risks, and grounded chat. |
+| **Workspaces** ("Living Workspace") | Matter workspaces. Retrieval is hard-scoped to the workspace's documents — a confidentiality boundary, not a filter hint. Workspaces can be grouped into multi-tenant **Spaces** with owner/editor/viewer roles; non-members cannot even see that a space's workspaces exist. |
+| **Intelligence** | Per-document summary, chronology, key clauses, risks, and grounded chat. |
 | **Draft** | Legal notice, agreement, IRAC memo, petition outline, advocate's letter — grounded in vault sources with citations. |
 | **Research** | Hypothesis-driven research: framing → evidence gathering → adjudication → verdict-first report. |
 | **Agents** | Fixed multi-step workflows (contract review, due diligence, IRAC memo) plus **Autonomous research**: a lead agent splits the goal across specialist researchers (parallel), a drafter, and an independent checker, then reconciles their work into a cited report with per-sub-agent receipts — or the legacy planner-executor loop via `orchestrated: false`. |
@@ -28,7 +28,7 @@ document vault, with every answer grounded in cited, verifiable sources.
 | **Billing** | Token-metered plans — Free 50k tokens/mo · Basic ₹2,999/mo (2M) · Premium ₹9,999/mo (10M) — with quota enforcement (HTTP 402) and UPI checkout. |
 
 Product differentiators: published-grade Indic OCR (Surya-only), Hindi↔English
-cross-lingual retrieval (bge-m3), Living Brief matter memory, provenance
+cross-lingual retrieval (bge-m3), Living Workspace matter memory, provenance
 receipts (citation-integrity audit), and primary-authority-first web research
 (Supreme Court / Indian Kanoon / India Code sources are probed and ranked
 ahead of news coverage).
@@ -151,7 +151,7 @@ The complete variable inventory (40+) is catalogued in
 Routes under `/api/v1`: `auth` (register/login/refresh/me/OIDC),
 `vault` (documents, search, S3 ingest, document metadata), `knowledge`
 (query, query/stream SSE, research, workflows, autonomous agent, interact,
-draft, source-document, graph, stats, cache-stats), `matters` (briefs,
+draft, source-document, graph, stats, cache-stats), `matters` (workspaces,
 documents, timeline, memory), `spaces` (multi-tenant spaces and members),
 `billing` (plans, checkout, payments, webhook), `private-vault` (status,
 password, unlock/lock, documents), `settings/public`, `dashboard/me`, and

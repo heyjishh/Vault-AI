@@ -79,6 +79,50 @@ live**, what is **built but unverified**, and what is **roadmap**.
   deadline.
 
 ### Changed
+- **New dashboard wording + surface renames: Brief →
+  Workspace, Ask → Knowledge, Interact → Intelligence
+  (3 Nov 2026, Piece 76).** JISHAN supplied the dashboard
+  hero wording verbatim and renamed three surfaces; **Draft
+  keeps its name**. Dashboard hero now reads: greeting with
+  "!" and 👋 ("Good morning, Admin! 👋" — the greeting stays
+  time-of-day aware and the name sentence-cased), "I'm
+  **Clause**, your intelligent legal research companion.",
+  "From case laws and legal precedents to workspaces,
+  documents, and your research vault — I'm here to help you
+  find answers, uncover insights, and navigate complex legal
+  questions with ease.", and "Every question deserves a
+  well-researched answer. Every answer deserves a citation."
+  The renames sweep every visible surface in both apps:
+  sidebar nav, dashboard action cards, the workspace list and
+  detail pages (tabs, toasts, delete dialogs, empty states),
+  the "Working in" switcher, Vault and Private Vault copy,
+  Prompts page, search/source "Open in Intelligence", the
+  Clause pet's page names, tips and actions, admin
+  Command Center labels, the README surface table, and the
+  server strings shown verbatim in the UI (scope notes now
+  say "Workspace vault: …", "Brief vault mode needs an active
+  workspace" → "Workspace vault mode …", timeline titles
+  "Workspace opened: …", activity details, error messages).
+  To avoid a duplicate nav label, the graph surface —
+  already titled "Knowledge Graph" on its page — is now
+  labelled **Knowledge Graph** in the sidebar. Only labels
+  changed: routes, view ids, API fields, storage keys and
+  internal code names (`matter`, `brief_vault`, `interact`)
+  are untouched, activity verbs stay verbs ("Asked",
+  "Interacted"), and legal idioms stay ("Brief answer" in
+  IRAC memos, "facts in brief" in a prompt seed). Verified:
+  workspace suite 279 passed / 0 failed; both frontend
+  bundles rebuilt and grepped — new hero wording, "Workspace
+  vault", "Your workspaces", "Open in Intelligence" present,
+  "Brief vault" / "Your briefs" / "Open in Interact" at zero;
+  the release binary was strings-checked for "Workspace
+  vault" (3 hits, "Brief vault" 0) before the restart — the
+  first restart attempt ran on the stale binary because
+  three orphaned cargo builds from backgrounded shells were
+  still running concurrently and clobbering the link step;
+  after killing them by PID, one clean build linked in 36s;
+  prod :3000 and test :3001 restarted on the new binary,
+  local health ok, public URL 200 with 6 documents, 0 hollow.
 - **No more + button — library pills like Refine (1 Nov 2026,
   Piece 71).** JISHAN: "remove the plus button, and put prompt
   and template should be look like refine button". Every chat

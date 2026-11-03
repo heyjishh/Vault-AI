@@ -269,7 +269,7 @@ export default function PrivateVaultPage() {
           <div className="flex items-center justify-between mb-5">
             <p className="inline-flex items-center gap-2 text-[13px] text-stone-500 dark:text-stone-400">
               <LockOpen size={14} className="text-emerald-700" /> Unlocked for this session —{' '}
-              {st.documents} sealed document{st.documents === 1 ? '' : 's'}. In Ask, switch on{' '}
+              {st.documents} sealed document{st.documents === 1 ? '' : 's'}. In Knowledge, switch on{' '}
               <span className="font-medium text-ink dark:text-[#f4f2ee]">Private</span> to include them in answers.
             </p>
             <div className="flex gap-2 shrink-0">
