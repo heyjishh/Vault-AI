@@ -56,6 +56,11 @@ pub struct WorkflowRun {
     pub steps: Vec<StepResult>,
     pub final_report: String,
     pub citations: Vec<Citation>,
+    /// finished | budget_tokens (Piece 80: per-run budget enforcement).
+    pub stopped: String,
+    /// Estimated tokens spent (the codebase's ≈4 chars/token estimate;
+    /// provider-reported usage is billed separately by the server).
+    pub tokens_estimate: u64,
 }
 
 // ---------------------------------------------------------------------------
@@ -305,6 +310,21 @@ impl WorkflowEngine {
         input: &str,
         terms: &[String],
     ) -> Result<WorkflowRun> {
+        self.run_budgeted(workflow_id, input, terms, None).await
+    }
+
+    /// Run with a per-run token budget (Piece 80). The budget is
+    /// enforced between steps on estimated tokens: once spent, the
+    /// run stops early and the report is synthesized from the
+    /// completed steps only, labelled partial. A run always completes
+    /// at least one step — a budget is a cap, not a veto.
+    pub async fn run_budgeted(
+        &self,
+        workflow_id: &str,
+        input: &str,
+        terms: &[String],
+        max_tokens: Option<u64>,
+    ) -> Result<WorkflowRun> {
         let def = Self::find(workflow_id)
             .ok_or_else(|| Error::BadRequest(format!("unknown workflow: {workflow_id}")))?;
         if def.steps.is_empty() {
@@ -313,8 +333,16 @@ impl WorkflowEngine {
 
         let mut step_results: Vec<StepResult> = Vec::new();
         let mut context_acc = String::new();
+        let mut tokens_estimate: u64 = 0;
+        let mut stopped = "finished".to_string();
 
         for step in def.steps {
+            if let Some(budget) = max_tokens {
+                if !step_results.is_empty() && tokens_estimate >= budget {
+                    stopped = "budget_tokens".to_string();
+                    break;
+                }
+            }
             let question = step
                 .query_template
                 .replace("{input}", input)
@@ -333,6 +361,8 @@ impl WorkflowEngine {
             } else {
                 self.query.query_opts(&focused, step.mode, step.top_k, None, false, &step_opts, crate::query::CitatorContext::default()).await?
             };
+            tokens_estimate += crate::usage::estimate_tokens(&focused)
+                + crate::usage::estimate_tokens(&answer.answer);
             // Feed a compact summary forward so later steps build on earlier ones.
             let summary: String = answer.answer.chars().take(800).collect();
             if !context_acc.is_empty() {
@@ -361,6 +391,17 @@ impl WorkflowEngine {
             ),
             None => def.report_instruction.to_string(),
         };
+        let report_system = if stopped == "budget_tokens" {
+            format!(
+                "{report_system}\n\nIMPORTANT: this run stopped early on its token budget after {} of {} steps. \
+                 The report covers ONLY the completed steps; state that plainly at the top and do not \
+                 speculate about the steps that did not run.",
+                step_results.len(),
+                def.steps.len()
+            )
+        } else {
+            report_system
+        };
         let final_report = self
             .query
             .llm()
@@ -381,6 +422,7 @@ impl WorkflowEngine {
             }
         }
 
+        tokens_estimate += crate::usage::estimate_tokens(&final_report);
         Ok(WorkflowRun {
             workflow_id: def.id.to_string(),
             workflow_name: def.name.to_string(),
@@ -388,6 +430,8 @@ impl WorkflowEngine {
             steps: step_results,
             final_report,
             citations,
+            stopped,
+            tokens_estimate,
         })
     }
 }
@@ -449,5 +493,24 @@ mod tests {
     async fn unknown_workflow_errors() {
         let e = engine();
         assert!(e.run("nope", "x", &[]).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn token_budget_stops_workflow_early_with_partial_report() {
+        let e = engine();
+        // Budget of 1 estimated token: step 1 always runs, then the
+        // run must stop before step 2 of 5 (contract_review).
+        let run = e
+            .run_budgeted("contract_review", "a services agreement", &[], Some(1))
+            .await
+            .unwrap();
+        assert_eq!(run.stopped, "budget_tokens");
+        assert_eq!(run.steps.len(), 1);
+        assert!(!run.final_report.is_empty());
+        assert!(run.tokens_estimate > 0);
+        // The same run unbudgeted finishes every step.
+        let full = e.run("contract_review", "a services agreement", &[]).await.unwrap();
+        assert_eq!(full.stopped, "finished");
+        assert_eq!(full.steps.len(), 5);
     }
 }

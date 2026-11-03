@@ -713,6 +713,9 @@ pub struct WorkflowRunRequest {
     pub input: String,
     /// Refinement terms (Piece 13), folded into every step's retrieval.
     pub refine_terms: Option<Vec<String>>,
+    /// Per-run token budget (Piece 80): the run stops early once the
+    /// estimate is spent and reports from the completed steps only.
+    pub max_tokens: Option<u64>,
 }
 
 /// Run an agentic workflow end to end.
@@ -726,22 +729,55 @@ pub async fn workflow_run(
     }
     crate::routes::billing::ensure_quota(&state, &user.id)?;
     let scope = legal_rag_rag::usage::new_scope();
-    let run = legal_rag_rag::usage::scope_usage(scope.clone(), async {
-        state.workflows.run(&body.workflow_id, &body.input, &body_terms(&body.refine_terms)).await
+    let result = legal_rag_rag::usage::scope_usage(scope.clone(), async {
+        state
+            .workflows
+            .run_budgeted(&body.workflow_id, &body.input, &body_terms(&body.refine_terms), body.max_tokens)
+            .await
     })
-    .await?;
-    crate::routes::billing::settle_with_payload(
-        &state,
-        &user,
-        &scope,
-        "workflow",
-        &body.input,
-        &run.workflow_name,
-        &run.final_report,
-        run.citations.len(),
-        Some(serde_json::json!({ "workflow_id": body.workflow_id, "input": body.input, "run": run })),
-    );
-    Ok(Json(run))
+    .await;
+    let tokens = scope.lock().map(|t| t.total()).unwrap_or(0);
+    match result {
+        Ok(run) => {
+            state.runs.record(
+                &user.email,
+                "workflow",
+                &run.workflow_name,
+                &body.input,
+                &crate::runs::status_from_stopped(&run.stopped),
+                run.steps.len(),
+                tokens,
+                &run.final_report,
+                None,
+            );
+            crate::routes::billing::settle_with_payload(
+                &state,
+                &user,
+                &scope,
+                "workflow",
+                &body.input,
+                &run.workflow_name,
+                &run.final_report,
+                run.citations.len(),
+                Some(serde_json::json!({ "workflow_id": body.workflow_id, "input": body.input, "run": run })),
+            );
+            Ok(Json(run))
+        }
+        Err(e) => {
+            state.runs.record(
+                &user.email,
+                "workflow",
+                &body.workflow_id,
+                &body.input,
+                "failed",
+                0,
+                tokens,
+                "",
+                Some(e.to_string()),
+            );
+            Err(e.into())
+        }
+    }
 }
 
 #[derive(Deserialize)]
@@ -768,6 +804,14 @@ pub struct AutonomousRunRequest {
     /// Refinement terms (Piece 13), folded into the researcher legs'
     /// retrieval (orchestrated) and the planner's steps (legacy).
     pub refine_terms: Option<Vec<String>>,
+    /// Per-run token budget (Piece 80). Orchestrated: tightens the
+    /// configured per-run cap for this run. Legacy: estimate-based
+    /// stop between steps.
+    pub max_tokens: Option<u64>,
+    /// A user-approved lead plan (Piece 80, orchestrated only): when
+    /// present and non-empty, the lead stage is skipped and these
+    /// branches run as approved.
+    pub approved_branches: Option<Vec<legal_rag_rag::PlanBranch>>,
 }
 
 /// Orchestrator config for this server: commissioned defaults, with
@@ -810,49 +854,191 @@ pub async fn autonomous_run(
     }
 
     if orchestrated {
-        let cfg = orchestration_config(&state);
+        let mut cfg = orchestration_config(&state);
+        if let Some(cap) = body.max_tokens {
+            cfg.per_run_token_cap = cfg.per_run_token_cap.min(cap.max(1));
+        }
+        let approved = body
+            .approved_branches
+            .clone()
+            .filter(|b| !b.is_empty());
         let scope = legal_rag_rag::usage::new_scope();
-        let run = legal_rag_rag::usage::scope_usage(scope.clone(), async {
-            state
-                .orchestrator
-                .run(body.goal.trim(), docs, cfg, ctx, &body_terms(&body.refine_terms), None)
-                .await
+        let result = legal_rag_rag::usage::scope_usage(scope.clone(), async {
+            match &approved {
+                Some(branches) => {
+                    state
+                        .orchestrator
+                        .run_with_branches(body.goal.trim(), branches.clone(), docs, cfg, ctx, &body_terms(&body.refine_terms), None)
+                        .await
+                }
+                None => {
+                    state
+                        .orchestrator
+                        .run(body.goal.trim(), docs, cfg, ctx, &body_terms(&body.refine_terms), None)
+                        .await
+                }
+            }
         })
-        .await?;
-        crate::routes::billing::settle_with_payload(
-            &state,
-            &user,
-            &scope,
-            "autonomous",
-            &body.goal,
-            "Autonomous research (orchestrated)",
-            &run.final_report,
-            run.citations.len(),
-            Some(serde_json::json!({ "goal": body.goal, "run": run })),
-        );
-        return Ok(Json(run).into_response());
+        .await;
+        let tokens = scope.lock().map(|t| t.total()).unwrap_or(0);
+        return match result {
+            Ok(run) => {
+                state.runs.record(
+                    &user.email,
+                    "autonomous_orchestrated",
+                    "Autonomous research (orchestrated)",
+                    &body.goal,
+                    &crate::runs::status_from_stopped(&run.stopped),
+                    run.sub_agents.len(),
+                    tokens,
+                    &run.final_report,
+                    None,
+                );
+                crate::routes::billing::settle_with_payload(
+                    &state,
+                    &user,
+                    &scope,
+                    "autonomous",
+                    &body.goal,
+                    "Autonomous research (orchestrated)",
+                    &run.final_report,
+                    run.citations.len(),
+                    Some(serde_json::json!({ "goal": body.goal, "run": run })),
+                );
+                Ok(Json(run).into_response())
+            }
+            Err(e) => {
+                state.runs.record(
+                    &user.email,
+                    "autonomous_orchestrated",
+                    "Autonomous research (orchestrated)",
+                    &body.goal,
+                    "failed",
+                    0,
+                    tokens,
+                    "",
+                    Some(e.to_string()),
+                );
+                Err(e.into())
+            }
+        };
     }
 
     let scope = legal_rag_rag::usage::new_scope();
-    let run = legal_rag_rag::usage::scope_usage(scope.clone(), async {
+    let budget = legal_rag_rag::RunBudget {
+        max_steps: Some(body.max_steps.unwrap_or(6)),
+        max_tokens: body.max_tokens,
+    };
+    let result = legal_rag_rag::usage::scope_usage(scope.clone(), async {
         state
             .agent
-            .run(body.goal.trim(), docs, body.max_steps.unwrap_or(6), &body_terms(&body.refine_terms))
+            .run_budgeted(body.goal.trim(), docs, budget, &body_terms(&body.refine_terms))
             .await
     })
-    .await?;
-    crate::routes::billing::settle_with_payload(
-        &state,
-        &user,
-        &scope,
-        "autonomous",
-        &body.goal,
-        "Autonomous research",
-        &run.final_report,
-        run.citations.len(),
-        Some(serde_json::json!({ "goal": body.goal, "run": run })),
-    );
-    Ok(Json(run).into_response())
+    .await;
+    let tokens = scope.lock().map(|t| t.total()).unwrap_or(0);
+    match result {
+        Ok(run) => {
+            state.runs.record(
+                &user.email,
+                "autonomous",
+                "Autonomous research",
+                &body.goal,
+                &crate::runs::status_from_stopped(&run.stopped),
+                run.steps.len(),
+                tokens,
+                &run.final_report,
+                None,
+            );
+            crate::routes::billing::settle_with_payload(
+                &state,
+                &user,
+                &scope,
+                "autonomous",
+                &body.goal,
+                "Autonomous research",
+                &run.final_report,
+                run.citations.len(),
+                Some(serde_json::json!({ "goal": body.goal, "run": run })),
+            );
+            Ok(Json(run).into_response())
+        }
+        Err(e) => {
+            state.runs.record(
+                &user.email,
+                "autonomous",
+                "Autonomous research",
+                &body.goal,
+                "failed",
+                0,
+                tokens,
+                "",
+                Some(e.to_string()),
+            );
+            Err(e.into())
+        }
+    }
+}
+
+#[derive(Deserialize)]
+pub struct AutonomousPlanRequest {
+    pub goal: String,
+    /// Confine the plan's scoping pass to this brief (space-checked).
+    pub matter_id: Option<String>,
+}
+
+#[derive(Serialize)]
+pub struct AutonomousPlanView {
+    pub branches: Vec<legal_rag_rag::PlanBranch>,
+}
+
+/// Draft the lead plan for a goal (Piece 80 plan approval). Quota-gated
+/// but unbilled — the plan is a draft; the run it feeds is billed when
+/// executed. The scoping pass inside `plan_branches` grounds the plan
+/// in what the vault holds, brief-confined when a matter is given.
+pub async fn autonomous_plan(
+    State(state): State<AppState>,
+    AuthUser(user): AuthUser,
+    Json(body): Json<AutonomousPlanRequest>,
+) -> Result<Json<AutonomousPlanView>, ApiError> {
+    if body.goal.trim().is_empty() {
+        return Err(legal_rag_common::Error::BadRequest("goal is empty".to_string()).into());
+    }
+    crate::routes::billing::ensure_quota(&state, &user.id)?;
+    let docs = doc_scope(&state, &body.matter_id, &user)?;
+    let cfg = orchestration_config(&state);
+    let branches = state
+        .orchestrator
+        .plan_branches(body.goal.trim(), docs, cfg)
+        .await?;
+    Ok(Json(AutonomousPlanView { branches }))
+}
+
+#[derive(Deserialize)]
+pub struct RunsListQuery {
+    pub limit: Option<usize>,
+}
+
+/// The caller's agent run history (Piece 80), newest first.
+pub async fn agent_runs_list(
+    State(state): State<AppState>,
+    AuthUser(user): AuthUser,
+    axum::extract::Query(q): axum::extract::Query<RunsListQuery>,
+) -> Result<Json<Vec<crate::runs::RunSummary>>, ApiError> {
+    Ok(Json(state.runs.list_for(&user.email, q.limit.unwrap_or(50))))
+}
+
+/// One recorded run in full (report included), owner-checked.
+pub async fn agent_run_get(
+    State(state): State<AppState>,
+    AuthUser(user): AuthUser,
+    axum::extract::Path(id): axum::extract::Path<String>,
+) -> Result<Json<crate::runs::RunRecord>, ApiError> {
+    state
+        .runs
+        .get(&user.email, &id)
+        .map(Json)
+        .ok_or_else(|| legal_rag_common::Error::BadRequest("run not found".to_string()).into())
 }
 
 /// SSE variant of the orchestrated run: status per sub-agent, then an
@@ -871,7 +1057,11 @@ async fn autonomous_stream(
     use axum::response::sse::{Event, KeepAlive, Sse};
     use legal_rag_rag::QueryEvent;
 
-    let cfg = orchestration_config(&state);
+    let mut cfg = orchestration_config(&state);
+    if let Some(cap) = body.max_tokens {
+        cfg.per_run_token_cap = cfg.per_run_token_cap.min(cap.max(1));
+    }
+    let approved = body.approved_branches.clone().filter(|b| !b.is_empty());
     let goal = body.goal.trim().to_string();
     let terms = body_terms(&body.refine_terms);
     let matter_id = body.matter_id.clone();
@@ -879,6 +1069,7 @@ async fn autonomous_stream(
     let orchestrator = state.orchestrator.clone();
     let billing = state.billing.clone();
     let activity = state.activity.clone();
+    let runs_store = state.runs.clone();
     let user_id = user.id.clone();
     let user_email = user.email.clone();
     tokio::spawn(async move {
@@ -886,14 +1077,34 @@ async fn autonomous_stream(
         let scope = legal_rag_rag::usage::new_scope();
         let scope_in = scope.clone();
         let run = legal_rag_rag::usage::scope_usage(scope_in, async {
-            orchestrator
-                .run(&goal, docs, cfg, ctx, &terms, Some(progress_tx))
-                .await
+            match &approved {
+                Some(branches) => {
+                    orchestrator
+                        .run_with_branches(&goal, branches.clone(), docs, cfg, ctx, &terms, Some(progress_tx))
+                        .await
+                }
+                None => {
+                    orchestrator
+                        .run(&goal, docs, cfg, ctx, &terms, Some(progress_tx))
+                        .await
+                }
+            }
         })
         .await;
         match run {
             Ok(run) => {
                 let totals = scope.lock().map(|t| *t).unwrap_or_default();
+                runs_store.record(
+                    &user_email,
+                    "autonomous_orchestrated",
+                    "Autonomous research (orchestrated)",
+                    &goal,
+                    &crate::runs::status_from_stopped(&run.stopped),
+                    run.sub_agents.len(),
+                    totals.total(),
+                    &run.final_report,
+                    None,
+                );
                 billing.add_usage(&user_id, &totals);
                 activity.record(
                     crate::activity::ActivityEvent::new(
@@ -920,6 +1131,18 @@ async fn autonomous_stream(
                 });
             }
             Err(e) => {
+                let totals = scope.lock().map(|t| *t).unwrap_or_default();
+                runs_store.record(
+                    &user_email,
+                    "autonomous_orchestrated",
+                    "Autonomous research (orchestrated)",
+                    &goal,
+                    "failed",
+                    0,
+                    totals.total(),
+                    "",
+                    Some(e.to_string()),
+                );
                 let _ = tx.send(QueryEvent::Status {
                     message: format!("error: {e}"),
                 });

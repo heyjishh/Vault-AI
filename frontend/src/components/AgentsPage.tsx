@@ -2,12 +2,12 @@ import { useEffect, useState } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { Bot, ChevronDown, Compass, Play } from 'lucide-react'
+import { Bot, ChevronDown, Compass, History, Play, Plus, X } from 'lucide-react'
 import { mattersApi, ragApi } from '../api/client'
 import { useSession } from '../stores/session'
 import { RefineControls, useRefine } from './RefineControls'
 import { ComposerLibraryButtons, promptInsert } from './PromptPicker'
-import type { AutonomousRun, Citation, WorkflowDef, WorkflowRun } from '../api/types'
+import type { AutonomousRun, Citation, PlanBranch, RunRecord, WorkflowDef, WorkflowRun } from '../api/types'
 import { CitationCard, EmptyState, Spinner } from './ui'
 import { CitedText, SourceModal, citeMarkdownComponents, linkifyCitations } from './SourceModal'
 
@@ -50,9 +50,11 @@ export default function AgentsPage({ go }: { go?: (view: string) => void } = {})
   // Prompt refinement (Piece 13) for the workflow input.
   const refineWf = useRefine({ value: input, setValue: setInput, surface: 'agents' })
 
+  const [wfBudget, setWfBudget] = useState('')
+  const [historyTick, setHistoryTick] = useState(0)
   const start = useMutation({
-    mutationFn: () => ragApi.runWorkflow(selected!.id, input.trim(), refineWf.consumeTerms()),
-    onSuccess: (r) => { setRun(r); setError(null); setOpenStep(null) },
+    mutationFn: () => ragApi.runWorkflow(selected!.id, input.trim(), refineWf.consumeTerms(), wfBudget ? Number(wfBudget) : undefined),
+    onSuccess: (r) => { setRun(r); setError(null); setOpenStep(null); setHistoryTick((t) => t + 1) },
     onError: (e) => setError((e as Error).message),
   })
 
@@ -65,10 +67,32 @@ export default function AgentsPage({ go }: { go?: (view: string) => void } = {})
   const matters = useQuery({ queryKey: ['matters'], queryFn: mattersApi.list })
   // Prompt refinement (Piece 13) for the autonomous goal.
   const refineAuto = useRefine({ value: goal, setValue: setGoal, surface: 'agents' })
+  const [autoBudget, setAutoBudget] = useState('')
+  const [plan, setPlan] = useState<PlanBranch[] | null>(null)
   const startAuto = useMutation({
-    mutationFn: () => ragApi.runAutonomous(goal.trim(), autoMatter || undefined, autoSteps, refineAuto.consumeTerms()),
-    onSuccess: (r) => { setAutoRun(r); setAutoError(null) },
+    mutationFn: () => ragApi.runAutonomous(goal.trim(), autoMatter || undefined, autoSteps, refineAuto.consumeTerms(), { max_tokens: autoBudget ? Number(autoBudget) : undefined }),
+    onSuccess: (r) => { setAutoRun(r); setAutoError(null); setHistoryTick((t) => t + 1) },
     onError: (e) => setAutoError((e as Error).message),
+  })
+  // Plan approval (Piece 80): draft the lead's plan, edit it, then run
+  // exactly the approved branches.
+  const draftPlan = useMutation({
+    mutationFn: () => ragApi.planAutonomous(goal.trim(), autoMatter || undefined),
+    onSuccess: (r) => { setPlan(r.branches); setAutoError(null) },
+    onError: (e) => setAutoError((e as Error).message),
+  })
+  const approvePlan = useMutation({
+    mutationFn: () => ragApi.runAutonomous(goal.trim(), autoMatter || undefined, autoSteps, refineAuto.consumeTerms(), { max_tokens: autoBudget ? Number(autoBudget) : undefined, approved_branches: plan ?? undefined }),
+    onSuccess: (r) => { setAutoRun(r); setAutoError(null); setPlan(null); setHistoryTick((t) => t + 1) },
+    onError: (e) => setAutoError((e as Error).message),
+  })
+
+  // Run history (Piece 80): every workflow + autonomous run, recorded.
+  const history = useQuery({ queryKey: ['agent-runs', historyTick], queryFn: () => ragApi.agentRuns(30) })
+  const [openRun, setOpenRun] = useState<RunRecord | null>(null)
+  const openHistoryRun = useMutation({
+    mutationFn: (id: string) => ragApi.agentRun(id),
+    onSuccess: (r) => setOpenRun(r),
   })
 
   return (
@@ -116,6 +140,11 @@ export default function AgentsPage({ go }: { go?: (view: string) => void } = {})
             <div className="flex items-center gap-3">
               <ComposerLibraryButtons onPick={promptInsert(input, setInput, 'agents-workflow-input')} />
               <p className="text-meta text-stone-400 dark:text-stone-500">Steps: {selected.steps.map((s) => s.name).join(' → ')}</p>
+              <label className="flex items-center gap-1.5 text-meta text-stone-500 dark:text-stone-400">
+                Token budget
+                <input type="number" min={0} step={1000} value={wfBudget} onChange={(e) => setWfBudget(e.target.value)} placeholder="∞"
+                  className="w-20 rounded-lex border border-stone-300 dark:border-white/10 px-2 py-1 outline-none focus:border-ink bg-white dark:bg-[#0a1a12]" />
+              </label>
               <RefineControls ctl={refineWf} disabled={!input.trim()} />
             </div>
             <button
@@ -156,15 +185,68 @@ export default function AgentsPage({ go }: { go?: (view: string) => void } = {})
               onChange={(e) => setAutoSteps(Math.min(10, Math.max(1, Number(e.target.value) || 6)))}
               className="w-16 rounded-lex border border-stone-300 dark:border-white/10 px-2 py-1.5 outline-none focus:border-ink bg-white dark:bg-[#0a1a12]" />
           </label>
+          <label className="flex items-center gap-2 text-meta2 text-stone-600 dark:text-stone-300">
+            Token budget
+            <input type="number" min={0} step={5000} value={autoBudget}
+              onChange={(e) => setAutoBudget(e.target.value)} placeholder="∞"
+              className="w-24 rounded-lex border border-stone-300 dark:border-white/10 px-2 py-1.5 outline-none focus:border-ink bg-white dark:bg-[#0a1a12]" />
+          </label>
           <RefineControls ctl={refineAuto} disabled={!goal.trim()} />
           <button
+            onClick={() => goal.trim() && draftPlan.mutate()} disabled={draftPlan.isPending || startAuto.isPending || !goal.trim()}
+            className="ml-auto flex items-center gap-2 rounded-lex border border-stone-300 dark:border-white/10 px-4 py-2 text-meta2 font-medium disabled:opacity-40 hover:border-stone-400"
+          >
+            <Compass size={14} /> {draftPlan.isPending ? 'Drafting plan…' : 'Draft plan'}
+          </button>
+          <button
             onClick={() => goal.trim() && startAuto.mutate()} disabled={startAuto.isPending || !goal.trim()}
-            className="btn-brand ml-auto flex items-center gap-2 rounded-lex text-ivory px-4 py-2 text-meta2 font-medium disabled:opacity-40"
+            className="btn-brand flex items-center gap-2 rounded-lex text-ivory px-4 py-2 text-meta2 font-medium disabled:opacity-40"
           >
             <Play size={14} /> {startAuto.isPending ? 'Researching…' : 'Run autonomous agent'}
           </button>
         </div>
         </div>
+        {plan && (
+          <div className="mt-4 rounded-lex-lg border border-stone-200 dark:border-white/10 bg-ivory dark:bg-[#14120f] p-4 fade-up">
+            <p className="text-meta2 font-medium text-stone-700 dark:text-stone-200">Draft plan — approve, edit, or discard</p>
+            <p className="text-meta text-stone-500 dark:text-stone-400 mt-1">
+              The lead drafted these branches from a scoping pass over the vault. The run will execute exactly this list — nothing more, nothing re-planned mid-run.
+            </p>
+            <div className="space-y-2 mt-3">
+              {plan.map((b, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <span className="text-meta text-stone-400 dark:text-stone-500 w-5 shrink-0">{i + 1}.</span>
+                  <input value={b.query}
+                    onChange={(e) => setPlan(plan.map((x, j) => j === i ? { ...x, query: e.target.value } : x))}
+                    className="flex-1 rounded-lex border border-stone-300 dark:border-white/10 px-2.5 py-1.5 text-meta2 outline-none focus:border-ink bg-white dark:bg-[#0a1a12]" />
+                  <input value={b.why} placeholder="Why this branch?"
+                    onChange={(e) => setPlan(plan.map((x, j) => j === i ? { ...x, why: e.target.value } : x))}
+                    className="w-52 rounded-lex border border-stone-300 dark:border-white/10 px-2.5 py-1.5 text-meta2 outline-none focus:border-ink bg-white dark:bg-[#0a1a12]" />
+                  <button onClick={() => setPlan(plan.filter((_, j) => j !== i))}
+                    className="text-stone-400 hover:text-[#a02c2c] shrink-0" title="Remove branch">
+                    <X size={15} />
+                  </button>
+                </div>
+              ))}
+            </div>
+            <div className="flex items-center gap-2 mt-3">
+              <button onClick={() => setPlan([...plan, { query: '', why: '' }])}
+                className="flex items-center gap-1.5 rounded-lex border border-stone-300 dark:border-white/10 px-3 py-1.5 text-meta2 font-medium hover:border-stone-400">
+                <Plus size={13} /> Add branch
+              </button>
+              <span className="flex-1" />
+              <button onClick={() => setPlan(null)}
+                className="rounded-lex px-3 py-1.5 text-meta2 text-stone-500 dark:text-stone-400 hover:text-stone-700">
+                Discard
+              </button>
+              <button onClick={() => plan.some((b) => b.query.trim()) && approvePlan.mutate()}
+                disabled={approvePlan.isPending || !plan.some((b) => b.query.trim())}
+                className="btn-brand flex items-center gap-2 rounded-lex text-ivory px-4 py-2 text-meta2 font-medium disabled:opacity-40">
+                <Play size={14} /> {approvePlan.isPending ? 'Running approved plan…' : 'Approve & run'}
+              </button>
+            </div>
+          </div>
+        )}
         {autoError && (
           <div className="mt-4 rounded-lex border border-brand-red/30 bg-[#feeaea] px-4 py-3 text-meta2 text-[#a02c2c]">{autoError}</div>
         )}
@@ -233,6 +315,13 @@ export default function AgentsPage({ go }: { go?: (view: string) => void } = {})
       {run && !start.isPending && (
         <div className="mt-8 fade-up">
           <h2 className="font-display text-2xl tracking-tight">{run.workflow_name}</h2>
+          {run.stopped === 'budget_tokens' ? (
+            <p className="mt-2 rounded-lex border border-[#e5c07b]/50 bg-[#fdf6e0] dark:bg-[#2a2110] px-4 py-2.5 text-meta2 text-[#7a5b12] dark:text-[#e5c07b]">
+              Stopped early — the token budget was reached after {run.steps.length} step(s). This report covers only the completed steps. Estimated spend: {(run.tokens_estimate ?? 0).toLocaleString()} tokens.
+            </p>
+          ) : (
+            <p className="text-meta text-stone-400 dark:text-stone-500 mt-1.5">Estimated spend: {(run.tokens_estimate ?? 0).toLocaleString()} tokens</p>
+          )}
           <div className="mt-4 rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] p-6">
             <div className="prose-lex">
               <ReactMarkdown
@@ -284,6 +373,59 @@ export default function AgentsPage({ go }: { go?: (view: string) => void } = {})
           )}
         </div>
       )}
+      <div className="mt-10">
+        <h2 className="font-display text-xl tracking-tight flex items-center gap-2">
+          <History size={18} className="text-stone-500 dark:text-stone-400" /> Run history
+        </h2>
+        <p className="text-meta text-stone-500 dark:text-stone-400 mt-1">Every workflow and autonomous run is recorded — status, steps, tokens, and the full report.</p>
+        {history.isLoading ? (
+          <Spinner label="Loading run history…" />
+        ) : !history.data || history.data.length === 0 ? (
+          <p className="text-meta2 text-stone-400 dark:text-stone-500 mt-3">No runs recorded yet.</p>
+        ) : (
+          <div className="mt-3 rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] divide-y divide-stone-100 dark:divide-white/5 overflow-hidden">
+            {history.data.map((r) => (
+              <button key={r.id} onClick={() => openHistoryRun.mutate(r.id)}
+                className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-stone-50 dark:hover:bg-white/5">
+                <span className="shrink-0 text-meta font-medium px-2 py-0.5 rounded-full border border-stone-200 dark:border-white/10 text-stone-600 dark:text-stone-300">
+                  {r.kind === 'workflow' ? 'Workflow' : r.kind === 'autonomous_orchestrated' ? 'Autonomous · team' : 'Autonomous'}
+                </span>
+                <span className="flex-1 min-w-0">
+                  <span className="block text-meta2 font-medium text-stone-800 dark:text-stone-100 truncate">{r.name}</span>
+                  <span className="block text-meta text-stone-400 dark:text-stone-500 truncate">{r.input}</span>
+                </span>
+                <span className={`shrink-0 text-meta font-medium ${r.status === 'completed' ? 'text-[#2e7d32] dark:text-[#7bc47f]' : r.status === 'failed' ? 'text-[#a02c2c]' : 'text-[#7a5b12] dark:text-[#e5c07b]'}`}>
+                  {r.status.replace('_', ' ')}
+                </span>
+                <span className="shrink-0 text-meta text-stone-400 dark:text-stone-500">{r.steps} steps · {r.tokens.toLocaleString()} tok</span>
+                <span className="shrink-0 text-meta text-stone-400 dark:text-stone-500">{new Date(r.created_at).toLocaleString()}</span>
+              </button>
+            ))}
+          </div>
+        )}
+        {openRun && (
+          <div className="mt-4 rounded-lex-lg border border-stone-200 dark:border-white/10 bg-ivory dark:bg-[#14120f] p-5 fade-up">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="font-display text-lg tracking-tight">{openRun.name}</p>
+                <p className="text-meta text-stone-400 dark:text-stone-500 mt-0.5">
+                  {openRun.status.replace('_', ' ')} · {openRun.steps} steps · {openRun.tokens.toLocaleString()} tokens · {new Date(openRun.created_at).toLocaleString()}
+                </p>
+                <p className="text-meta2 text-stone-600 dark:text-stone-300 mt-1.5">{openRun.input}</p>
+              </div>
+              <button onClick={() => setOpenRun(null)} className="text-stone-400 hover:text-stone-600 shrink-0"><X size={16} /></button>
+            </div>
+            {openRun.error && (
+              <p className="mt-3 rounded-lex border border-brand-red/30 bg-[#feeaea] px-4 py-2.5 text-meta2 text-[#a02c2c]">{openRun.error}</p>
+            )}
+            {openRun.report && (
+              <div className="prose-lex mt-3">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{openRun.report}</ReactMarkdown>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
       {modalCitation && (
         <SourceModal citation={modalCitation} onClose={() => setModalCitation(null)} go={go} />
       )}

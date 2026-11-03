@@ -41,9 +41,9 @@ pub mod web;
 
 pub use batch::{filter_supported_files, BatchItemResult};
 pub use agent::{StepResult, WorkflowDef, WorkflowEngine, WorkflowRun, BUILTIN_WORKFLOWS};
-pub use orchestrator::{AgentStepTrace, AutonomousAgent, AutonomousRun};
+pub use orchestrator::{AgentStepTrace, AutonomousAgent, AutonomousRun, PlannedStep, RunBudget};
 pub use subagents::{
-    OrchestratedRun, OrchestratorConfig, SubAgentOrchestrator, SubAgentReceipt,
+    OrchestratedRun, OrchestratorConfig, PlanBranch, SubAgentOrchestrator, SubAgentReceipt,
     DEFAULT_MAX_PARALLEL_RESEARCHERS, DEFAULT_PER_RUN_TOKEN_CAP,
     DEFAULT_PER_SUBAGENT_TIMEOUT_SECS, DEFAULT_PER_SUBAGENT_TOKEN_BUDGET,
 };

@@ -303,6 +303,33 @@ export interface WorkflowRun {
   steps: StepResult[]
   final_report: string
   citations: Citation[]
+  /** finished | budget_tokens (Piece 80 per-run budgets). */
+  stopped: string
+  tokens_estimate: number
+}
+
+/** One branch of a lead plan (Piece 80 plan approval). */
+export interface PlanBranch {
+  query: string
+  why: string
+}
+
+/** Agent run history row (Piece 80). */
+export interface RunSummary {
+  id: string
+  kind: string
+  name: string
+  input: string
+  status: string
+  steps: number
+  tokens: number
+  created_at: string
+}
+
+/** A recorded run in full, report included. */
+export interface RunRecord extends RunSummary {
+  report: string
+  error: string | null
 }
 
 export interface AgentStepTrace {
@@ -338,6 +365,8 @@ export interface AutonomousRun {
   /** Orchestrated runs only: unresolved conflicts, flagged not hidden. */
   conflicts?: string[]
   total_tokens?: number
+  /** Legacy runs only: estimated tokens spent (Piece 80). */
+  tokens_estimate?: number
 }
 
 export interface CacheStats {

@@ -15,6 +15,42 @@ live**, what is **built but unverified**, and what is **roadmap**.
 ## [Unreleased]
 
 ### Added
+- **Agents orchestration: run history, per-run budgets, plan
+  approval, drift fix (3 Nov 2026, Piece 80).** The
+  orchestration gaps named in the 3 Nov patchwork inventory
+  are closed. **Run history**: every workflow and autonomous
+  run (JSON and streaming) is recorded — kind, input, status,
+  steps, billed tokens, and the full report — in a new
+  `agent_runs.json` store with owner-scoped `GET
+  /knowledge/agents/runs` and `/runs/{id}`; the Agents page
+  gains a Run history section with expandable reports, and
+  failed runs are recorded too, with their error. **Per-run
+  budgets**: workflows and both autonomous modes accept
+  `max_tokens`; enforcement happens between steps (a run
+  always completes at least one step), and a budget-stopped
+  run synthesizes a partial report that says plainly it
+  covers only the completed steps — status `budget_tokens`,
+  never a bare error. Orchestrated runs keep their existing
+  per-run cap, now tightened by the caller's budget.
+  **Plan approval**: `POST /knowledge/agents/autonomous/plan`
+  drafts the lead's research branches without running
+  anything (unbilled, quota-gated); the Agents page shows the
+  draft for edit/add/remove, and "Approve & run" executes
+  exactly that list — the run's receipts carry an honest
+  `lead-plan-approved` entry instead of a lead call.
+  **Drift fix**: the lead now plans from a corpus scoping
+  pass (retrieval-only, brief-scoped, no LLM call) instead of
+  decomposing the goal blind; plan parsing in both planners
+  dedupes on normalized text and drops branches that merely
+  restate the goal; the legacy autonomous agent was rewritten
+  plan-first (one grounded plan up front, executed without
+  re-planning). **Verified live** on :3001: plan drafted 2
+  grounded branches; the approved run completed with the
+  `lead-plan-approved` receipt and a 3,296-character report;
+  a workflow run with `max_tokens: 50` stopped after 1 of 4
+  steps with a partial report; both runs appear in history
+  with correct statuses and reports. Suite: 290 passed / 0
+  failed.
 - **Workspace case/query alerts (3 Nov 2026, Piece 79).**
   From Prism's Case/Query Alerts, at JISHAN's direction: a
   watch anchored to a Workspace re-runs its question through

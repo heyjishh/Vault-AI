@@ -33,7 +33,7 @@
 //! query legs (corpus + web). User-invoked only; nothing here runs on
 //! a schedule, and runs leave no memory across briefs.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -129,6 +129,10 @@ const LEAD_SYSTEM: &str = "You are the lead agent of a legal-research team. \
 Decompose the GOAL into independent research branches that can be investigated \
 in parallel. Each branch must be a single specific question answerable from \
 documents or the web, and branches must not depend on each other's answers. \
+When a SCOPING PASS is included, it shows what the vault already holds on this \
+goal: ground your branches in that material — ask about the documents, \
+provisions and gaps it actually shows, never generic questions the scoping \
+pass already answers, and never a branch that merely restates the goal. \
 Respond with EXACTLY one JSON object, no other text: \
 {\"branches\": [{\"query\": \"<specific research question>\", \"why\": \"<one short sentence>\"}]}. \
 Use 1 branch for a narrow goal and at most 3 branches for a broad one; never \
@@ -256,26 +260,94 @@ fn parse_checker_verdict(raw: &str) -> Option<CheckerVerdict> {
     })
 }
 
+/// One research branch of a lead plan (Piece 80: also the
+/// plan-approval wire shape — the UI shows and edits these, and an
+/// approved list comes back to `run_with_branches`).
+#[derive(Debug, Clone, Serialize, serde::Deserialize)]
+pub struct PlanBranch {
+    pub query: String,
+    #[serde(default)]
+    pub why: String,
+}
+
+/// Normalize a branch query for duplicate/goal comparison
+/// (case/space-insensitive — the old exact-match dedupe let
+/// case-variant duplicates through, one of the drift sources).
+fn norm_branch(q: &str) -> String {
+    q.to_lowercase()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
 /// Plan branches from a lead completion; falls back to the goal itself
 /// when the plan is unusable (the run must not die on a bad plan).
-fn branches_from_plan(raw: &str, goal: &str, max: usize) -> Vec<String> {
+/// Piece 80: dedupe is normalized, and branches that merely restate
+/// the goal are dropped (the fallback covers that case properly).
+fn plan_from_lead(raw: &str, goal: &str, max: usize) -> Vec<PlanBranch> {
     let max = max.clamp(1, 8);
-    let mut out: Vec<String> = Vec::new();
+    let goal_norm = norm_branch(goal);
+    let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let mut out: Vec<PlanBranch> = Vec::new();
     if let Some(plan) = parse_json_object::<LeadPlan>(raw) {
         for b in plan.branches {
             let q = b.query.trim().to_string();
-            if !q.is_empty() && !out.contains(&q) {
-                out.push(q);
+            let key = norm_branch(&q);
+            if q.is_empty() || key == goal_norm || !seen.insert(key) {
+                continue;
             }
+            out.push(PlanBranch {
+                query: q,
+                why: b.why.trim().to_string(),
+            });
             if out.len() >= max {
                 break;
             }
         }
     }
     if out.is_empty() {
-        out.push(goal.to_string());
+        out.push(PlanBranch {
+            query: goal.to_string(),
+            why: "Fallback: the goal as a single branch.".to_string(),
+        });
     }
     out
+}
+
+/// Scoping context for the lead planner (Piece 80 drift fix): what
+/// the vault already holds on the goal, from the retrieval-only hit
+/// test (no LLM call). Hits are confined to `scope_docs` when the
+/// run is brief-scoped — the plan must never be grounded in material
+/// outside the brief. Empty when retrieval finds nothing.
+async fn scoping_context(
+    query: &QueryService,
+    goal: &str,
+    scope_docs: &Option<Vec<String>>,
+) -> String {
+    let Ok(report) = query.hit_test(goal, 4).await else {
+        return String::new();
+    };
+    let Some(stage) = report.stages.last() else {
+        return String::new();
+    };
+    let mut seen_docs: HashSet<String> = HashSet::new();
+    let mut lines: Vec<String> = Vec::new();
+    for hit in &stage.hits {
+        if let Some(docs) = scope_docs {
+            if !docs.contains(&hit.doc_id) {
+                continue;
+            }
+        }
+        if !seen_docs.insert(hit.doc_id.clone()) {
+            continue;
+        }
+        let title = hit.doc_title.as_deref().unwrap_or("Untitled source");
+        lines.push(format!("- {title}: {}", hit.snippet));
+        if lines.len() >= 4 {
+            break;
+        }
+    }
+    lines.join("\n")
 }
 
 /// Is `s` a citation marker key (`doc:3`, `web:0`, `private:1`)?
@@ -455,6 +527,45 @@ impl SubAgentOrchestrator {
         }
     }
 
+    /// Plan only (Piece 80 plan approval): the scoping-grounded lead
+    /// plan for the UI to show and edit. Runs no researchers.
+    pub async fn plan_branches(
+        &self,
+        goal: &str,
+        scope_docs: Option<Vec<String>>,
+        config: OrchestratorConfig,
+    ) -> Result<Vec<PlanBranch>> {
+        let scoping = scoping_context(&self.query, goal, &scope_docs).await;
+        let prompt = if scoping.is_empty() {
+            format!("GOAL: {goal}")
+        } else {
+            format!("GOAL: {goal}\n\nSCOPING PASS — what the vault already holds on this goal:\n{scoping}")
+        };
+        let raw = self.query.llm().complete(LEAD_SYSTEM, &prompt).await?;
+        Ok(plan_from_lead(
+            &raw,
+            goal,
+            config.max_parallel_researchers.clamp(1, 8),
+        ))
+    }
+
+    /// Run the full pipeline with a user-approved plan (Piece 80):
+    /// the lead stage is replaced by the approved branches, recorded
+    /// on an honest "lead-plan-approved" receipt.
+    pub async fn run_with_branches(
+        &self,
+        goal: &str,
+        branches: Vec<PlanBranch>,
+        scope_docs: Option<Vec<String>>,
+        config: OrchestratorConfig,
+        ctx: crate::query::CitatorContext,
+        terms: &[String],
+        progress: Option<UnboundedSender<QueryEvent>>,
+    ) -> Result<OrchestratedRun> {
+        self.run_inner(goal, scope_docs, config, ctx, terms, progress, Some(branches))
+            .await
+    }
+
     /// Run the full lead → researchers → drafter → checker →
     /// reconciler pipeline. `progress` receives status events for SSE
     /// streaming; `None` runs silently for the JSON response. `ctx`
@@ -469,6 +580,20 @@ impl SubAgentOrchestrator {
         terms: &[String],
         progress: Option<UnboundedSender<QueryEvent>>,
     ) -> Result<OrchestratedRun> {
+        self.run_inner(goal, scope_docs, config, ctx, terms, progress, None)
+            .await
+    }
+
+    async fn run_inner(
+        &self,
+        goal: &str,
+        scope_docs: Option<Vec<String>>,
+        config: OrchestratorConfig,
+        ctx: crate::query::CitatorContext,
+        terms: &[String],
+        progress: Option<UnboundedSender<QueryEvent>>,
+        preplanned: Option<Vec<PlanBranch>>,
+    ) -> Result<OrchestratedRun> {
         let started = Instant::now();
         let mut receipts: Vec<SubAgentReceipt> = Vec::new();
         let mut total_tokens: u64 = 0;
@@ -478,27 +603,49 @@ impl SubAgentOrchestrator {
         // --- budget helpers (stage boundaries) -------------------------
         let over_cap = |total: u64| total >= config.per_run_token_cap;
 
-        // --- Stage 1: lead plans branches -------------------------------
+        // --- Stage 1: lead plans branches (or the approved plan) ------
         let branches: Vec<String>;
-        {
+        if let Some(pre) = &preplanned {
+            let mut receipt = SubAgentReceipt::new("lead", "lead-plan-approved", goal);
+            receipt.contribution = format!(
+                "Plan approved by the user: {} branch(es): {}",
+                pre.len(),
+                pre.iter().map(|b| b.query.as_str()).collect::<Vec<_>>().join(" | ")
+            );
+            self.progress(
+                &progress,
+                &format!("lead: user-approved plan, {} branch(es)", pre.len()),
+            );
+            receipts.push(receipt);
+            branches = pre.iter().map(|b| b.query.clone()).collect();
+        } else {
             let t0 = Instant::now();
             let child = usage::new_scope();
             let child2 = child.clone();
             let goal_owned = goal.to_string();
+            let scope_owned = scope_docs.clone();
             let fut = usage::scope_usage(child2, async {
-                self.query
-                    .llm()
-                    .complete(LEAD_SYSTEM, &format!("GOAL: {goal_owned}"))
-                    .await
+                // Piece 80 drift fix: ground the lead in a scoping
+                // pass over the vault before it decomposes the goal.
+                let scoping = scoping_context(&self.query, &goal_owned, &scope_owned).await;
+                let prompt = if scoping.is_empty() {
+                    format!("GOAL: {goal_owned}")
+                } else {
+                    format!("GOAL: {goal_owned}\n\nSCOPING PASS — what the vault already holds on this goal:\n{scoping}")
+                };
+                self.query.llm().complete(LEAD_SYSTEM, &prompt).await
             });
             let mut receipt = SubAgentReceipt::new("lead", "lead-plan", goal);
             match tokio::time::timeout(timeout, fut).await {
                 Ok(Ok(raw)) => {
-                    branches = branches_from_plan(
+                    branches = plan_from_lead(
                         &raw,
                         goal,
                         config.max_parallel_researchers.clamp(1, 8),
-                    );
+                    )
+                    .iter()
+                    .map(|b| b.query.clone())
+                    .collect();
                     receipt.contribution = format!(
                         "Planned {} research branch(es): {}",
                         branches.len(),
@@ -1165,10 +1312,28 @@ mod tests {
         let raw = r#"{"branches": [
             {"query": "q1", "why": "a"}, {"query": "q2", "why": "b"},
             {"query": "q3", "why": "c"}, {"query": "q4", "why": "d"}]}"#;
-        let b = branches_from_plan(raw, "goal", 3);
-        assert_eq!(b, vec!["q1", "q2", "q3"]);
-        assert_eq!(branches_from_plan("no json", "goal", 3), vec!["goal"]);
-        assert_eq!(branches_from_plan("", "goal", 3), vec!["goal"]);
+        let b = plan_from_lead(raw, "goal", 3);
+        let queries: Vec<&str> = b.iter().map(|x| x.query.as_str()).collect();
+        assert_eq!(queries, vec!["q1", "q2", "q3"]);
+        assert_eq!(b[0].why, "a");
+        let fallback = plan_from_lead("no json", "goal", 3);
+        assert_eq!(fallback.len(), 1);
+        assert_eq!(fallback[0].query, "goal");
+        assert_eq!(plan_from_lead("", "goal", 3)[0].query, "goal");
+    }
+
+    #[test]
+    fn plan_dedupes_case_variants_and_drops_goal_restatements() {
+        // Piece 80: the old exact-match dedupe let case/space variants
+        // through, and a branch restating the goal wasted a researcher.
+        let raw = r#"{"branches": [
+            {"query": "Rent Act notice period", "why": "a"},
+            {"query": "rent  act   notice period", "why": "dup"},
+            {"query": "Goal", "why": "restates the goal"},
+            {"query": "mesne profits measure", "why": "b"}]}"#;
+        let b = plan_from_lead(raw, "goal", 3);
+        let queries: Vec<&str> = b.iter().map(|x| x.query.as_str()).collect();
+        assert_eq!(queries, vec!["Rent Act notice period", "mesne profits measure"]);
     }
 
     #[test]

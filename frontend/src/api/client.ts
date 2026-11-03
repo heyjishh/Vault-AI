@@ -3,7 +3,7 @@ import type {
   AuthResponse, CacheStats, ChunkAug, Citation, CitationAudit, CitationTreatment, CorpusStats, DocMeta, DocSearchHit, DocumentInfo, GraphView, Space,
   IngestReport, Matter, MatterDetail, MatterMemory, MatterSummary, PrivateDocMeta, PublicSettings,
   QueryAnswer, QueryMode, ResearchReport, SourceDocument, TimelineItem, TokenPair,
-  WorkflowDef, WorkflowRun, AutonomousRun,
+  WorkflowDef, WorkflowRun, AutonomousRun, PlanBranch, RunRecord, RunSummary,
   AlertCheckResult, WatchView,
 } from './types'
 
@@ -148,18 +148,30 @@ export const ragApi = {
   async cacheStats(): Promise<CacheStats> {
     const r = await api.get<CacheStats>('/knowledge/cache-stats'); return r.data
   },
-  async runAutonomous(goal: string, matter_id?: string, max_steps?: number, refine_terms?: string[]): Promise<AutonomousRun> {
+  async runAutonomous(goal: string, matter_id?: string, max_steps?: number, refine_terms?: string[], opts?: { max_tokens?: number; approved_branches?: PlanBranch[] }): Promise<AutonomousRun> {
     try {
-      const r = await api.post<AutonomousRun>('/knowledge/agents/autonomous', { goal, matter_id: matter_id ?? null, max_steps: max_steps ?? null, refine_terms: refine_terms?.length ? refine_terms : undefined })
+      const r = await api.post<AutonomousRun>('/knowledge/agents/autonomous', { goal, matter_id: matter_id ?? null, max_steps: max_steps ?? null, refine_terms: refine_terms?.length ? refine_terms : undefined, max_tokens: opts?.max_tokens ?? null, approved_branches: opts?.approved_branches?.length ? opts.approved_branches : undefined })
       return r.data
     } catch (e) { throw new Error(err(e)) }
+  },
+  async planAutonomous(goal: string, matter_id?: string): Promise<{ branches: PlanBranch[] }> {
+    try {
+      const r = await api.post<{ branches: PlanBranch[] }>('/knowledge/agents/autonomous/plan', { goal, matter_id: matter_id ?? null })
+      return r.data
+    } catch (e) { throw new Error(err(e)) }
+  },
+  async agentRuns(limit = 50): Promise<RunSummary[]> {
+    const r = await api.get<RunSummary[]>('/knowledge/agents/runs', { params: { limit } }); return r.data
+  },
+  async agentRun(id: string): Promise<RunRecord> {
+    const r = await api.get<RunRecord>(`/knowledge/agents/runs/${id}`); return r.data
   },
   async workflows(): Promise<WorkflowDef[]> {
     const r = await api.get<WorkflowDef[]>('/knowledge/workflows'); return r.data
   },
-  async runWorkflow(workflow_id: string, input: string, refine_terms?: string[]): Promise<WorkflowRun> {
+  async runWorkflow(workflow_id: string, input: string, refine_terms?: string[], max_tokens?: number): Promise<WorkflowRun> {
     try {
-      const r = await api.post<WorkflowRun>('/knowledge/workflows/run', { workflow_id, input, refine_terms: refine_terms?.length ? refine_terms : undefined })
+      const r = await api.post<WorkflowRun>('/knowledge/workflows/run', { workflow_id, input, refine_terms: refine_terms?.length ? refine_terms : undefined, max_tokens: max_tokens ?? null })
       return r.data
     } catch (e) { throw new Error(err(e)) }
   },
