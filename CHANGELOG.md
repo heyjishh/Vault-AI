@@ -15,6 +15,33 @@ live**, what is **built but unverified**, and what is **roadmap**.
 ## [Unreleased]
 
 ### Added
+- **Template Library: the full 157-type catalogue, as
+  originals (3 Nov 2026, Piece 77).** The Prism (India
+  Kanoon) DocHub catalogue was enumerated read-only at
+  157 document types in 14 groups, and JISHAN chose to
+  mirror all 157 types. Every type now has a curated
+  template — **169 in total**, the 12 originals untouched,
+  exactly 4 Suggested as before. The new templates are
+  ORIGINAL drafting briefs in the library's house style
+  (structure and sections spelled out, [BRACKETED
+  PLACEHOLDERS] for every fact, India-specific anchors —
+  CPC Orders, NI Act s.138, BNSS 2023 bail/quashing,
+  Companies Act 2013 forms DIR-2/SH-4/MGT-7); the
+  catalogue names are facts, Prism's drafted wording was
+  not copied (Purple Cow: completeness, never identity).
+  Eight new categories join the rail in a set order:
+  Applications & Petitions, Property, Estate & Wills,
+  Family, Intellectual Property, Business, Miscellaneous,
+  Custom. Curated templates ship in code, so no data
+  migration — they appear for every user on deploy, and
+  Piece 73's format-only rule applies to them at use like
+  every template. **Verified live** on :3001: 169
+  templates, 15 rail categories in order, per-category
+  counts reconciled against the catalogue, ids unique;
+  workspace suite 280 passed / 0 failed including a new
+  catalogue-completeness test; prod restarted on the same
+  binary, public 200, corpus unchanged (6 documents,
+  0 hollow).
 - **Templates pill in Interact, same as Draft (1 Nov 2026,
   Piece 74).** JISHAN: "want template option in interact also
   same as draft". The Interact composer now carries the

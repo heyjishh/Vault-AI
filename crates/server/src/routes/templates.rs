@@ -32,6 +32,14 @@ pub async fn list_templates(
         "Affidavits".to_string(),
         "Corporate".to_string(),
         "Employment".to_string(),
+        "Applications & Petitions".to_string(),
+        "Property".to_string(),
+        "Estate & Wills".to_string(),
+        "Family".to_string(),
+        "Intellectual Property".to_string(),
+        "Business".to_string(),
+        "Miscellaneous".to_string(),
+        "Custom".to_string(),
     ];
     for p in &templates {
         if !categories.contains(&p.template.category) {
