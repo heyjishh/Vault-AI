@@ -88,9 +88,15 @@ struct ConnData {
 pub struct ConnectorStore {
     data: RwLock<ConnData>,
     path: PathBuf,
-    /// OAuth state nonces: nonce -> (user email, provider id).
-    nonces: RwLock<HashMap<String, (String, String)>>,
+    /// OAuth state nonces: nonce -> (user email, provider id,
+    /// issued-at). A nonce is single-use and lives at most
+    /// NONCE_TTL (Piece 82 hardening) — an abandoned or leaked
+    /// consent link cannot be redeemed later.
+    nonces: RwLock<HashMap<String, (String, String, DateTime<Utc>)>>,
 }
+
+/// How long an OAuth state nonce stays redeemable.
+const NONCE_TTL_MINUTES: i64 = 10;
 
 #[derive(Deserialize)]
 struct AppCreds {
@@ -191,15 +197,24 @@ impl ConnectorStore {
 
     pub fn new_nonce(&self, user_email: &str, provider_id: &str) -> String {
         let nonce = legal_rag_common::new_id();
-        self.nonces
-            .write()
-            .unwrap()
-            .insert(nonce.clone(), (user_email.to_string(), provider_id.to_string()));
+        let now = Utc::now();
+        let mut nonces = self.nonces.write().unwrap();
+        // Opportunistic purge so abandoned consent links do not
+        // accumulate in the map.
+        nonces.retain(|_, (_, _, issued)| now - *issued <= Duration::minutes(NONCE_TTL_MINUTES));
+        nonces.insert(
+            nonce.clone(),
+            (user_email.to_string(), provider_id.to_string(), now),
+        );
         nonce
     }
 
     pub fn take_nonce(&self, nonce: &str) -> Option<(String, String)> {
-        self.nonces.write().unwrap().remove(nonce)
+        let (email, provider, issued) = self.nonces.write().unwrap().remove(nonce)?;
+        if Utc::now() - issued > Duration::minutes(NONCE_TTL_MINUTES) {
+            return None;
+        }
+        Some((email, provider))
     }
 }
 
@@ -636,6 +651,18 @@ mod tests {
         let n = s.new_nonce("a@test.io", "google");
         assert_eq!(s.take_nonce(&n).unwrap().0, "a@test.io");
         assert!(s.take_nonce(&n).is_none());
+        // And they expire: a nonce issued over NONCE_TTL ago is
+        // refused even on its first use (Piece 82).
+        let stale = "stale-nonce".to_string();
+        s.nonces.write().unwrap().insert(
+            stale.clone(),
+            (
+                "a@test.io".to_string(),
+                "google".to_string(),
+                Utc::now() - Duration::minutes(NONCE_TTL_MINUTES + 1),
+            ),
+        );
+        assert!(s.take_nonce(&stale).is_none());
         assert!(s.remove_connection("a@test.io", "google"));
         assert!(!s.remove_connection("a@test.io", "google"));
         let _ = std::fs::remove_file(&path);

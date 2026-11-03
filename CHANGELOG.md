@@ -15,6 +15,35 @@ live**, what is **built but unverified**, and what is **roadmap**.
 ## [Unreleased]
 
 ### Added
+- **Connectors: full code-path audit + wiring proof + nonce
+  hardening (3 Nov 2026, Piece 82).** Every connector path was
+  audited end to end (provider defs, app config from env or
+  `connector_apps.json`, consent URL, callback, token exchange
+  and refresh, account-email fetch, file list/search per
+  provider, download with Google Workspace → PDF export, and
+  import through the normal upload pipeline) and the wiring was
+  then proven live on :3001 with dummy credentials: config was
+  picked up from `connector_apps.json` with no restart; the
+  generated Google consent URL is exact (client id, scope
+  `drive.readonly openid email`, `access_type=offline` +
+  `prompt=consent` so a refresh token is issued, and the
+  redirect URI
+  `https://legal-rag-relay.jurisvault.workers.dev/api/v1/connectors/google/callback`);
+  a callback with a bogus code consumed its nonce and landed
+  on the app's `?connector_error=1` redirect rather than a 500;
+  a replayed nonce was refused (single-use); file listing with
+  no connection is a clean 400. Hardening: OAuth state nonces
+  now expire after 10 minutes (they previously lived until
+  used). **Two blockers remain, neither of them code**: the
+  operator's Google Cloud OAuth app (client id/secret) has not
+  been created yet, and this VM's egress proxy does not allow
+  `*.googleapis.com` at all (verified: token, userinfo, and
+  Drive endpoints all time out while Cloudflare and other
+  upstreams work) — so a real round-trip additionally needs
+  the stack on hosting with open egress, the same hosting
+  decision already pending. On such hosting, the moment
+  credentials land in `connector_apps.json` (or env), Connect
+  works with no further code change.
 - **Interact streaming + automated feedback → golden loop
   (3 Nov 2026, Piece 81).** The two manual/partial loops named
   in the 3 Nov patchwork inventory are closed. **Interact
