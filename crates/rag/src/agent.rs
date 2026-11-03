@@ -6,7 +6,8 @@
 //! later steps, and a final report is synthesized from all of them.
 //! Every claim keeps its citations; the report never invents sources.
 //!
-//! Built-ins: contract risk review, due diligence, legal memo drafting.
+//! Built-ins: contract risk review, due diligence, legal memo drafting,
+//! and the counter-argument brief (Piece 78).
 //! Workflows are data (`Workflow` structs), so new ones can be added
 //! without touching the engine.
 
@@ -187,6 +188,45 @@ const MEMO_STEPS: &[WorkflowStepDef] = &[
     },
 ];
 
+const COUNTER_STEPS: &[WorkflowStepDef] = &[
+    WorkflowStepDef {
+        id: "their_case",
+        name: "Their strongest case",
+        query_template: "Argue the strongest possible case AGAINST this position, as opposing counsel would: {input}",
+        focus: "Make their best arguments at full strength — statutory text, precedent and policy. No strawmen.",
+        mode: QueryMode::Mix,
+        top_k: 6,
+        use_web: false,
+    },
+    WorkflowStepDef {
+        id: "exposure",
+        name: "Where our position is exposed",
+        query_template: "What weaknesses, gaps, or adverse material affect this position: {input}? Context from earlier steps: {context}",
+        focus: "Facts we cannot prove, limitation and jurisdiction problems, adverse provisions, and concessions the other side will extract.",
+        mode: QueryMode::Mix,
+        top_k: 6,
+        use_web: false,
+    },
+    WorkflowStepDef {
+        id: "authorities_against",
+        name: "Authorities they will cite",
+        query_template: "What statutes, sections, and case law would opposing counsel cite against {input}?",
+        focus: "Exact provisions and the holdings they would rely on; note how they would distinguish the authorities on our side.",
+        mode: QueryMode::Mix,
+        top_k: 6,
+        use_web: false,
+    },
+    WorkflowStepDef {
+        id: "rebuttal",
+        name: "Our rebuttal",
+        query_template: "How should each counter-argument be answered for {input}? Context from earlier steps: {context}",
+        focus: "Point-by-point rebuttal, cheap concessions worth making, and the evidence or drafting changes that shore up each weak point.",
+        mode: QueryMode::Mix,
+        top_k: 5,
+        use_web: false,
+    },
+];
+
 pub const BUILTIN_WORKFLOWS: &[WorkflowDef] = &[
     WorkflowDef {
         id: "contract_review",
@@ -211,6 +251,14 @@ pub const BUILTIN_WORKFLOWS: &[WorkflowDef] = &[
         input_label: "Legal question",
         report_instruction: "You are a senior associate drafting a legal memo. Structure: Question presented, Brief answer, Applicable rules, Analysis, Conclusion. Apply rules to facts explicitly and note counterarguments. Every legal proposition needs its citation id like [doc:0].",
         steps: MEMO_STEPS,
+    },
+    WorkflowDef {
+        id: "counter_argument",
+        name: "Counter-argument brief",
+        description: "Argues the other side at full strength — their best case, your exposure, the authorities they will cite — then drafts your point-by-point rebuttal.",
+        input_label: "Your position, draft, or case summary",
+        report_instruction: "You are preparing counsel for the other side's best day in court. Write a counter-argument brief with sections: Their strongest case, Where our position is exposed, Authorities they will cite, Our rebuttal (point by point), Preparation checklist. Argue their side at full strength — a strawman helps no one. Every legal proposition must carry its citation id like [doc:0]; where the corpus holds nothing on a point, say so plainly instead of inventing authority.",
+        steps: COUNTER_STEPS,
     },
 ];
 
@@ -368,11 +416,24 @@ mod tests {
     }
 
     #[test]
-    fn builtins_list_three_workflows() {
+    fn builtins_list_four_workflows() {
         let e = engine();
         let list = e.list();
-        assert_eq!(list.len(), 3);
+        assert_eq!(list.len(), 4);
         assert!(list.iter().all(|w| !w.steps.is_empty()));
+        assert!(list.iter().any(|w| w.id == "counter_argument"));
+    }
+
+    #[tokio::test]
+    async fn counter_argument_workflow_runs_end_to_end() {
+        let e = engine();
+        let run = e
+            .run("counter_argument", "our claim is within limitation", &[])
+            .await
+            .unwrap();
+        assert_eq!(run.workflow_id, "counter_argument");
+        assert_eq!(run.steps.len(), 4);
+        assert!(!run.final_report.is_empty());
     }
 
     #[tokio::test]

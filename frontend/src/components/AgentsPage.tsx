@@ -15,6 +15,7 @@ const ICONS: Record<string, string> = {
   contract_review: 'Review a contract clause-by-clause for risk, obligations and missing protections.',
   due_diligence: 'Run diligence across documents and the web for red flags and exposure.',
   memo_draft: 'Draft a structured IRAC legal memo from the corpus.',
+  counter_argument: 'Argue the other side at full strength, then draft your point-by-point rebuttal.',
 }
 
 export default function AgentsPage({ go }: { go?: (view: string) => void } = {}) {

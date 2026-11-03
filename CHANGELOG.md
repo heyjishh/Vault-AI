@@ -15,6 +15,23 @@ live**, what is **built but unverified**, and what is **roadmap**.
 ## [Unreleased]
 
 ### Added
+- **Counter-argument brief workflow (3 Nov 2026,
+  Piece 78).** A fourth builtin Agents workflow, taken from
+  Prism's Counter Argument Generator at JISHAN's direction:
+  four corpus-only steps (Their strongest case / Where our
+  position is exposed / Authorities they will cite / Our
+  rebuttal) feeding a five-section report (those four plus
+  a preparation checklist), instructed to argue the other
+  side at full strength — a strawman helps no one. The
+  Agents page lists it automatically from the API, with its
+  own blurb. **Verified live** on :3001: a run on a tenancy /
+  Section 106 TPA position completed HTTP 200 with 4 steps
+  (2 citations each) and a 4,536-character report covering
+  all five sections; agent tests 13 passed including a new
+  end-to-end workflow test. Note: a run takes ~6 minutes
+  against the test instance's Gemini bridge; the three
+  earlier attempts failed on the bridge and on VM
+  replacements, not on the workflow.
 - **Template Library: the full 157-type catalogue, as
   originals (3 Nov 2026, Piece 77).** The Prism (India
   Kanoon) DocHub catalogue was enumerated read-only at
