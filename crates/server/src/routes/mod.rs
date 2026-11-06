@@ -19,6 +19,7 @@ pub mod mcp;
 pub mod prompts;
 pub mod templates;
 pub mod connectors;
+pub mod doc_edits;
 pub mod spaces;
 pub mod private_vault;
 pub mod uploads;
@@ -113,6 +114,12 @@ pub fn router(state: AppState) -> Router {
         .route("/api/v1/knowledge/agents/runs/{id}", get(knowledge::agent_run_get))
         .route("/api/v1/knowledge/agents/tools/plan", post(knowledge::tool_plan))
         .route("/api/v1/knowledge/agents/tools/run", post(knowledge::tool_agent_run))
+        .route("/api/v1/knowledge/agents/edits/propose", post(doc_edits::propose_edit))
+        .route("/api/v1/knowledge/agents/edits", get(doc_edits::list_edits))
+        .route("/api/v1/knowledge/agents/edits/{id}", get(doc_edits::get_edit))
+        .route("/api/v1/knowledge/agents/edits/{id}/approve", post(doc_edits::approve_edit))
+        .route("/api/v1/knowledge/agents/edits/{id}/reject", post(doc_edits::reject_edit))
+        .route("/api/v1/vault/documents/{id}/versions", get(doc_edits::document_versions))
         .route("/api/v1/knowledge/stats", get(knowledge::stats))
         .route("/api/v1/knowledge/graph", get(knowledge::graph_view))
         // Create: Interact with a document + Draft generation.

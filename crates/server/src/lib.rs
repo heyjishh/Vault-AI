@@ -8,6 +8,7 @@
 pub mod activity;
 pub mod alerts;
 pub mod runs;
+pub mod edits;
 pub mod annotations;
 pub mod matters;
 pub mod originals;

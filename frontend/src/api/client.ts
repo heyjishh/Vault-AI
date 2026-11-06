@@ -4,6 +4,7 @@ import type {
   IngestReport, Matter, MatterDetail, MatterMemory, MatterSummary, PrivateDocMeta, PublicSettings,
   QueryAnswer, QueryMode, ResearchReport, SourceDocument, TimelineItem, TokenPair,
   WorkflowDef, WorkflowRun, AutonomousRun, PlanBranch, PlannedStep, RunRecord, RunSummary, ToolRun,
+  EditRecord, VersionView,
   AlertCheckResult, WatchView,
 } from './types'
 
@@ -173,6 +174,35 @@ export const ragApi = {
       const r = await api.post<ToolRun>('/knowledge/agents/tools/run', { goal, matter_id: matter_id ?? null, max_steps: opts?.max_steps ?? null, max_tokens: opts?.max_tokens ?? null, approved_plan: opts?.approved_plan?.length ? opts.approved_plan : undefined })
       return r.data
     } catch (e) { throw new Error(err(e)) }
+  },
+  /** Piece 85: propose a document edit (runs the edit pass; writes nothing back). */
+  async proposeEdit(doc_id: string, instruction: string, priv = false): Promise<EditRecord> {
+    try {
+      const r = await api.post<EditRecord>('/knowledge/agents/edits/propose', { doc_id, instruction, private: priv })
+      return r.data
+    } catch (e) { throw new Error(err(e)) }
+  },
+  /** Piece 85: the caller's edit proposals, optionally by status. */
+  async listEdits(status?: string): Promise<EditRecord[]> {
+    const r = await api.get<EditRecord[]>('/knowledge/agents/edits', { params: status ? { status } : {} }); return r.data
+  },
+  /** Piece 85: approve a pending edit — writes back a new version. */
+  async approveEdit(id: string): Promise<EditRecord> {
+    try {
+      const r = await api.post<EditRecord>(`/knowledge/agents/edits/${id}/approve`, {})
+      return r.data
+    } catch (e) { throw new Error(err(e)) }
+  },
+  /** Piece 85: reject a pending edit — the proposal is discarded. */
+  async rejectEdit(id: string): Promise<EditRecord> {
+    try {
+      const r = await api.post<EditRecord>(`/knowledge/agents/edits/${id}/reject`, {})
+      return r.data
+    } catch (e) { throw new Error(err(e)) }
+  },
+  /** Piece 85: a document's version lineage with receipts. */
+  async documentVersions(doc_id: string): Promise<VersionView[]> {
+    const r = await api.get<VersionView[]>(`/vault/documents/${doc_id}/versions`); return r.data
   },
   async agentRuns(limit = 50): Promise<RunSummary[]> {
     const r = await api.get<RunSummary[]>('/knowledge/agents/runs', { params: { limit } }); return r.data

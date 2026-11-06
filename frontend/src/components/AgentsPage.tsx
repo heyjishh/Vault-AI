@@ -2,12 +2,12 @@ import { useEffect, useState } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { Bot, ChevronDown, Compass, History, Play, Plus, Wrench, X } from 'lucide-react'
-import { mattersApi, ragApi } from '../api/client'
+import { Bot, ChevronDown, Compass, History, Pencil, Play, Plus, Wrench, X } from 'lucide-react'
+import { mattersApi, ragApi, vaultApi } from '../api/client'
 import { useSession } from '../stores/session'
 import { RefineControls, useRefine } from './RefineControls'
 import { ComposerLibraryButtons, promptInsert } from './PromptPicker'
-import type { AutonomousRun, Citation, PlanBranch, PlannedStep, RunRecord, ToolRun, ToolTraceEntry, WorkflowDef, WorkflowRun } from '../api/types'
+import type { AutonomousRun, Citation, EditRecord, PassageDiff, PlanBranch, PlannedStep, RunRecord, ToolRun, ToolTraceEntry, WorkflowDef, WorkflowRun } from '../api/types'
 import { CitationCard, EmptyState, Spinner } from './ui'
 import { CitedText, SourceModal, citeMarkdownComponents, linkifyCitations } from './SourceModal'
 
@@ -36,6 +36,26 @@ function ToolTraceList({ trace }: { trace: ToolTraceEntry[] }) {
           </span>
         </div>
       ))}
+    </div>
+  )
+}
+
+/** Piece 85: a passage diff an approver can actually read. */
+function DiffView({ diff }: { diff: PassageDiff }) {
+  if (diff.added.length === 0 && diff.removed.length === 0) {
+    return <p className="text-meta2 text-stone-500 dark:text-stone-400">No textual change.</p>
+  }
+  const cap = (xs: string[]) => xs.slice(0, 8)
+  return (
+    <div className="space-y-1.5">
+      {cap(diff.removed).map((p, i) => (
+        <p key={`r${i}`} className="rounded-lex bg-[#feeaea] dark:bg-[#2a1212] px-3 py-2 text-meta2 text-[#7a2020] dark:text-[#e8a0a0] whitespace-pre-wrap">− {p}</p>
+      ))}
+      {diff.removed.length > 8 && <p className="text-meta text-stone-400">…and {diff.removed.length - 8} more removed passage(s)</p>}
+      {cap(diff.added).map((p, i) => (
+        <p key={`a${i}`} className="rounded-lex bg-[#e9f7ec] dark:bg-[#0f2416] px-3 py-2 text-meta2 text-[#205c2a] dark:text-[#9fd3a8] whitespace-pre-wrap">+ {p}</p>
+      ))}
+      {diff.added.length > 8 && <p className="text-meta text-stone-400">…and {diff.added.length - 8} more added passage(s)</p>}
     </div>
   )
 }
@@ -139,6 +159,31 @@ export default function AgentsPage({ go }: { go?: (view: string) => void } = {})
     }),
     onSuccess: (r) => { setToolRun(r); setToolError(null); setToolPlan(null); setHistoryTick((t) => t + 1) },
     onError: (e) => setToolError((e as Error).message),
+  })
+
+  // Document edits (Piece 85): propose an edit, review its diff,
+  // approve it into a new version — or reject it.
+  const [editDocId, setEditDocId] = useState('')
+  const [editInstruction, setEditInstruction] = useState('')
+  const [editError, setEditError] = useState<string | null>(null)
+  const [lastEdit, setLastEdit] = useState<EditRecord | null>(null)
+  const [editTick, setEditTick] = useState(0)
+  const vaultDocs = useQuery({ queryKey: ['vault-docs-for-edit'], queryFn: vaultApi.list })
+  const pendingEdits = useQuery({ queryKey: ['edits-pending', editTick], queryFn: () => ragApi.listEdits('pending') })
+  const docVersions = useQuery({
+    queryKey: ['doc-versions', editDocId, editTick],
+    queryFn: () => ragApi.documentVersions(editDocId),
+    enabled: !!editDocId,
+  })
+  const proposeEdit = useMutation({
+    mutationFn: () => ragApi.proposeEdit(editDocId, editInstruction.trim()),
+    onSuccess: (r) => { setLastEdit(r); setEditError(null); setEditInstruction(''); setEditTick((t) => t + 1) },
+    onError: (e) => setEditError((e as Error).message),
+  })
+  const decideEdit = useMutation({
+    mutationFn: (args: { id: string; approve: boolean }) => args.approve ? ragApi.approveEdit(args.id) : ragApi.rejectEdit(args.id),
+    onSuccess: (r) => { setLastEdit(r); setEditError(null); setEditTick((t) => t + 1); setHistoryTick((t) => t + 1) },
+    onError: (e) => setEditError((e as Error).message),
   })
 
   // Run history (Piece 80): every workflow + autonomous run, recorded.
@@ -481,6 +526,86 @@ export default function AgentsPage({ go }: { go?: (view: string) => void } = {})
                 {toolRun.citations.map((c) => <CitationCard key={c.chunk_id} citation={c} go={go} />)}
               </div>
             )}
+          </div>
+        )}
+      </div>
+
+      <div className="mt-8 rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] p-5">
+        <h2 className="font-display text-xl tracking-tight flex items-center gap-2">
+          <Pencil size={18} className="text-stone-500 dark:text-stone-400" /> Document edits
+        </h2>
+        <p className="text-meta2 text-stone-500 dark:text-stone-400 mt-1">
+          Hand the agent a document and an instruction — it drafts the edit and shows you the diff. Nothing is written back until you approve; approval files a new version in the document's Workspaces, and the original stays in the vault, downloadable, in the version list.
+        </p>
+        <div className="flex flex-wrap items-center gap-3 mt-4">
+          <select value={editDocId} onChange={(e) => setEditDocId(e.target.value)}
+            className="rounded-lex border border-stone-300 dark:border-white/10 px-2.5 py-2 text-meta2 bg-white dark:bg-[#0a1a12] outline-none focus:border-ink max-w-[320px]">
+            <option value="">Choose a document…</option>
+            {(vaultDocs.data ?? []).map((d) => <option key={d.id} value={d.id}>{d.title}</option>)}
+          </select>
+          <input value={editInstruction} onChange={(e) => setEditInstruction(e.target.value)}
+            placeholder="e.g. Change the deposit from one month of rent to two months"
+            className="flex-1 min-w-[240px] rounded-lex border border-stone-300 dark:border-white/10 px-3 py-2 text-meta2 outline-none focus:border-ink bg-white dark:bg-[#0a1a12]" />
+          <button
+            onClick={() => editDocId && editInstruction.trim() && proposeEdit.mutate()}
+            disabled={proposeEdit.isPending || !editDocId || !editInstruction.trim()}
+            className="btn-brand flex items-center gap-2 rounded-lex text-ivory px-4 py-2 text-meta2 font-medium disabled:opacity-40"
+          >
+            <Pencil size={14} /> {proposeEdit.isPending ? 'Drafting edit…' : 'Propose edit'}
+          </button>
+        </div>
+        {editError && (
+          <div className="mt-4 rounded-lex border border-brand-red/30 bg-[#feeaea] px-4 py-3 text-meta2 text-[#a02c2c]">{editError}</div>
+        )}
+        {editDocId && (docVersions.data?.length ?? 0) > 0 && (
+          <div className="mt-4">
+            <p className="text-meta2 font-medium text-stone-700 dark:text-stone-200 mb-2">Versions</p>
+            <div className="space-y-1.5">
+              {docVersions.data!.map((v) => (
+                <div key={v.doc_id} className="flex items-start gap-2.5 text-meta2">
+                  <span className="shrink-0 text-meta font-medium text-stone-600 dark:text-stone-300">v{v.version}{v.current ? ' · current' : ''}</span>
+                  <span className="text-stone-600 dark:text-stone-300">
+                    {v.title}
+                    {v.receipt && <span className="block text-meta text-stone-400 dark:text-stone-500">{v.receipt}</span>}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {lastEdit && lastEdit.status !== 'pending' && (
+          <div className="mt-4 rounded-lex border border-stone-200 dark:border-white/10 bg-ivory dark:bg-[#14120f] px-4 py-3 fade-up">
+            <p className="text-meta2 text-stone-700 dark:text-stone-200">
+              <span className="font-medium">{lastEdit.doc_title}</span> — edit {lastEdit.status}
+              {lastEdit.version ? ` as version ${lastEdit.version}` : ''}.
+            </p>
+            {lastEdit.receipt && <p className="text-meta text-stone-500 dark:text-stone-400 mt-1">{lastEdit.receipt}</p>}
+          </div>
+        )}
+        {(pendingEdits.data?.length ?? 0) > 0 && (
+          <div className="mt-5">
+            <p className="text-meta2 font-medium text-stone-700 dark:text-stone-200 mb-2">Pending approval · {pendingEdits.data!.length}</p>
+            <div className="space-y-3">
+              {pendingEdits.data!.map((e) => (
+                <div key={e.id} className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-ivory dark:bg-[#14120f] p-4">
+                  <div className="flex flex-wrap items-start gap-2">
+                    <div className="flex-1 min-w-[200px]">
+                      <p className="text-meta2 font-medium text-stone-800 dark:text-stone-100">{e.doc_title}{e.source === 'private' ? ' · Confidential Vault' : ''}</p>
+                      <p className="text-meta text-stone-500 dark:text-stone-400 mt-0.5">“{e.instruction}” · {e.diff.added.length} passage(s) added, {e.diff.removed.length} removed · {new Date(e.created_at).toLocaleString()}</p>
+                    </div>
+                    <button onClick={() => decideEdit.mutate({ id: e.id, approve: false })} disabled={decideEdit.isPending}
+                      className="rounded-lex px-3 py-1.5 text-meta2 text-stone-500 dark:text-stone-400 hover:text-[#a02c2c] disabled:opacity-40">
+                      Reject
+                    </button>
+                    <button onClick={() => decideEdit.mutate({ id: e.id, approve: true })} disabled={decideEdit.isPending}
+                      className="btn-brand flex items-center gap-2 rounded-lex text-ivory px-4 py-2 text-meta2 font-medium disabled:opacity-40">
+                      <Play size={14} /> {decideEdit.isPending ? 'Writing back…' : 'Approve & write back'}
+                    </button>
+                  </div>
+                  <div className="mt-3"><DiffView diff={e.diff} /></div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>

@@ -329,6 +329,38 @@ impl PrivateVault {
         Ok(metas)
     }
 
+    /// One document's full decrypted text (chunks joined in reading
+    /// order) and title. Requires unlock — a locked vault refuses, and
+    /// the plaintext exists only in this return value. Piece 85's
+    /// document editing reads through here; the write-back goes
+    /// through `add_doc`, so an edited private document is sealed
+    /// under the same key and never lands in the shared corpus.
+    pub fn doc_text(&self, user_id: &str, doc_id: &str) -> Result<(String, String), String> {
+        let key = self.session_key(user_id).ok_or("vault is locked")?;
+        let file = self.inner.read().unwrap();
+        let user = file
+            .users
+            .iter()
+            .find(|u| u.user_id == user_id)
+            .ok_or("no vault for user")?;
+        let doc = user
+            .docs
+            .iter()
+            .find(|d| d.id == doc_id)
+            .ok_or("document not found")?;
+        let title = String::from_utf8(decrypt(&key, &doc.title_ct)?)
+            .unwrap_or_else(|_| "(unreadable title)".to_string());
+        let mut text = String::new();
+        for chunk in &doc.chunks {
+            let part = String::from_utf8(decrypt(&key, &chunk.ct)?).unwrap_or_default();
+            if !text.is_empty() {
+                text.push_str("\n\n");
+            }
+            text.push_str(&part);
+        }
+        Ok((title, text))
+    }
+
     /// Delete one of the owner's documents (ciphertext removal; no key
     /// needed, so it also works while locked).
     pub fn delete_doc(&self, user_id: &str, doc_id: &str) -> bool {

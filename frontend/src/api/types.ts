@@ -365,6 +365,49 @@ export interface ToolRun {
   plan: PlannedStep[]
 }
 
+/** Piece 85: a passage-level diff between two document versions. */
+export interface PassageDiff {
+  added: string[]
+  removed: string[]
+}
+
+/** Piece 85: a document edit proposal and its provenance receipt. */
+export interface EditRecord {
+  id: string
+  owner_email: string
+  owner_id: string
+  /** shared | private */
+  source: string
+  doc_id: string
+  root_doc_id: string
+  doc_title: string
+  instruction: string
+  /** pending | approved | rejected */
+  status: string
+  /** Held only while pending. */
+  edited_text: string
+  diff: PassageDiff
+  run_id?: string | null
+  created_at: string
+  decided_at?: string | null
+  approver?: string | null
+  result_doc_id?: string | null
+  version?: number | null
+  receipt?: string | null
+}
+
+/** Piece 85: one version in a document's lineage. */
+export interface VersionView {
+  version: number
+  doc_id: string
+  title: string
+  current: boolean
+  instruction?: string | null
+  approver?: string | null
+  receipt?: string | null
+  decided_at?: string | null
+}
+
 export interface AgentStepTrace {
   n: number
   action: string

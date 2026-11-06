@@ -44,6 +44,8 @@ pub struct AppState {
     pub templates: Arc<crate::templates::TemplateStore>,
     pub alerts: Arc<crate::alerts::AlertStore>,
     pub runs: Arc<crate::runs::RunStore>,
+    /// Piece 85: document edit proposals + version lineage.
+    pub edits: Arc<crate::edits::EditStore>,
     pub connectors: Arc<crate::connectors::ConnectorStore>,
     pub annotations: Arc<crate::annotations::AnnotationStore>,
     pub matters: Arc<crate::matters::MatterStore>,

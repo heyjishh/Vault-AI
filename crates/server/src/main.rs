@@ -406,6 +406,9 @@ async fn main() -> anyhow::Result<()> {
     let runs = std::sync::Arc::new(
         legal_rag_server::runs::RunStore::load(data_dir.join("agent_runs.json")),
     );
+    let edits = std::sync::Arc::new(
+        legal_rag_server::edits::EditStore::load(data_dir.join("document_edits.json")),
+    );
     let annotations = std::sync::Arc::new(
         legal_rag_server::annotations::AnnotationStore::load(data_dir.join("annotations.json")),
     );
@@ -471,6 +474,7 @@ async fn main() -> anyhow::Result<()> {
         templates,
         alerts,
         runs,
+        edits,
         connectors,
         annotations,
         matters,

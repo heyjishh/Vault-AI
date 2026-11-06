@@ -15,6 +15,46 @@ live**, what is **built but unverified**, and what is **roadmap**.
 ## [Unreleased]
 
 ### Added
+- **Vault file editing: propose an edit, approve the diff, get a new
+  version — originals always preserved (7 Nov 2026, Piece 85).**
+  A document + a natural-language instruction produce an LLM edit
+  pass (`crates/rag/src/edits.rs`: the pass itself, a paragraph-level
+  LCS diff the approver reads as added/removed passages, and a
+  minimal RTF writer) parked as a pending proposal in a new edit
+  store (`crates/server/src/edits.rs`, `document_edits.json`) — the
+  Piece 80 approval pattern applied to documents; nothing is written
+  back before approval, and rejection discards the held text while
+  recording the outcome. On approval the edited text becomes a NEW
+  VERSION through the existing machinery end to end: the shared path
+  re-ingests via the upload pipeline's own `process_document_complete`,
+  retains the version's file via Piece 29 originals, files it into the
+  source's Workspaces in place of the previous version (which stays in
+  the vault, downloadable, in the version list), and carries the
+  source's legal-validity metadata over; the confidential path chunks
+  with the private embeddings provider and seals a new encrypted
+  document via `PrivateVault::add_doc` — gated on the vault being
+  unlocked at propose time (new `PrivateVault::doc_text`) and again at
+  write-back, with no plaintext ever entering the shared corpus.
+  Formats: txt/md native, RTF regenerated from the edited text,
+  PDF/DOCX stored as a text version — the receipt on the document and
+  in run history (kind `document_edit`) says which, with the
+  instruction, editor run id, approver, timestamps and diff summary.
+  New API: `POST /knowledge/agents/edits/propose`,
+  `GET /knowledge/agents/edits[/{id}]`, `POST …/edits/{id}/approve|reject`,
+  `GET /vault/documents/{id}/versions`; the Agents page gains a
+  Document edits panel (propose, pending approvals with the diff,
+  versions list). **Verified live on the test instance:** an edit to
+  the tenancy note (notice period fifteen days → three months) was
+  proposed with an exact 1-removed/1-added diff, approved into
+  version 2 (`doc-1ee945e76d8a`), filed in place of v1 in the
+  workspace; a scoped Knowledge query then answered "three months"
+  citing v2's chunk, v1 still downloaded intact (HTTP 200), and the
+  versions endpoint shows the full lineage with receipts; a second
+  proposal was rejected live (text discarded, no version created).
+  Suite: 310 passed / 0 failed (9 new tests: diff add/remove/identity,
+  RTF escaping, edit-pass failure-page rejection, store lineage and
+  rejection, private-vault locked gate). Also corrects Piece 84's
+  suite figure below to the reproducible 301 (293 baseline + 8).
 - **Tool-use agent runtime: the agent drives a schema-checked tool
   loop, with sub-agents, inside the Piece 80 guardrails (7 Nov 2026,
   Piece 84).** A new `crates/rag/src/tools.rs` adds (1) a canonical
@@ -47,7 +87,7 @@ live**, what is **built but unverified**, and what is **roadmap**.
   with a cited report; the trace persisted on the run record
   (kind `autonomous_tools`, 3 calls, 10,556 billed tokens), including
   one model protocol slip that was fed back and self-corrected.
-  Suite: 363 passed / 0 failed (8 new tool tests: schema rejection,
+  Suite: 301 passed / 0 failed at this commit (8 new tool tests: schema rejection,
   budget stops mid-loop with a partial report, sub-agent budget
   carving, Workspace confinement at the execution seam). The MCP
   server keeps its existing three tools this piece; the registry is

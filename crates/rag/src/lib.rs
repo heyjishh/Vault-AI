@@ -13,6 +13,7 @@ pub mod citator_v2;
 pub mod orchestrator;
 pub mod subagents;
 pub mod tools;
+pub mod edits;
 pub mod audit;
 pub mod batch;
 pub mod bm25;
@@ -47,6 +48,7 @@ pub use tools::{
     tool_defs, validate_tool_args, DocCatalog, DocListEntry, ToolAgent, ToolChildSummary,
     ToolDef, ToolRun, ToolRunContext, ToolTraceEntry,
 };
+pub use edits::{apply_edit, compute_diff, text_to_rtf, PassageDiff};
 pub use subagents::{
     OrchestratedRun, OrchestratorConfig, PlanBranch, SubAgentOrchestrator, SubAgentReceipt,
     DEFAULT_MAX_PARALLEL_RESEARCHERS, DEFAULT_PER_RUN_TOKEN_CAP,
