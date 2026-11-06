@@ -12,8 +12,9 @@ import { CitationCard, EmptyState, Spinner } from './ui'
 import { CitedText, SourceModal, citeMarkdownComponents, linkifyCitations } from './SourceModal'
 
 /** Piece 84: the tool-call trace of a tool-agent run — every call the
- *  model made, what it cost, and whether it succeeded. */
-function ToolTraceList({ trace }: { trace: ToolTraceEntry[] }) {
+ *  model made, what it cost, and whether it succeeded. Exported for
+ *  the Agent Chat page (Piece 86), which renders the same traces. */
+export function ToolTraceList({ trace }: { trace: ToolTraceEntry[] }) {
   if (trace.length === 0) return null
   return (
     <div className="space-y-1.5">
@@ -40,8 +41,9 @@ function ToolTraceList({ trace }: { trace: ToolTraceEntry[] }) {
   )
 }
 
-/** Piece 85: a passage diff an approver can actually read. */
-function DiffView({ diff }: { diff: PassageDiff }) {
+/** Piece 85: a passage diff an approver can actually read.
+ *  Exported for the Agent Chat page (Piece 86) approval cards. */
+export function DiffView({ diff }: { diff: PassageDiff }) {
   if (diff.added.length === 0 && diff.removed.length === 0) {
     return <p className="text-meta2 text-stone-500 dark:text-stone-400">No textual change.</p>
   }

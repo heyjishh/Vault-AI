@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
-  MessageSquare, FlaskConical, Bot, FolderOpen, Network, LogOut, LayoutDashboard,
+  MessageSquare, MessagesSquare, FlaskConical, Bot, FolderOpen, Network, LogOut, LayoutDashboard,
   PenSquare, Trash2, CreditCard, FileSearch, PenLine, Briefcase, Lock, ExternalLink, PanelTop, Search, X, BookOpen, LayoutTemplate, Plug,
 } from 'lucide-react'
 import { useAuth } from '../stores/auth'
@@ -13,6 +13,7 @@ import { BrandMark, ConfirmDialog, DualToneBackdrop, ThemeToggle } from './ui'
 import AssistantPage from './AssistantPage'
 import ResearchPage from './ResearchPage'
 import AgentsPage from './AgentsPage'
+import AgentChatPage from './AgentChatPage'
 import VaultPage from './VaultPage'
 import GraphPage from './GraphPage'
 import PlansPage from './PlansPage'
@@ -31,7 +32,7 @@ import ErrorBoundary from './ErrorBoundary'
 import Toaster from './Toaster'
 import ClausePet, { ClausePetToggle } from './ClausePet'
 
-export type View = 'dashboard' | 'matters' | 'matter' | 'assistant' | 'interact' | 'draft' | 'research' | 'agents' | 'vault' | 'search' | 'private' | 'graph' | 'plans' | 'tab' | 'prompts' | 'templates' | 'connectors'
+export type View = 'dashboard' | 'matters' | 'matter' | 'assistant' | 'interact' | 'draft' | 'research' | 'agents' | 'agentchat' | 'vault' | 'search' | 'private' | 'graph' | 'plans' | 'tab' | 'prompts' | 'templates' | 'connectors'
 
 const NAV: { id: View; label: string; icon: React.ElementType }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -41,6 +42,7 @@ const NAV: { id: View; label: string; icon: React.ElementType }[] = [
   { id: 'draft', label: 'Draft', icon: PenLine },
   { id: 'research', label: 'Research', icon: FlaskConical },
   { id: 'agents', label: 'Agents', icon: Bot },
+  { id: 'agentchat', label: 'Agent Chat', icon: MessagesSquare },
   { id: 'prompts', label: 'Prompts', icon: BookOpen },
   { id: 'templates', label: 'Templates', icon: LayoutTemplate },
   { id: 'vault', label: 'Vault', icon: FolderOpen },
@@ -367,6 +369,7 @@ export default function AppShell() {
               {view === 'draft' && <DraftPage go={(v) => { setActiveTabId(null); setView(v as View) }} />}
               {view === 'research' && <ResearchPage go={(v) => { setActiveTabId(null); setView(v as View) }} />}
               {view === 'agents' && <AgentsPage go={(v) => { setActiveTabId(null); setView(v as View) }} />}
+              {view === 'agentchat' && <AgentChatPage go={(v) => { setActiveTabId(null); setView(v as View) }} />}
               {view === 'prompts' && <PromptsPage go={(v) => { setActiveTabId(null); setView(v as View) }} />}
               {view === 'templates' && <TemplatesPage go={(v) => { setActiveTabId(null); setView(v as View) }} />}
               {view === 'connectors' && <ConnectorsPage />}

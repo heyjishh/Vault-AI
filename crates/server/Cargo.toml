@@ -20,6 +20,7 @@ sha2 = "0.10"
 aes-gcm = "0.10"
 argon2 = "0.5"
 futures = { workspace = true }
+async-trait = "0.1"
 base64 = { workspace = true }
 dotenvy = { workspace = true }
 serde = { workspace = true }

@@ -5,6 +5,7 @@ use axum::{Json, Router};
 use crate::state::AppState;
 
 pub mod admin;
+pub mod agent_chat;
 pub mod alerts;
 pub mod annotations;
 pub mod auth;
@@ -120,6 +121,11 @@ pub fn router(state: AppState) -> Router {
         .route("/api/v1/knowledge/agents/edits/{id}/approve", post(doc_edits::approve_edit))
         .route("/api/v1/knowledge/agents/edits/{id}/reject", post(doc_edits::reject_edit))
         .route("/api/v1/vault/documents/{id}/versions", get(doc_edits::document_versions))
+        // Agent Chat (Piece 86): one textbox — the model picks its tools.
+        .route("/api/v1/agent/chat", post(agent_chat::chat_blocking))
+        .route("/api/v1/agent/chat/stream", post(agent_chat::chat_stream))
+        .route("/api/v1/agent/chat/threads", get(agent_chat::list_threads))
+        .route("/api/v1/agent/chat/threads/{id}", get(agent_chat::get_thread))
         .route("/api/v1/knowledge/stats", get(knowledge::stats))
         .route("/api/v1/knowledge/graph", get(knowledge::graph_view))
         // Create: Interact with a document + Draft generation.

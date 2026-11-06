@@ -111,28 +111,45 @@ pub async fn propose_edit(
         return Err(bad_request("doc_id is empty".to_string()));
     }
     crate::routes::billing::ensure_quota(&state, &user.id)?;
+    let record = create_edit_proposal(&state, &user, &body.doc_id, &instruction, body.private).await?;
+    Ok(Json(record))
+}
 
-    let (source, title, text) = if body.private {
+/// The propose core, shared by the propose route above and the
+/// Agent Chat's edit seam (Piece 86): visibility and edit-access
+/// checks, the edit pass on the uncached LLM (the confidential path
+/// when `private`), the parked proposal, its run-history record,
+/// and the billing settle for the pass. Callers own quota checks
+/// and request validation. Writes nothing back — a proposal is all
+/// this ever creates.
+pub(crate) async fn create_edit_proposal(
+    state: &AppState,
+    user: &legal_rag_auth::User,
+    doc_id: &str,
+    instruction: &str,
+    private: bool,
+) -> Result<EditRecord, ApiError> {
+    let (source, title, text) = if private {
         // Locked vaults refuse here — doc_text requires the key.
         let (title, text) = state
             .private_vault
-            .doc_text(&user.id, &body.doc_id)
+            .doc_text(&user.id, doc_id)
             .map_err(bad_request)?;
         ("private", title, text)
     } else {
-        if !crate::routes::matters::doc_visible(&state, &user, &body.doc_id) {
+        if !crate::routes::matters::doc_visible(&state, &user, doc_id) {
             return Err(not_found("document not found"));
         }
-        if !can_edit_shared(&state, &user, &body.doc_id) {
+        if !can_edit_shared(&state, &user, doc_id) {
             return Err(bad_request(
                 "you do not have edit access to this document".to_string(),
             ));
         }
         let info = state
             .rag
-            .doc_info(&body.doc_id)
+            .doc_info(doc_id)
             .ok_or_else(|| not_found("document not found"))?;
-        let text = shared_source_text(&state, &body.doc_id).await?;
+        let text = shared_source_text(&state, doc_id).await?;
         ("shared", info.title, text)
     };
     if text.trim().is_empty() {
@@ -163,12 +180,12 @@ pub async fn propose_edit(
     })
     .await?;
     let diff = legal_rag_rag::compute_diff(&text, &edited);
-    let root = state.edits.root_of(&body.doc_id);
+    let root = state.edits.root_of(doc_id);
     let record = state.edits.propose(
         &user.email,
         &user.id,
         source,
-        &body.doc_id,
+        doc_id,
         &root,
         &title,
         &instruction,
@@ -200,9 +217,9 @@ pub async fn propose_edit(
         "Document edit proposal",
         &diff.summary_line(),
         0,
-        Some(serde_json::json!({ "edit_id": record.id, "doc_id": body.doc_id, "private": source == "private" })),
+        Some(serde_json::json!({ "edit_id": record.id, "doc_id": doc_id, "private": source == "private" })),
     );
-    Ok(Json(state.edits.get(&user.email, &record.id).unwrap_or(record)))
+    Ok(state.edits.get(&user.email, &record.id).unwrap_or(record))
 }
 
 #[derive(Deserialize)]

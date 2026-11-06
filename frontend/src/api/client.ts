@@ -5,6 +5,7 @@ import type {
   QueryAnswer, QueryMode, ResearchReport, SourceDocument, TimelineItem, TokenPair,
   WorkflowDef, WorkflowRun, AutonomousRun, PlanBranch, PlannedStep, RunRecord, RunSummary, ToolRun,
   EditRecord, VersionView,
+  AgentApproval, AgentChatThread, AgentChatThreadSummary, AgentChatTurn, PassageDiff,
   AlertCheckResult, WatchView,
 } from './types'
 
@@ -206,6 +207,26 @@ export const ragApi = {
   },
   async agentRuns(limit = 50): Promise<RunSummary[]> {
     const r = await api.get<RunSummary[]>('/knowledge/agents/runs', { params: { limit } }); return r.data
+  },
+  /** Piece 86: one blocking Agent Chat turn (the stream's fallback). */
+  async agentChatSend(payload: { message: string; thread_id?: string; matter_id?: string; doc_ids?: string[] }): Promise<AgentChatTurn> {
+    try {
+      const r = await api.post<AgentChatTurn>('/agent/chat', {
+        message: payload.message,
+        thread_id: payload.thread_id ?? null,
+        matter_id: payload.matter_id ?? null,
+        doc_ids: payload.doc_ids ?? [],
+      })
+      return r.data
+    } catch (e) { throw new Error(err(e)) }
+  },
+  /** Piece 86: the caller's Agent Chat threads, newest first. */
+  async agentChatThreads(): Promise<AgentChatThreadSummary[]> {
+    const r = await api.get<AgentChatThreadSummary[]>('/agent/chat/threads'); return r.data
+  },
+  /** Piece 86: one Agent Chat thread in full. */
+  async agentChatThread(id: string): Promise<AgentChatThread> {
+    const r = await api.get<AgentChatThread>(`/agent/chat/threads/${id}`); return r.data
   },
   async agentRun(id: string): Promise<RunRecord> {
     const r = await api.get<RunRecord>(`/knowledge/agents/runs/${id}`); return r.data
@@ -1038,6 +1059,123 @@ export async function interactStream(
         } else if (event === 'done') {
           sawDone = true
           handlers.onDone?.(parsed.response as InteractResponse)
+        }
+      }
+    }
+    if (!sawDone && !sawError) throw new Error('stream ended unexpectedly')
+  }
+  return attempt(false)
+}
+
+export interface AgentChatStreamHandlers {
+  onStatus?: (message: string) => void
+  onToolCall?: (n: number, tool: string, argsDigest: string) => void
+  onToolResult?: (n: number, tool: string, status: string, summary: string) => void
+  onSubAgent?: (phase: string, n: number, goal?: string, stopped?: string, steps?: number, tokens?: number) => void
+  onApprovalRequired?: (approval: AgentApproval) => void
+  onSources?: (citations: Citation[]) => void
+  onDelta?: (text: string) => void
+  onDone?: (done: { thread_id: string; run_id: string; tokens: number; stopped: string; edit_ids: string[] }) => void
+  onError?: (message: string, partial: boolean) => void
+}
+
+/**
+ * Streaming Agent Chat turn over SSE (Piece 86): status → tool_call /
+ * tool_result / subagent / approval_required → sources → delta… →
+ * done. Same transport contract as queryStream: fetch + reader, the
+ * 401 refresh retry, and a stream that delivered a real error does
+ * not throw for the missing Done.
+ */
+export async function agentChatStream(
+  payload: { message: string; thread_id?: string; matter_id?: string; doc_ids?: string[] },
+  handlers: AgentChatStreamHandlers,
+  signal?: AbortSignal,
+): Promise<void> {
+  async function attempt(isRetry: boolean): Promise<void> {
+    const res = await fetch('/api/v1/agent/chat/stream', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(tokens.access ? { Authorization: `Bearer ${tokens.access}` } : {}),
+      },
+      body: JSON.stringify({
+        message: payload.message,
+        thread_id: payload.thread_id ?? null,
+        matter_id: payload.matter_id ?? null,
+        doc_ids: payload.doc_ids ?? [],
+      }),
+      signal,
+    })
+    if (res.status === 401 && !isRetry && tokens.refresh) {
+      const r = await axios.post('/api/v1/auth/refresh', { refresh_token: tokens.refresh })
+      tokens.save(r.data)
+      return attempt(true)
+    }
+    if (!res.ok || !res.body) {
+      const text = await res.text().catch(() => '')
+      throw new Error(text || `stream failed (${res.status})`)
+    }
+    const reader = res.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+    let sawDone = false
+    let sawError = false
+    for (;;) {
+      const { value, done } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+      let idx
+      while ((idx = buffer.indexOf('\n\n')) >= 0) {
+        const rawEvent = buffer.slice(0, idx)
+        buffer = buffer.slice(idx + 2)
+        let event = 'message'
+        let data = ''
+        for (const line of rawEvent.split('\n')) {
+          if (line.startsWith('event:')) event = line.slice(6).trim()
+          else if (line.startsWith('data:')) data += line.slice(5).trim()
+        }
+        if (!data) continue
+        let parsed: Record<string, unknown>
+        try { parsed = JSON.parse(data) } catch { continue }
+        if (event === 'status') {
+          handlers.onStatus?.(String(parsed.message ?? ''))
+        } else if (event === 'tool_call') {
+          handlers.onToolCall?.(Number(parsed.n ?? 0), String(parsed.tool ?? ''), String(parsed.args_digest ?? ''))
+        } else if (event === 'tool_result') {
+          handlers.onToolResult?.(Number(parsed.n ?? 0), String(parsed.tool ?? ''), String(parsed.status ?? ''), String(parsed.summary ?? ''))
+        } else if (event === 'subagent') {
+          handlers.onSubAgent?.(
+            String(parsed.phase ?? ''),
+            Number(parsed.n ?? 0),
+            parsed.goal != null ? String(parsed.goal) : undefined,
+            parsed.stopped != null ? String(parsed.stopped) : undefined,
+            Number(parsed.steps ?? 0),
+            Number(parsed.tokens_estimate ?? 0),
+          )
+        } else if (event === 'approval_required') {
+          handlers.onApprovalRequired?.({
+            edit_id: String(parsed.edit_id ?? ''),
+            doc_id: String(parsed.doc_id ?? ''),
+            doc_title: String(parsed.doc_title ?? ''),
+            instruction: String(parsed.instruction ?? ''),
+            diff: (parsed.diff as PassageDiff) ?? { added: [], removed: [] },
+          })
+        } else if (event === 'sources') {
+          handlers.onSources?.((parsed.citations as Citation[]) ?? [])
+        } else if (event === 'delta') {
+          handlers.onDelta?.(String(parsed.text ?? ''))
+        } else if (event === 'done') {
+          sawDone = true
+          handlers.onDone?.({
+            thread_id: String(parsed.thread_id ?? ''),
+            run_id: String(parsed.run_id ?? ''),
+            tokens: Number(parsed.tokens ?? 0),
+            stopped: String(parsed.stopped ?? ''),
+            edit_ids: (parsed.edit_ids as string[]) ?? [],
+          })
+        } else if (event === 'error') {
+          sawError = true
+          handlers.onError?.(String(parsed.message ?? 'the agent run failed'), parsed.partial === true)
         }
       }
     }

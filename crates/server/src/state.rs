@@ -46,6 +46,8 @@ pub struct AppState {
     pub runs: Arc<crate::runs::RunStore>,
     /// Piece 85: document edit proposals + version lineage.
     pub edits: Arc<crate::edits::EditStore>,
+    /// Piece 86: Agent Chat threads (one-box agent conversations).
+    pub agent_chats: Arc<crate::agent_chat::ChatStore>,
     pub connectors: Arc<crate::connectors::ConnectorStore>,
     pub annotations: Arc<crate::annotations::AnnotationStore>,
     pub matters: Arc<crate::matters::MatterStore>,

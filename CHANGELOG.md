@@ -15,6 +15,56 @@ live**, what is **built but unverified**, and what is **roadmap**.
 ## [Unreleased]
 
 ### Added
+- **One-box Agent Chat: one textbox, the model picks its tools
+  (7 Nov 2026, Piece 86).** A first-class Agent Chat page with a
+  single composer: the user types a message and the model itself
+  decides whether to answer from the vault, research the web, query
+  the graph, delegate to sub-agents, or propose a document edit —
+  no mode picker, no separate Agents-page flow as the front door.
+  Backend: `POST /api/v1/agent/chat/stream` (SSE: status, tool_call,
+  tool_result, subagent, approval_required, sources, delta, done,
+  error — the Ask/Interact envelope conventions) plus a blocking
+  `POST /api/v1/agent/chat` fallback, running the Piece 84 loop via
+  a new `ToolAgent::run_hooked` with two hooks: a live event sink
+  (`ToolLoopEvent`, projected from the same points that build the
+  persisted trace) and an `EditProposer` seam. The registry gains
+  an `edit_document` tool offered ONLY to hooked runs: it runs the
+  Piece 85 propose core (extracted as `create_edit_proposal`,
+  shared with the propose route — visibility/edit-access checks,
+  edit pass, parked proposal) and the loop can do nothing else with
+  it; approval/write-back stays with the Piece 85 decide endpoints,
+  and the write gating is execution-level (no proposer or a
+  sub-agent = a clean tool error fed back to the model). Threads
+  persist in a new owner-scoped store (`agent_chats.json`) holding
+  messages, tool-trace summaries, citations, run ids and edit ids,
+  so a thread survives reload and an approval decided later still
+  resolves against the live edit record; runs land in run history
+  (kind `autonomous_tools`, name "Agent chat") and bill through the
+  existing quota/settle path. Frontend: the new page reuses the
+  existing markdown/citation rendering, the Piece 84 trace list and
+  the Piece 85 diff view (both now exported from the Agents page),
+  with inline diff approval cards (Approve / Reject wired to the
+  decide endpoints, receipt in place after approval), sub-agent
+  cards, and a full-width layout. Tests: +7 in the rag crate
+  (proposal creation with no write path, proposer-absent feedback,
+  Workspace confinement at the proposer seam, sub-agents cannot
+  propose, web routing, event ordering with delta concatenation,
+  EditProposed projection) and +4 in the server crate (thread store
+  lifecycle/owner scoping, SSE event mapping and payload shapes).
+  Suite: 321 passed / 0 failed (310 baseline + 11). Verified live
+  on :3001 (see the verification note in the Piece 86 session
+  report): a plain tenancy question answered with citations and no
+  edit activity; a research message drove web research; an edit
+  message produced an approval card with the exact diff, approval
+  filed version 3 of the tenancy note, and a follow-up in the same
+  thread answered with the new text. Thread goals carry
+  decided-edit updates (approved/rejected, with the new version
+  number) plus a verify-current-text note, so a follow-up never
+  answers from a stale turn — caught in the first live follow-up,
+  which reasoned from the earlier "pending" turn, and fixed before
+  this piece closed. The Agents page keeps plan approval and
+  orchestration; the Confidential Vault is untouched (chat
+  proposes edits to shared documents only).
 - **Vault file editing: propose an edit, approve the diff, get a new
   version — originals always preserved (7 Nov 2026, Piece 85).**
   A document + a natural-language instruction produce an LLM edit

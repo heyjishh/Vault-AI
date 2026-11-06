@@ -408,6 +408,68 @@ export interface VersionView {
   decided_at?: string | null
 }
 
+/** Piece 86: a pending edit proposal as the agent loop reports it. */
+export interface EditProposalInfo {
+  edit_id: string
+  doc_id: string
+  doc_title: string
+  instruction: string
+  diff: PassageDiff
+}
+
+/** Piece 86: one message in an Agent Chat thread. */
+export interface AgentChatMessage {
+  role: 'user' | 'assistant'
+  text: string
+  created_at: string
+  run_id?: string | null
+  tokens?: number
+  stopped?: string | null
+  trace?: ToolTraceEntry[]
+  citations?: Citation[]
+  edit_ids?: string[]
+  doc_ids?: string[]
+}
+
+/** Piece 86: a full Agent Chat thread. */
+export interface AgentChatThread {
+  id: string
+  matter_id?: string | null
+  title: string
+  messages: AgentChatMessage[]
+  created_at: string
+  updated_at: string
+}
+
+/** Piece 86: the sidebar row for one Agent Chat thread. */
+export interface AgentChatThreadSummary {
+  id: string
+  matter_id?: string | null
+  title: string
+  message_count: number
+  updated_at: string
+}
+
+/** Piece 86: the blocking chat turn's response. */
+export interface AgentChatTurn {
+  thread_id: string
+  message: AgentChatMessage
+  run_id: string
+  tokens: number
+  stopped: string
+  citations: Citation[]
+  proposals: EditProposalInfo[]
+}
+
+/** Piece 86: an approval_required stream event's payload. */
+export interface AgentApproval {
+  edit_id: string
+  doc_id: string
+  doc_title: string
+  instruction: string
+  diff: PassageDiff
+}
+
 export interface AgentStepTrace {
   n: number
   action: string

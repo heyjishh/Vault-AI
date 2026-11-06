@@ -45,8 +45,9 @@ pub use batch::{filter_supported_files, BatchItemResult};
 pub use agent::{StepResult, WorkflowDef, WorkflowEngine, WorkflowRun, BUILTIN_WORKFLOWS};
 pub use orchestrator::{AgentStepTrace, AutonomousAgent, AutonomousRun, PlannedStep, RunBudget};
 pub use tools::{
-    tool_defs, validate_tool_args, DocCatalog, DocListEntry, ToolAgent, ToolChildSummary,
-    ToolDef, ToolRun, ToolRunContext, ToolTraceEntry,
+    all_tool_names, chat_tool_names, tool_defs, validate_tool_args, DocCatalog, DocListEntry,
+    EditProposalInfo, EditProposer, ToolAgent, ToolChildSummary, ToolDef, ToolEventSink,
+    ToolLoopEvent, ToolRun, ToolRunContext, ToolRunHooks, ToolTraceEntry,
 };
 pub use edits::{apply_edit, compute_diff, text_to_rtf, PassageDiff};
 pub use subagents::{

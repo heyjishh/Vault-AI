@@ -157,6 +157,17 @@ pub fn tool_defs() -> Vec<ToolDef> {
                 &["goal"],
             ),
         },
+        ToolDef {
+            name: "edit_document",
+            description: "Propose an edit to one document: the document id and the change to make, in plain language. This creates a PENDING PROPOSAL with a diff — the user must approve it before anything is written back; it never changes the document by itself. Use when the user asks to change, fix, update or rewrite a document.",
+            input_schema: schema(
+                json!({
+                    "doc_id": { "type": "string" },
+                    "instruction": { "type": "string" }
+                }),
+                &["doc_id", "instruction"],
+            ),
+        },
     ]
 }
 
@@ -164,8 +175,20 @@ pub fn tool_def(name: &str) -> Option<ToolDef> {
     tool_defs().into_iter().find(|d| d.name == name)
 }
 
-/// The tools a fresh top-level run may use.
+/// The tools a fresh top-level run may use. `edit_document` is NOT
+/// in the default set: it is offered only by runs that carry an
+/// [`EditProposer`] (the Piece 86 Agent Chat), so a plain tool run
+/// can never even name it.
 pub fn all_tool_names() -> Vec<String> {
+    tool_defs()
+        .iter()
+        .map(|d| d.name.to_string())
+        .filter(|n| n != "edit_document")
+        .collect()
+}
+
+/// The full registry, for runs that may propose document edits.
+pub fn chat_tool_names() -> Vec<String> {
     tool_defs().iter().map(|d| d.name.to_string()).collect()
 }
 
@@ -371,6 +394,150 @@ pub struct ToolRun {
     /// The user-approved plan the run followed, when one was given.
     #[serde(default)]
     pub plan: Vec<PlannedStep>,
+    /// Edit proposals this run created (Piece 86) — all still
+    /// pending; the write-back half of the lifecycle belongs to the
+    /// edit store's decide endpoints, never to the loop.
+    #[serde(default)]
+    pub proposals: Vec<EditProposalInfo>,
+}
+
+// ---------------------------------------------------------------------------
+// Streaming events + the document-edit seam (Piece 86).
+// ---------------------------------------------------------------------------
+
+/// One live event from a tool run, for streaming surfaces (the
+/// one-box Agent Chat). The run's durable record remains the
+/// [`ToolTraceEntry`] list on the run record; these events are its
+/// live projection, in the same serde shape as `QueryEvent`.
+#[derive(Debug, Clone, Serialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum ToolLoopEvent {
+    Status {
+        message: String,
+    },
+    ToolCall {
+        /// 1-based sequence number of the call within the run;
+        /// pairs with the matching `ToolResult`.
+        n: usize,
+        tool: String,
+        args_digest: String,
+    },
+    ToolResult {
+        n: usize,
+        tool: String,
+        /// ok | error
+        status: String,
+        /// A one-line human summary of what came back.
+        summary: String,
+        result_chars: usize,
+        tokens_estimate: u64,
+        duration_ms: u64,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        child: Option<ToolChildSummary>,
+    },
+    /// An `edit_document` call created a pending proposal. The
+    /// write itself waits for an approval decision outside the loop.
+    EditProposed {
+        proposal: EditProposalInfo,
+    },
+    /// The run's citation set, emitted before the answer deltas so
+    /// the UI can render sources early (the Ask stream convention).
+    Sources {
+        citations: Vec<Citation>,
+    },
+    /// A chunk of the final report. The loop composes its report
+    /// whole (it is not a token stream), so deltas are a rendering
+    /// cadence over the completed text, chunked at word boundaries.
+    Delta {
+        text: String,
+    },
+}
+
+/// The sink a streaming caller hands the loop. Events are advisory:
+/// emitting must never block or fail the run.
+pub type ToolEventSink = Arc<dyn Fn(ToolLoopEvent) + Send + Sync>;
+
+/// A pending document-edit proposal created by the `edit_document`
+/// tool — the Piece 85 lifecycle's first half, as the loop sees it.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EditProposalInfo {
+    pub edit_id: String,
+    pub doc_id: String,
+    pub doc_title: String,
+    pub instruction: String,
+    pub diff: crate::edits::PassageDiff,
+}
+
+/// The seam for document edits: the loop can only PROPOSE. The
+/// implementation (server-side) runs the Piece 85 propose path —
+/// visibility and edit-access checks, the LLM edit pass, the parked
+/// proposal — and approval/write-back stays with the edit store's
+/// decide endpoints. The loop never writes a document itself.
+#[async_trait]
+pub trait EditProposer: Send + Sync {
+    async fn propose_edit(
+        &self,
+        doc_id: &str,
+        instruction: &str,
+    ) -> std::result::Result<EditProposalInfo, String>;
+}
+
+/// Per-run extras a caller may hand the loop: a live event sink and
+/// the edit-proposal seam. Default: neither — the loop then behaves
+/// exactly as Piece 84 shipped.
+#[derive(Clone, Default)]
+pub struct ToolRunHooks {
+    pub sink: Option<ToolEventSink>,
+    pub edit_proposer: Option<Arc<dyn EditProposer>>,
+    /// Offer `edit_document` in this run's tool list. Only takes
+    /// effect together with a proposer; the Agents-page run leaves
+    /// it off.
+    pub allow_edit: bool,
+}
+
+fn emit(sink: &Option<ToolEventSink>, ev: ToolLoopEvent) {
+    if let Some(s) = sink {
+        s(ev);
+    }
+}
+
+/// Split a completed report into delta chunks (~280 chars, cut at
+/// whitespace so concatenation reproduces the text exactly).
+fn delta_chunks(text: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut cur = String::new();
+    for piece in text.split_inclusive(char::is_whitespace) {
+        if !cur.is_empty() && cur.chars().count() + piece.chars().count() > 280 {
+            out.push(std::mem::take(&mut cur));
+        }
+        cur.push_str(piece);
+    }
+    if !cur.is_empty() {
+        out.push(cur);
+    }
+    out
+}
+
+/// A one-line summary of a call's outcome for the live event stream.
+fn result_summary(out: &CallOutcome) -> String {
+    if out.status != "ok" {
+        return out.error.clone().unwrap_or_else(|| "error".to_string());
+    }
+    if out.tool == "spawn_subagent" {
+        if let Some(child) = &out.child {
+            return format!(
+                "sub-agent “{}” stopped: {} ({} trace entries)",
+                child.goal, child.stopped, child.steps
+            );
+        }
+    }
+    let first = out.result_text.lines().next().unwrap_or("").trim();
+    let summary: String = first.chars().take(200).collect();
+    if summary.is_empty() {
+        format!("{} chars returned", out.result_chars)
+    } else {
+        summary
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -387,7 +554,9 @@ Respond with EXACTLY one JSON object and no other text, in one of these shapes:\
 {\"final\": \"<your complete report, answering the goal from the tool results, citing sources inline as [doc:N] / [web:N] exactly as they appear in the results>\"}\n\
 Rules: every claim in the final report must come from a tool result — never invent facts, cases, or citations. \
 If a tool returns an error, read it and correct your call instead of repeating it. \
-When the goal is covered, answer with {\"final\": ...} instead of calling more tools.";
+When the goal is covered, answer with {\"final\": ...} instead of calling more tools. \
+If the user asks to change a document and edit_document is among your tools, use it: it parks a proposal \
+the user approves before anything is written back — never claim a document is already changed.";
 
 const SYNTH_SYSTEM: &str = "You are a senior legal researcher writing the final report of an \
 autonomous tool-using research run that ended before the agent produced its own final answer. \
@@ -469,6 +638,7 @@ fn args_digest(tool: &str, args: &Value) -> String {
         "vault_search" | "web_research" | "graph_query" => pick(&["query"]),
         "read_document" => pick(&["doc_id"]),
         "spawn_subagent" => pick(&["goal"]),
+        "edit_document" => pick(&["instruction"]),
         _ => String::new(),
     }
 }
@@ -577,10 +747,30 @@ impl ToolAgent {
         ctx: ToolRunContext,
         budget: RunBudget,
     ) -> Result<ToolRun> {
+        self.run_hooked(goal, plan, ctx, budget, ToolRunHooks::default()).await
+    }
+
+    /// [`Self::run`] with per-run hooks (Piece 86): a live event
+    /// sink and/or the edit-proposal seam. With `allow_edit` set the
+    /// run's tool list is the full registry (including
+    /// `edit_document`); otherwise it is the default Piece 84 set.
+    pub async fn run_hooked(
+        &self,
+        goal: &str,
+        plan: &[PlannedStep],
+        ctx: ToolRunContext,
+        budget: RunBudget,
+        hooks: ToolRunHooks,
+    ) -> Result<ToolRun> {
         if goal.trim().is_empty() {
             return Err(Error::BadRequest("goal is empty".to_string()));
         }
-        self.run_inner(goal, plan, ctx, budget, all_tool_names(), 0).await
+        let allowed = if hooks.allow_edit {
+            chat_tool_names()
+        } else {
+            all_tool_names()
+        };
+        self.run_inner(goal, plan, ctx, budget, allowed, 0, &hooks).await
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -592,6 +782,7 @@ impl ToolAgent {
         budget: RunBudget,
         allowed: Vec<String>,
         depth: usize,
+        hooks: &ToolRunHooks,
     ) -> Result<ToolRun> {
         let max_steps = budget.max_steps.unwrap_or(usize::MAX).max(1);
         let system = self.system_prompt(&allowed, &ctx, plan);
@@ -604,6 +795,12 @@ impl ToolAgent {
         let mut steps_done: usize = 0;
         let mut stopped = "finished".to_string();
         let mut final_report: Option<String> = None;
+        let mut proposals: Vec<EditProposalInfo> = Vec::new();
+        // Live-event sequence numbers: ToolCall and ToolResult are
+        // emitted in call order, so the k-th result pairs with the
+        // k-th call.
+        let mut calls_emitted: usize = 0;
+        let mut results_emitted: usize = 0;
 
         for _turn in 0..MAX_TURNS {
             // Budget gates sit between turns/calls; a run always makes
@@ -676,8 +873,19 @@ impl ToolAgent {
                         .map(|(i, _)| i)
                         .collect();
                     if spawn_idx.len() > 1 {
+                        for &i in &spawn_idx {
+                            calls_emitted += 1;
+                            emit(
+                                &hooks.sink,
+                                ToolLoopEvent::ToolCall {
+                                    n: calls_emitted,
+                                    tool: calls[i].tool.clone(),
+                                    args_digest: args_digest(&calls[i].tool, &calls[i].args),
+                                },
+                            );
+                        }
                         let futs = spawn_idx.iter().map(|&i| {
-                            self.execute_call(&calls[i], &ctx, budget, tokens_estimate, steps_done, depth)
+                            self.execute_call(&calls[i], &ctx, budget, tokens_estimate, steps_done, depth, hooks)
                         });
                         let outs = futures::future::join_all(futs).await;
                         for (k, out) in outs.into_iter().enumerate() {
@@ -694,15 +902,24 @@ impl ToolAgent {
                             let out = results[i].take().unwrap();
                             steps_done += 1;
                             tokens_estimate += out.tokens_estimate;
-                            self.absorb(out, &mut trace, &mut transcript, &mut findings, &mut citations, &mut seen_chunks);
+                            self.absorb(out, &mut trace, &mut transcript, &mut findings, &mut citations, &mut seen_chunks, &mut proposals, &hooks.sink, &mut results_emitted);
                             continue;
                         }
+                        calls_emitted += 1;
+                        emit(
+                            &hooks.sink,
+                            ToolLoopEvent::ToolCall {
+                                n: calls_emitted,
+                                tool: call.tool.clone(),
+                                args_digest: args_digest(&call.tool, &call.args),
+                            },
+                        );
                         let out = self
-                            .execute_call(call, &ctx, budget, tokens_estimate, steps_done, depth)
+                            .execute_call(call, &ctx, budget, tokens_estimate, steps_done, depth, hooks)
                             .await;
                         steps_done += 1;
                         tokens_estimate += out.tokens_estimate;
-                        self.absorb(out, &mut trace, &mut transcript, &mut findings, &mut citations, &mut seen_chunks);
+                        self.absorb(out, &mut trace, &mut transcript, &mut findings, &mut citations, &mut seen_chunks, &mut proposals, &hooks.sink, &mut results_emitted);
                     }
                     if stopped == "budget" {
                         break;
@@ -720,6 +937,12 @@ impl ToolAgent {
                 // No model-authored final: synthesize from the
                 // findings, labelled partial when a budget/turn cap
                 // (or a provider failure) cut the run short.
+                emit(
+                    &hooks.sink,
+                    ToolLoopEvent::Status {
+                        message: "Writing the final answer from the findings gathered so far…".to_string(),
+                    },
+                );
                 let findings_text = if findings.is_empty() {
                     "(no findings were gathered)".to_string()
                 } else {
@@ -749,6 +972,19 @@ impl ToolAgent {
             }
         };
 
+        // Live projection of the completed answer: sources first
+        // (the Ask stream convention), then the report in deltas.
+        if let Some(s) = &hooks.sink {
+            if !citations.is_empty() {
+                s(ToolLoopEvent::Sources {
+                    citations: citations.clone(),
+                });
+            }
+            for chunk in delta_chunks(&final_report) {
+                s(ToolLoopEvent::Delta { text: chunk });
+            }
+        }
+
         Ok(ToolRun {
             goal: goal.to_string(),
             trace,
@@ -757,11 +993,14 @@ impl ToolAgent {
             stopped,
             tokens_estimate,
             plan: plan.to_vec(),
+            proposals,
         })
     }
 
     /// Fold one executed call into the run's trace, transcript,
-    /// findings, and citation set.
+    /// findings, and citation set — and project it to the live event
+    /// sink, when one is attached.
+    #[allow(clippy::too_many_arguments)]
     fn absorb(
         &self,
         out: CallOutcome,
@@ -770,10 +1009,13 @@ impl ToolAgent {
         findings: &mut Vec<String>,
         citations: &mut Vec<Citation>,
         seen_chunks: &mut HashSet<String>,
+        proposals: &mut Vec<EditProposalInfo>,
+        sink: &Option<ToolEventSink>,
+        results_emitted: &mut usize,
     ) {
-        for c in out.citations {
+        for c in &out.citations {
             if seen_chunks.insert(c.chunk_id.clone()) {
-                citations.push(c);
+                citations.push(c.clone());
             }
         }
         if out.status == "ok" {
@@ -787,6 +1029,29 @@ impl ToolAgent {
             out.tool,
             cap_feed(&out.result_text)
         ));
+        *results_emitted += 1;
+        emit(
+            sink,
+            ToolLoopEvent::ToolResult {
+                n: *results_emitted,
+                tool: out.tool.clone(),
+                status: out.status.clone(),
+                summary: result_summary(&out),
+                result_chars: out.result_chars,
+                tokens_estimate: out.tokens_estimate,
+                duration_ms: out.duration_ms,
+                child: out.child.clone(),
+            },
+        );
+        for proposal in &out.proposals {
+            proposals.push(proposal.clone());
+            emit(
+                sink,
+                ToolLoopEvent::EditProposed {
+                    proposal: proposal.clone(),
+                },
+            );
+        }
         trace.push(ToolTraceEntry {
             n: trace.len() + 1,
             tool: out.tool,
@@ -813,6 +1078,7 @@ impl ToolAgent {
         parent_tokens_so_far: u64,
         parent_steps_so_far: usize,
         depth: usize,
+        hooks: &ToolRunHooks,
     ) -> CallOutcome {
         let started = Instant::now();
         let digest = args_digest(&call.tool, &call.args);
@@ -827,6 +1093,7 @@ impl ToolAgent {
             duration_ms: 0,
             citations: Vec::new(),
             child: None,
+            proposals: Vec::new(),
         };
         let fail = |out: &mut CallOutcome, started: Instant, msg: String| {
             out.status = "error".to_string();
@@ -958,6 +1225,44 @@ impl ToolAgent {
                     lines.join("\n")
                 };
             }
+            "edit_document" => {
+                let doc_id = call.args.get("doc_id").and_then(|v| v.as_str()).unwrap_or("");
+                let instruction = call.args.get("instruction").and_then(|v| v.as_str()).unwrap_or("");
+                if let Some(scope) = &ctx.scope_docs {
+                    if !scope.iter().any(|d| d == doc_id) {
+                        fail(
+                            &mut out,
+                            started,
+                            format!(
+                                "document {doc_id} is outside this run's Workspace — edits can only be proposed for documents inside the run's scope; use list_workspace to see what is available"
+                            ),
+                        );
+                        return out;
+                    }
+                }
+                match &hooks.edit_proposer {
+                    None => fail(
+                        &mut out,
+                        started,
+                        "edit_document is not available in this run — document edits are proposed from the Agent Chat, where the user reviews and approves them".to_string(),
+                    ),
+                    Some(proposer) => match proposer.propose_edit(doc_id, instruction).await {
+                        Ok(info) => {
+                            out.tokens_estimate = usage::estimate_tokens(instruction)
+                                + usage::estimate_tokens(&info.diff.summary_line());
+                            out.result_text = format!(
+                                "EDIT PROPOSED for “{}” (proposal {}): {}. NOTHING has been written back — the proposal is pending the user's approval. In your final answer, say the edit is proposed and awaiting approval; do not say the document has been changed.",
+                                info.doc_title,
+                                info.edit_id,
+                                info.diff.summary_line()
+                            );
+                            out.result_chars = out.result_text.chars().count();
+                            out.proposals.push(info);
+                        }
+                        Err(msg) => fail(&mut out, started, format!("edit_document failed: {msg}")),
+                    },
+                }
+            }
             "spawn_subagent" => {
                 if depth >= 1 {
                     fail(
@@ -974,7 +1279,7 @@ impl ToolAgent {
                     Some(names) => names
                         .iter()
                         .filter_map(|v| v.as_str())
-                        .filter(|n| *n != "spawn_subagent" && tool_def(n).is_some())
+                        .filter(|n| *n != "spawn_subagent" && *n != "edit_document" && tool_def(n).is_some())
                         .map(|n| n.to_string())
                         .collect(),
                     None => all_tool_names()
@@ -1012,9 +1317,12 @@ impl ToolAgent {
                     max_tokens: Some(child_tokens),
                 };
                 // The child inherits the parent's scope and request
-                // options unchanged — confinement cannot widen.
+                // options unchanged — confinement cannot widen. It
+                // gets NO hooks: no live sink (the parent reports it)
+                // and no edit proposer — proposals are a top-level,
+                // user-watched act, like spawning itself.
                 let child_ctx = ctx.clone();
-                match Box::pin(self.run_inner(goal, &[], child_ctx, child_budget, child_tools, depth + 1)).await {
+                match Box::pin(self.run_inner(goal, &[], child_ctx, child_budget, child_tools, depth + 1, &ToolRunHooks::default())).await {
                     Ok(child) => {
                         out.tokens_estimate = child.tokens_estimate;
                         out.result_text = format!(
@@ -1064,6 +1372,7 @@ struct CallOutcome {
     duration_ms: u64,
     citations: Vec<Citation>,
     child: Option<ToolChildSummary>,
+    proposals: Vec<EditProposalInfo>,
 }
 
 
@@ -1239,19 +1548,19 @@ mod tests {
         };
         // Outside the scope: refused, even though the document exists.
         let out = agent
-            .execute_call(&call("read_document", json!({ "doc_id": "doc-b" })), &ctx, RunBudget::default(), 0, 0, 0)
+            .execute_call(&call("read_document", json!({ "doc_id": "doc-b" })), &ctx, RunBudget::default(), 0, 0, 0, &ToolRunHooks::default())
             .await;
         assert_eq!(out.status, "error");
         assert!(out.result_text.contains("outside this run's Workspace"), "{}", out.result_text);
         // Inside the scope: the document's own text comes back.
         let out = agent
-            .execute_call(&call("read_document", json!({ "doc_id": "doc-a" })), &ctx, RunBudget::default(), 0, 0, 0)
+            .execute_call(&call("read_document", json!({ "doc_id": "doc-a" })), &ctx, RunBudget::default(), 0, 0, 0, &ToolRunHooks::default())
             .await;
         assert_eq!(out.status, "ok");
         assert!(out.result_text.contains("security deposit is refundable"));
         // list_workspace shows only the scoped document.
         let out = agent
-            .execute_call(&call("list_workspace", json!({})), &ctx, RunBudget::default(), 0, 0, 0)
+            .execute_call(&call("list_workspace", json!({})), &ctx, RunBudget::default(), 0, 0, 0, &ToolRunHooks::default())
             .await;
         assert_eq!(out.status, "ok");
         assert!(out.result_text.contains("doc-a"));
@@ -1264,13 +1573,13 @@ mod tests {
         let ctx = ToolRunContext::default();
         // Depth 1 = already a sub-agent: spawning is refused.
         let out = agent
-            .execute_call(&call("spawn_subagent", json!({ "goal": "deeper" })), &ctx, RunBudget::default(), 0, 0, 1)
+            .execute_call(&call("spawn_subagent", json!({ "goal": "deeper" })), &ctx, RunBudget::default(), 0, 0, 1, &ToolRunHooks::default())
             .await;
         assert_eq!(out.status, "error");
         assert!(out.result_text.contains("cannot spawn"));
         // Unknown tool: an error outcome, not a crash.
         let out = agent
-            .execute_call(&call("teleport", json!({})), &ctx, RunBudget::default(), 0, 0, 0)
+            .execute_call(&call("teleport", json!({})), &ctx, RunBudget::default(), 0, 0, 0, &ToolRunHooks::default())
             .await;
         assert_eq!(out.status, "error");
         assert!(out.result_text.contains("unknown tool"));
@@ -1377,5 +1686,227 @@ mod tests {
             run.tokens_estimate >= child.tokens_estimate,
             "child spend must land in the parent's totals"
         );
+    }
+
+    // -- Piece 86: the edit seam and the live event stream --------------
+
+    /// Records every proposal request; stands in for the server's
+    /// Piece 85 propose path.
+    struct FakeProposer {
+        calls: Mutex<Vec<(String, String)>>,
+    }
+
+    #[async_trait]
+    impl EditProposer for FakeProposer {
+        async fn propose_edit(
+            &self,
+            doc_id: &str,
+            instruction: &str,
+        ) -> std::result::Result<EditProposalInfo, String> {
+            self.calls
+                .lock()
+                .unwrap()
+                .push((doc_id.to_string(), instruction.to_string()));
+            Ok(EditProposalInfo {
+                edit_id: "edit-1".to_string(),
+                doc_id: doc_id.to_string(),
+                doc_title: "Tenancy note".to_string(),
+                instruction: instruction.to_string(),
+                diff: crate::edits::compute_diff("old text", "new text"),
+            })
+        }
+    }
+
+    fn edit_hooks(proposer: &Arc<FakeProposer>) -> ToolRunHooks {
+        ToolRunHooks {
+            sink: None,
+            edit_proposer: Some(proposer.clone() as Arc<dyn EditProposer>),
+            allow_edit: true,
+        }
+    }
+
+    #[tokio::test]
+    async fn edit_document_creates_a_proposal_and_writes_nothing() {
+        let agent = agent_with(vec![
+            "{\"tool\": \"edit_document\", \"args\": {\"doc_id\": \"doc-a\", \"instruction\": \"extend the deposit window to 45 days\"}}",
+            "{\"final\": \"The edit is proposed and awaiting your approval.\"}",
+        ]);
+        let proposer = Arc::new(FakeProposer { calls: Mutex::new(Vec::new()) });
+        let run = agent
+            .run_hooked(
+                "extend the deposit window in the tenancy note",
+                &[],
+                ToolRunContext::default(),
+                RunBudget::default(),
+                edit_hooks(&proposer),
+            )
+            .await
+            .unwrap();
+        assert_eq!(run.stopped, "finished");
+        // Exactly one proposal, parked — the loop has no write path:
+        // a proposal is all an edit call can ever produce.
+        assert_eq!(proposer.calls.lock().unwrap().len(), 1);
+        assert_eq!(run.proposals.len(), 1);
+        assert_eq!(run.proposals[0].edit_id, "edit-1");
+        assert_eq!(run.proposals[0].doc_id, "doc-a");
+        let entry = run.trace.iter().find(|t| t.tool == "edit_document").unwrap();
+        assert_eq!(entry.status, "ok");
+    }
+
+    #[tokio::test]
+    async fn edit_document_without_a_proposer_is_clean_feedback() {
+        let agent = agent_with(vec![
+            "{\"tool\": \"edit_document\", \"args\": {\"doc_id\": \"doc-a\", \"instruction\": \"fix it\"}}",
+            "{\"final\": \"Editing is not available here.\"}",
+        ]);
+        let run = agent
+            .run_hooked(
+                "fix the tenancy note",
+                &[],
+                ToolRunContext::default(),
+                RunBudget::default(),
+                ToolRunHooks { sink: None, edit_proposer: None, allow_edit: true },
+            )
+            .await
+            .unwrap();
+        assert_eq!(run.stopped, "finished");
+        assert!(run.proposals.is_empty());
+        let entry = run.trace.iter().find(|t| t.tool == "edit_document").unwrap();
+        assert_eq!(entry.status, "error");
+        assert!(entry.error.as_deref().unwrap().contains("not available"), "{:?}", entry.error);
+    }
+
+    #[tokio::test]
+    async fn edit_document_is_confined_to_the_run_workspace() {
+        let agent = agent_with(vec![
+            "{\"tool\": \"edit_document\", \"args\": {\"doc_id\": \"doc-b\", \"instruction\": \"fix it\"}}",
+            "{\"final\": \"Cannot edit outside the workspace.\"}",
+        ]);
+        let proposer = Arc::new(FakeProposer { calls: Mutex::new(Vec::new()) });
+        let ctx = ToolRunContext {
+            scope_docs: Some(vec!["doc-a".to_string()]),
+            ..Default::default()
+        };
+        let run = agent
+            .run_hooked("fix the other workspace's doc", &[], ctx, RunBudget::default(), edit_hooks(&proposer))
+            .await
+            .unwrap();
+        assert_eq!(run.stopped, "finished");
+        assert!(run.proposals.is_empty());
+        assert_eq!(proposer.calls.lock().unwrap().len(), 0, "a confined run must never reach the proposer");
+        let entry = run.trace.iter().find(|t| t.tool == "edit_document").unwrap();
+        assert_eq!(entry.status, "error");
+    }
+
+    #[tokio::test]
+    async fn subagent_cannot_propose_edits() {
+        let agent = agent_with(vec![
+            "{\"tool\": \"spawn_subagent\", \"args\": {\"goal\": \"child branch\", \"tools\": [\"edit_document\", \"vault_search\"]}}",
+            "{\"tool\": \"edit_document\", \"args\": {\"doc_id\": \"doc-a\", \"instruction\": \"change it\"}}",
+            "{\"final\": \"Child report.\"}",
+            "{\"final\": \"Parent report.\"}",
+        ]);
+        let proposer = Arc::new(FakeProposer { calls: Mutex::new(Vec::new()) });
+        let run = agent
+            .run_hooked(
+                "delegate and edit",
+                &[],
+                ToolRunContext::default(),
+                RunBudget::default(),
+                edit_hooks(&proposer),
+            )
+            .await
+            .unwrap();
+        assert_eq!(run.final_report, "Parent report.");
+        assert_eq!(
+            proposer.calls.lock().unwrap().len(),
+            0,
+            "the child's edit attempt must never reach the proposer (children get no edit seam)"
+        );
+        assert!(run.proposals.is_empty());
+    }
+
+    #[tokio::test]
+    async fn research_routes_to_web_research() {
+        let agent = agent_with(vec![
+            "{\"tool\": \"web_research\", \"args\": {\"query\": \"latest rent control ruling\"}}",
+            "{\"final\": \"Researched report.\"}",
+        ]);
+        let run = agent
+            .run("what is the latest ruling", &[], ToolRunContext::default(), RunBudget::default())
+            .await
+            .unwrap();
+        assert_eq!(run.stopped, "finished");
+        assert!(run.trace.iter().any(|t| t.tool == "web_research" && t.status == "ok"));
+        assert!(run.proposals.is_empty());
+    }
+
+    #[tokio::test]
+    async fn events_stream_calls_results_and_answer_deltas_in_order() {
+        let agent = agent_with(vec![
+            "{\"tool\": \"vault_search\", \"args\": {\"query\": \"tenancy deposit\"}}",
+            "{\"final\": \"The deposit is refundable within thirty days of vacating the premises.\"}",
+        ]);
+        let events: Arc<Mutex<Vec<ToolLoopEvent>>> = Arc::new(Mutex::new(Vec::new()));
+        let sink_events = events.clone();
+        let hooks = ToolRunHooks {
+            sink: Some(Arc::new(move |ev| sink_events.lock().unwrap().push(ev))),
+            edit_proposer: None,
+            allow_edit: false,
+        };
+        let run = agent
+            .run_hooked("deposit rules", &[], ToolRunContext::default(), RunBudget::default(), hooks)
+            .await
+            .unwrap();
+        assert_eq!(run.stopped, "finished");
+        let evs = events.lock().unwrap();
+        let call_at = evs
+            .iter()
+            .position(|e| matches!(e, ToolLoopEvent::ToolCall { tool, .. } if tool == "vault_search"))
+            .expect("a tool_call event for vault_search");
+        let result_at = evs
+            .iter()
+            .position(|e| matches!(e, ToolLoopEvent::ToolResult { tool, status, .. } if tool == "vault_search" && status == "ok"))
+            .expect("a tool_result event for vault_search");
+        assert!(call_at < result_at, "the call event must precede its result event");
+        // Answer deltas concatenate to the exact final report.
+        let streamed: String = evs
+            .iter()
+            .filter_map(|e| match e {
+                ToolLoopEvent::Delta { text } => Some(text.clone()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(streamed, run.final_report);
+        assert!(!streamed.is_empty());
+        // A pure question produced no edit activity.
+        assert!(evs.iter().all(|e| !matches!(e, ToolLoopEvent::EditProposed { .. })));
+    }
+
+    #[tokio::test]
+    async fn edit_proposal_is_projected_to_the_event_sink() {
+        let agent = agent_with(vec![
+            "{\"tool\": \"edit_document\", \"args\": {\"doc_id\": \"doc-a\", \"instruction\": \"extend the window\"}}",
+            "{\"final\": \"Proposed.\"}",
+        ]);
+        let proposer = Arc::new(FakeProposer { calls: Mutex::new(Vec::new()) });
+        let events: Arc<Mutex<Vec<ToolLoopEvent>>> = Arc::new(Mutex::new(Vec::new()));
+        let sink_events = events.clone();
+        let mut hooks = edit_hooks(&proposer);
+        hooks.sink = Some(Arc::new(move |ev| sink_events.lock().unwrap().push(ev)));
+        agent
+            .run_hooked("extend the window", &[], ToolRunContext::default(), RunBudget::default(), hooks)
+            .await
+            .unwrap();
+        let evs = events.lock().unwrap();
+        let proposed = evs
+            .iter()
+            .find_map(|e| match e {
+                ToolLoopEvent::EditProposed { proposal } => Some(proposal),
+                _ => None,
+            })
+            .expect("an edit_proposed event");
+        assert_eq!(proposed.edit_id, "edit-1");
+        assert_eq!(proposed.diff.added.len(), 1);
     }
 }

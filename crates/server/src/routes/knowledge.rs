@@ -139,7 +139,7 @@ fn settings_mode(state: &AppState) -> QueryMode {
 }
 
 /// Resolve a request's matter to its document scope (404 on unknown id).
-fn doc_scope(
+pub(crate) fn doc_scope(
     state: &AppState,
     matter_id: &Option<String>,
     user: &legal_rag_auth::User,
