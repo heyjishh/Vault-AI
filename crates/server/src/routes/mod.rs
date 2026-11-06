@@ -111,6 +111,8 @@ pub fn router(state: AppState) -> Router {
         .route("/api/v1/knowledge/agents/autonomous/plan", post(knowledge::autonomous_plan))
         .route("/api/v1/knowledge/agents/runs", get(knowledge::agent_runs_list))
         .route("/api/v1/knowledge/agents/runs/{id}", get(knowledge::agent_run_get))
+        .route("/api/v1/knowledge/agents/tools/plan", post(knowledge::tool_plan))
+        .route("/api/v1/knowledge/agents/tools/run", post(knowledge::tool_agent_run))
         .route("/api/v1/knowledge/stats", get(knowledge::stats))
         .route("/api/v1/knowledge/graph", get(knowledge::graph_view))
         // Create: Interact with a document + Draft generation.

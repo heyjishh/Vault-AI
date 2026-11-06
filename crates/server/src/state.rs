@@ -34,6 +34,8 @@ pub struct AppState {
     pub workflows: Arc<WorkflowEngine>,
     pub agent: Arc<legal_rag_rag::AutonomousAgent>,
     pub orchestrator: Arc<legal_rag_rag::SubAgentOrchestrator>,
+    /// Piece 84 tool-use agent (tool-calling loop over the registry).
+    pub tool_agent: Arc<legal_rag_rag::ToolAgent>,
     pub billing: Arc<crate::billing::BillingStore>,
     pub activity: Arc<crate::activity::ActivityStore>,
     pub golden: Arc<crate::golden::GoldenStore>,

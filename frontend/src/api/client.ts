@@ -3,7 +3,7 @@ import type {
   AuthResponse, CacheStats, ChunkAug, Citation, CitationAudit, CitationTreatment, CorpusStats, DocMeta, DocSearchHit, DocumentInfo, GraphView, Space,
   IngestReport, Matter, MatterDetail, MatterMemory, MatterSummary, PrivateDocMeta, PublicSettings,
   QueryAnswer, QueryMode, ResearchReport, SourceDocument, TimelineItem, TokenPair,
-  WorkflowDef, WorkflowRun, AutonomousRun, PlanBranch, RunRecord, RunSummary,
+  WorkflowDef, WorkflowRun, AutonomousRun, PlanBranch, PlannedStep, RunRecord, RunSummary, ToolRun,
   AlertCheckResult, WatchView,
 } from './types'
 
@@ -157,6 +157,20 @@ export const ragApi = {
   async planAutonomous(goal: string, matter_id?: string): Promise<{ branches: PlanBranch[] }> {
     try {
       const r = await api.post<{ branches: PlanBranch[] }>('/knowledge/agents/autonomous/plan', { goal, matter_id: matter_id ?? null })
+      return r.data
+    } catch (e) { throw new Error(err(e)) }
+  },
+  /** Piece 84: draft a plan for a tool-agent run (Piece 80 planner). */
+  async planToolAgent(goal: string, matter_id?: string): Promise<{ steps: PlannedStep[] }> {
+    try {
+      const r = await api.post<{ steps: PlannedStep[] }>('/knowledge/agents/tools/plan', { goal, matter_id: matter_id ?? null })
+      return r.data
+    } catch (e) { throw new Error(err(e)) }
+  },
+  /** Piece 84: run the tool-use agent (schema-checked tool loop). */
+  async runToolAgent(goal: string, matter_id?: string, opts?: { max_steps?: number; max_tokens?: number; approved_plan?: PlannedStep[] }): Promise<ToolRun> {
+    try {
+      const r = await api.post<ToolRun>('/knowledge/agents/tools/run', { goal, matter_id: matter_id ?? null, max_steps: opts?.max_steps ?? null, max_tokens: opts?.max_tokens ?? null, approved_plan: opts?.approved_plan?.length ? opts.approved_plan : undefined })
       return r.data
     } catch (e) { throw new Error(err(e)) }
   },

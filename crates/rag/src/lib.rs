@@ -12,6 +12,7 @@ pub mod citator;
 pub mod citator_v2;
 pub mod orchestrator;
 pub mod subagents;
+pub mod tools;
 pub mod audit;
 pub mod batch;
 pub mod bm25;
@@ -42,6 +43,10 @@ pub mod web;
 pub use batch::{filter_supported_files, BatchItemResult};
 pub use agent::{StepResult, WorkflowDef, WorkflowEngine, WorkflowRun, BUILTIN_WORKFLOWS};
 pub use orchestrator::{AgentStepTrace, AutonomousAgent, AutonomousRun, PlannedStep, RunBudget};
+pub use tools::{
+    tool_defs, validate_tool_args, DocCatalog, DocListEntry, ToolAgent, ToolChildSummary,
+    ToolDef, ToolRun, ToolRunContext, ToolTraceEntry,
+};
 pub use subagents::{
     OrchestratedRun, OrchestratorConfig, PlanBranch, SubAgentOrchestrator, SubAgentReceipt,
     DEFAULT_MAX_PARALLEL_RESEARCHERS, DEFAULT_PER_RUN_TOKEN_CAP,

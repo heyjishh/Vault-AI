@@ -330,6 +330,39 @@ export interface RunSummary {
 export interface RunRecord extends RunSummary {
   report: string
   error: string | null
+  /** Piece 84: tool-call trace (tool-agent runs only). */
+  trace?: ToolTraceEntry[]
+}
+
+/** One step of a Piece 80 up-front plan (the tool agent's approval unit). */
+export interface PlannedStep {
+  action: string
+  query: string
+  reason: string
+}
+
+/** Piece 84: one recorded tool call in a tool-agent run. */
+export interface ToolTraceEntry {
+  n: number
+  tool: string
+  args_digest: string
+  status: string
+  error?: string | null
+  result_chars: number
+  tokens_estimate: number
+  duration_ms: number
+  child?: { goal: string; stopped: string; steps: number; tokens_estimate: number } | null
+}
+
+/** Piece 84: a tool-agent run — the model drove the tool loop. */
+export interface ToolRun {
+  goal: string
+  trace: ToolTraceEntry[]
+  final_report: string
+  citations: Citation[]
+  stopped: string
+  tokens_estimate: number
+  plan: PlannedStep[]
 }
 
 export interface AgentStepTrace {

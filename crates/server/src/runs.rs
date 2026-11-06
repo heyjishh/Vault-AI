@@ -24,7 +24,8 @@ pub const INPUT_CAP: usize = 500;
 pub struct RunRecord {
     pub id: String,
     pub owner_email: String,
-    /// workflow | autonomous | autonomous_orchestrated
+    /// workflow | autonomous | autonomous_orchestrated |
+    /// autonomous_tools (Piece 84) | document_edit (Piece 85)
     pub kind: String,
     /// Workflow name, or the autonomous mode label.
     pub name: String,
@@ -37,6 +38,11 @@ pub struct RunRecord {
     pub report: String,
     #[serde(default)]
     pub error: Option<String>,
+    /// Piece 84: the tool-call trace of a tool-agent run (empty for
+    /// every other run kind). Persisted with the record so the Agents
+    /// UI's run view can show exactly what the agent called.
+    #[serde(default)]
+    pub trace: Vec<legal_rag_rag::ToolTraceEntry>,
     pub created_at: DateTime<Utc>,
 }
 
@@ -135,6 +141,24 @@ impl RunStore {
         report: &str,
         error: Option<String>,
     ) -> RunRecord {
+        self.record_with_trace(owner_email, kind, name, input, status, steps, tokens, report, error, Vec::new())
+    }
+
+    /// [`Self::record`] plus a Piece 84 tool-call trace.
+    #[allow(clippy::too_many_arguments)]
+    pub fn record_with_trace(
+        &self,
+        owner_email: &str,
+        kind: &str,
+        name: &str,
+        input: &str,
+        status: &str,
+        steps: usize,
+        tokens: u64,
+        report: &str,
+        error: Option<String>,
+        trace: Vec<legal_rag_rag::ToolTraceEntry>,
+    ) -> RunRecord {
         let record = RunRecord {
             id: legal_rag_common::new_id(),
             owner_email: owner_email.to_string(),
@@ -146,6 +170,7 @@ impl RunStore {
             tokens,
             report: cap_chars(report, REPORT_CAP),
             error,
+            trace,
             created_at: Utc::now(),
         };
         {

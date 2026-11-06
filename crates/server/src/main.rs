@@ -345,6 +345,12 @@ async fn main() -> anyhow::Result<()> {
     let workflows = Arc::new(legal_rag_rag::WorkflowEngine::new(query.clone()));
     let agent = Arc::new(legal_rag_rag::AutonomousAgent::new(query.clone()));
     let orchestrator = Arc::new(legal_rag_rag::SubAgentOrchestrator::new(query.clone()));
+    // Piece 84: the tool-use agent reads documents through the
+    // pipeline itself (the DocCatalog seam), never a second store.
+    let tool_agent = Arc::new(legal_rag_rag::ToolAgent::new(
+        query.clone(),
+        rag.clone() as Arc<dyn legal_rag_rag::DocCatalog>,
+    ));
 
     // ---- Persistence: load snapshots, then save periodically + on shutdown.
     let data_dir = legal_rag_rag::persist::data_dir();
@@ -456,6 +462,7 @@ async fn main() -> anyhow::Result<()> {
         workflows,
         agent,
         orchestrator,
+        tool_agent,
         billing,
         activity,
         golden,

@@ -15,6 +15,43 @@ live**, what is **built but unverified**, and what is **roadmap**.
 ## [Unreleased]
 
 ### Added
+- **Tool-use agent runtime: the agent drives a schema-checked tool
+  loop, with sub-agents, inside the Piece 80 guardrails (7 Nov 2026,
+  Piece 84).** A new `crates/rag/src/tools.rs` adds (1) a canonical
+  tool registry — `vault_search`, `read_document`, `list_workspace`,
+  `web_research`, `graph_query`, `spawn_subagent` — whose definitions
+  the loop renders for the model and validates every call against
+  (a small JSON-schema checker: required fields, types, enums,
+  bounds); a rejected call is fed back as the tool result and the run
+  corrects itself, the planner-drift pattern, never a crash. (2) The
+  tools wrap the existing legs unchanged — `query_opts` (strict when
+  Workspace-scoped, so the confidentiality boundary is hard),
+  `query_with_web` (the due-diligence web leg), the LightRAG graph
+  modes, and `RagAnything::document_text` behind a `DocCatalog` seam;
+  `read_document` refuses any document outside the run's Workspace.
+  (3) `spawn_subagent` runs a child loop with a scoped tool subset
+  (no sub-sub-agents) and a step/token budget carved from the
+  parent's remaining budget, children in one batch in parallel, spend
+  merged into the parent through the child-usage-scope pattern.
+  (4) An optional user-approved Piece 80 plan is carried into the
+  loop as standing direction (draft endpoint reuses `plan_upfront`).
+  Every call is recorded in a trace (name, args digest, result size,
+  tokens, duration, child summary) persisted on the run record; the
+  Agents page gains a Tool agent panel (goal, Workspace, budgets,
+  plan draft/approve) and renders the trace in the live result and in
+  Run history. New API: `POST /api/v1/knowledge/agents/tools/plan`,
+  `POST /api/v1/knowledge/agents/tools/run`. **Verified live on the
+  test instance:** a Workspace-scoped run listed the workspace, read
+  the tenancy note in full, spawned a sub-agent for the renewal
+  search (child: 4 trace entries, ~3,006 est. tokens), and finished
+  with a cited report; the trace persisted on the run record
+  (kind `autonomous_tools`, 3 calls, 10,556 billed tokens), including
+  one model protocol slip that was fed back and self-corrected.
+  Suite: 363 passed / 0 failed (8 new tool tests: schema rejection,
+  budget stops mid-loop with a partial report, sub-agent budget
+  carving, Workspace confinement at the execution seam). The MCP
+  server keeps its existing three tools this piece; the registry is
+  the canonical definition set it can serve later.
 - **Citator V2 completed: cached answers get full V2 treatment, and
   the flag is durable and on in prod (3 Nov 2026, Piece 83).**
   The semantic-cache-hit path (`refresh_treatments` in

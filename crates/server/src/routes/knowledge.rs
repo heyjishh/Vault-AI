@@ -1041,6 +1041,138 @@ pub async fn agent_run_get(
         .ok_or_else(|| legal_rag_common::Error::BadRequest("run not found".to_string()).into())
 }
 
+#[derive(Deserialize)]
+pub struct ToolPlanRequest {
+    pub goal: String,
+    /// Confine the plan's scoping pass to this brief (space-checked).
+    pub matter_id: Option<String>,
+}
+
+#[derive(Serialize)]
+pub struct ToolPlanView {
+    pub steps: Vec<legal_rag_rag::PlannedStep>,
+}
+
+/// Draft a plan for a tool-agent run (Piece 84). This is the Piece 80
+/// up-front planner unchanged — its steps are the approval unit: the
+/// UI shows and edits them, and an approved list comes back to the
+/// run, which executes it with tools instead of fixed step types.
+/// Quota-gated but unbilled, like the orchestrated plan draft.
+pub async fn tool_plan(
+    State(state): State<AppState>,
+    AuthUser(user): AuthUser,
+    Json(body): Json<ToolPlanRequest>,
+) -> Result<Json<ToolPlanView>, ApiError> {
+    if body.goal.trim().is_empty() {
+        return Err(legal_rag_common::Error::BadRequest("goal is empty".to_string()).into());
+    }
+    crate::routes::billing::ensure_quota(&state, &user.id)?;
+    let docs = doc_scope(&state, &body.matter_id, &user)?;
+    let steps = state.agent.plan_upfront(body.goal.trim(), docs, &[]).await;
+    Ok(Json(ToolPlanView { steps }))
+}
+
+#[derive(Deserialize)]
+pub struct ToolRunRequest {
+    pub goal: String,
+    /// Confine the run to this brief (space-checked): retrieval legs
+    /// run strict and read_document refuses anything outside it.
+    pub matter_id: Option<String>,
+    /// Tool-call budget for the loop, 1..=24 (default 12).
+    pub max_steps: Option<usize>,
+    /// Estimated-token budget (Piece 80 semantics: checked between
+    /// calls; a run always makes at least one call).
+    pub max_tokens: Option<u64>,
+    /// Citator V2 context, as on Ask.
+    pub state: Option<String>,
+    pub applicant: Option<String>,
+    /// Refinement terms (Piece 13), folded into the retrieval legs.
+    pub refine_terms: Option<Vec<String>>,
+    /// A user-approved plan (from the plan draft above): carried into
+    /// the loop as standing direction.
+    pub approved_plan: Option<Vec<legal_rag_rag::PlannedStep>>,
+}
+
+/// Tool-agent run (Piece 84): the model drives a schema-checked tool
+/// loop (vault search, document reads, web research, graph queries,
+/// sub-agents) inside the Piece 80 guardrails — approved plan, step
+/// and token budgets, billing, and a run-history record that carries
+/// the full tool-call trace.
+pub async fn tool_agent_run(
+    State(state): State<AppState>,
+    AuthUser(user): AuthUser,
+    Json(body): Json<ToolRunRequest>,
+) -> Result<Json<legal_rag_rag::ToolRun>, ApiError> {
+    if body.goal.trim().is_empty() {
+        return Err(legal_rag_common::Error::BadRequest("goal is empty".to_string()).into());
+    }
+    crate::routes::billing::ensure_quota(&state, &user.id)?;
+    let docs = doc_scope(&state, &body.matter_id, &user)?;
+    let ctx = legal_rag_rag::ToolRunContext {
+        scope_docs: docs,
+        terms: body_terms(&body.refine_terms),
+        citator: crate::routes::citator_context(body.state.as_deref(), body.applicant.as_deref()),
+    };
+    let budget = legal_rag_rag::RunBudget {
+        max_steps: Some(body.max_steps.unwrap_or(12).clamp(1, 24)),
+        max_tokens: body.max_tokens,
+    };
+    let plan = body.approved_plan.clone().unwrap_or_default();
+    let scope = legal_rag_rag::usage::new_scope();
+    let result = legal_rag_rag::usage::scope_usage(scope.clone(), async {
+        state.tool_agent.run(body.goal.trim(), &plan, ctx, budget).await
+    })
+    .await;
+    let tokens = scope.lock().map(|t| t.total()).unwrap_or(0);
+    match result {
+        Ok(run) => {
+            let calls = run
+                .trace
+                .iter()
+                .filter(|t| t.tool != "finish" && t.tool != "model")
+                .count();
+            state.runs.record_with_trace(
+                &user.email,
+                "autonomous_tools",
+                "Tool agent",
+                &body.goal,
+                &crate::runs::status_from_stopped(&run.stopped),
+                calls,
+                tokens,
+                &run.final_report,
+                None,
+                run.trace.clone(),
+            );
+            crate::routes::billing::settle_with_payload(
+                &state,
+                &user,
+                &scope,
+                "autonomous",
+                &body.goal,
+                "Tool agent",
+                &run.final_report,
+                run.citations.len(),
+                Some(serde_json::json!({ "goal": body.goal, "run": run })),
+            );
+            Ok(Json(run))
+        }
+        Err(e) => {
+            state.runs.record(
+                &user.email,
+                "autonomous_tools",
+                "Tool agent",
+                &body.goal,
+                "failed",
+                0,
+                tokens,
+                "",
+                Some(e.to_string()),
+            );
+            Err(e.into())
+        }
+    }
+}
+
 /// SSE variant of the orchestrated run: status per sub-agent, then an
 /// extended Done event carrying the final report, the citation audit
 /// and every sub-agent's receipt. Billing/activity settle when the run

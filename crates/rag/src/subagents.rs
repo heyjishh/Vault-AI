@@ -189,7 +189,8 @@ fn parse_json_object<T: serde::de::DeserializeOwned>(raw: &str) -> Option<T> {
 /// Extract the first brace-matched JSON object from `raw`, honouring
 /// string literals (so a `}` inside a quoted issue string does not end
 /// the object early, and trailing prose after the object is ignored).
-fn first_json_object(raw: &str) -> Option<&str> {
+/// Shared with the Piece 84 tool-call parser (`crate::tools`).
+pub(crate) fn first_json_object(raw: &str) -> Option<&str> {
     let bytes = raw.as_bytes();
     let mut start = None;
     let mut depth = 0i32;

@@ -2,14 +2,43 @@ import { useEffect, useState } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { Bot, ChevronDown, Compass, History, Play, Plus, X } from 'lucide-react'
+import { Bot, ChevronDown, Compass, History, Play, Plus, Wrench, X } from 'lucide-react'
 import { mattersApi, ragApi } from '../api/client'
 import { useSession } from '../stores/session'
 import { RefineControls, useRefine } from './RefineControls'
 import { ComposerLibraryButtons, promptInsert } from './PromptPicker'
-import type { AutonomousRun, Citation, PlanBranch, RunRecord, WorkflowDef, WorkflowRun } from '../api/types'
+import type { AutonomousRun, Citation, PlanBranch, PlannedStep, RunRecord, ToolRun, ToolTraceEntry, WorkflowDef, WorkflowRun } from '../api/types'
 import { CitationCard, EmptyState, Spinner } from './ui'
 import { CitedText, SourceModal, citeMarkdownComponents, linkifyCitations } from './SourceModal'
+
+/** Piece 84: the tool-call trace of a tool-agent run — every call the
+ *  model made, what it cost, and whether it succeeded. */
+function ToolTraceList({ trace }: { trace: ToolTraceEntry[] }) {
+  if (trace.length === 0) return null
+  return (
+    <div className="space-y-1.5">
+      {trace.map((t) => (
+        <div key={t.n} className="flex items-start gap-2.5 text-meta2">
+          <span className="shrink-0 text-meta font-medium text-stone-600 dark:text-stone-300">
+            {t.n}. {t.tool.replace('_', ' ')} · {t.status}
+          </span>
+          <span className="text-stone-600 dark:text-stone-300 min-w-0">
+            {t.args_digest && <span className="break-words">{t.args_digest}</span>}
+            {t.error && <span className="text-[#a02c2c]"> — {t.error}</span>}
+            {t.child && (
+              <span className="text-stone-400 dark:text-stone-500">
+                {' '}· sub-agent “{t.child.goal}” stopped: {t.child.stopped}, {t.child.steps} trace entries
+              </span>
+            )}
+            <span className="text-stone-400 dark:text-stone-500">
+              {' '}· {t.result_chars.toLocaleString()} chars · ~{t.tokens_estimate.toLocaleString()} tok · {t.duration_ms} ms
+            </span>
+          </span>
+        </div>
+      ))}
+    </div>
+  )
+}
 
 const ICONS: Record<string, string> = {
   contract_review: 'Review a contract clause-by-clause for risk, obligations and missing protections.',
@@ -85,6 +114,31 @@ export default function AgentsPage({ go }: { go?: (view: string) => void } = {})
     mutationFn: () => ragApi.runAutonomous(goal.trim(), autoMatter || undefined, autoSteps, refineAuto.consumeTerms(), { max_tokens: autoBudget ? Number(autoBudget) : undefined, approved_branches: plan ?? undefined }),
     onSuccess: (r) => { setAutoRun(r); setAutoError(null); setPlan(null); setHistoryTick((t) => t + 1) },
     onError: (e) => setAutoError((e as Error).message),
+  })
+
+  // Tool agent (Piece 84): the model drives a schema-checked tool
+  // loop — vault search, document reads, web research, graph queries,
+  // and sub-agents — inside the same budget/approval guardrails.
+  const [toolGoal, setToolGoal] = useState('')
+  const [toolMatter, setToolMatter] = useState('')
+  const [toolSteps, setToolSteps] = useState(12)
+  const [toolBudget, setToolBudget] = useState('')
+  const [toolPlan, setToolPlan] = useState<PlannedStep[] | null>(null)
+  const [toolRun, setToolRun] = useState<ToolRun | null>(null)
+  const [toolError, setToolError] = useState<string | null>(null)
+  const draftToolPlan = useMutation({
+    mutationFn: () => ragApi.planToolAgent(toolGoal.trim(), toolMatter || undefined),
+    onSuccess: (r) => { setToolPlan(r.steps); setToolError(null) },
+    onError: (e) => setToolError((e as Error).message),
+  })
+  const startTool = useMutation({
+    mutationFn: () => ragApi.runToolAgent(toolGoal.trim(), toolMatter || undefined, {
+      max_steps: toolSteps,
+      max_tokens: toolBudget ? Number(toolBudget) : undefined,
+      approved_plan: toolPlan ?? undefined,
+    }),
+    onSuccess: (r) => { setToolRun(r); setToolError(null); setToolPlan(null); setHistoryTick((t) => t + 1) },
+    onError: (e) => setToolError((e as Error).message),
   })
 
   // Run history (Piece 80): every workflow + autonomous run, recorded.
@@ -307,6 +361,130 @@ export default function AgentsPage({ go }: { go?: (view: string) => void } = {})
         )}
       </div>
 
+      <div className="mt-8 rounded-lex-lg border border-stone-200 dark:border-white/10 bg-white dark:bg-[#0a1a12] p-5">
+        <h2 className="font-display text-xl tracking-tight flex items-center gap-2">
+          <Wrench size={18} className="text-stone-500 dark:text-stone-400" /> Tool agent
+        </h2>
+        <p className="text-meta2 text-stone-500 dark:text-stone-400 mt-1">
+          Give it a goal and the agent works it with tools — searching the vault, reading documents, researching the web, querying the knowledge graph, and delegating branches to sub-agents — adapting as results come back. Every call is schema-checked, budget-capped, and recorded in the run trace below and in Run history.
+        </p>
+        <div className="running-border mt-3 rounded-lex-lg border border-stone-300 dark:border-white/10 bg-white dark:bg-[#0a1a12]">
+          <textarea
+            id="agents-tool-goal-input"
+            value={toolGoal} onChange={(e) => setToolGoal(e.target.value)} rows={3}
+            placeholder="e.g. List the documents in this workspace, read the tenancy note, and use a sub-agent to check what the vault says about deposit refunds."
+            className="w-full resize-none px-4 pt-4 pb-2 text-[15px] outline-none placeholder:text-stone-400 bg-transparent"
+          />
+          <div className="flex flex-wrap items-center gap-3 px-3 pb-3 pt-1">
+            <select value={toolMatter} onChange={(e) => setToolMatter(e.target.value)}
+              className="rounded-lex border border-stone-300 dark:border-white/10 px-2.5 py-2 text-meta2 bg-white dark:bg-[#0a1a12] outline-none focus:border-ink max-w-[220px]">
+              <option value="">Whole vault</option>
+              {(matters.data ?? []).map((m) => <option key={m.id} value={m.id}>{m.title}</option>)}
+            </select>
+            <label className="flex items-center gap-2 text-meta2 text-stone-600 dark:text-stone-300">
+              Max tool calls
+              <input type="number" min={1} max={24} value={toolSteps}
+                onChange={(e) => setToolSteps(Math.min(24, Math.max(1, Number(e.target.value) || 12)))}
+                className="w-16 rounded-lex border border-stone-300 dark:border-white/10 px-2 py-1.5 outline-none focus:border-ink bg-white dark:bg-[#0a1a12]" />
+            </label>
+            <label className="flex items-center gap-2 text-meta2 text-stone-600 dark:text-stone-300">
+              Token budget
+              <input type="number" min={0} step={5000} value={toolBudget}
+                onChange={(e) => setToolBudget(e.target.value)} placeholder="∞"
+                className="w-24 rounded-lex border border-stone-300 dark:border-white/10 px-2 py-1.5 outline-none focus:border-ink bg-white dark:bg-[#0a1a12]" />
+            </label>
+            <button
+              onClick={() => toolGoal.trim() && draftToolPlan.mutate()} disabled={draftToolPlan.isPending || startTool.isPending || !toolGoal.trim()}
+              className="ml-auto flex items-center gap-2 rounded-lex border border-stone-300 dark:border-white/10 px-4 py-2 text-meta2 font-medium disabled:opacity-40 hover:border-stone-400"
+            >
+              <Compass size={14} /> {draftToolPlan.isPending ? 'Drafting plan…' : 'Draft plan'}
+            </button>
+            <button
+              onClick={() => toolGoal.trim() && startTool.mutate()} disabled={startTool.isPending || !toolGoal.trim()}
+              className="btn-brand flex items-center gap-2 rounded-lex text-ivory px-4 py-2 text-meta2 font-medium disabled:opacity-40"
+            >
+              <Play size={14} /> {startTool.isPending ? 'Working…' : 'Run tool agent'}
+            </button>
+          </div>
+        </div>
+        {toolPlan && (
+          <div className="mt-4 rounded-lex-lg border border-stone-200 dark:border-white/10 bg-ivory dark:bg-[#14120f] p-4 fade-up">
+            <p className="text-meta2 font-medium text-stone-700 dark:text-stone-200">Draft plan — approve, edit, or discard</p>
+            <p className="text-meta text-stone-500 dark:text-stone-400 mt-1">
+              The planner drafted these steps from a scoping pass over the vault. The tool agent will follow this plan with its tools, adapting queries as results come back.
+            </p>
+            <div className="space-y-2 mt-3">
+              {toolPlan.map((s, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <span className="text-meta text-stone-400 dark:text-stone-500 w-5 shrink-0">{i + 1}.</span>
+                  <select value={s.action}
+                    onChange={(e) => setToolPlan(toolPlan.map((x, j) => j === i ? { ...x, action: e.target.value } : x))}
+                    className="rounded-lex border border-stone-300 dark:border-white/10 px-2 py-1.5 text-meta2 outline-none focus:border-ink bg-white dark:bg-[#0a1a12]">
+                    <option value="search_vault">search vault</option>
+                    <option value="search_web">search web</option>
+                  </select>
+                  <input value={s.query}
+                    onChange={(e) => setToolPlan(toolPlan.map((x, j) => j === i ? { ...x, query: e.target.value } : x))}
+                    className="flex-1 rounded-lex border border-stone-300 dark:border-white/10 px-2.5 py-1.5 text-meta2 outline-none focus:border-ink bg-white dark:bg-[#0a1a12]" />
+                  <input value={s.reason} placeholder="Why this step?"
+                    onChange={(e) => setToolPlan(toolPlan.map((x, j) => j === i ? { ...x, reason: e.target.value } : x))}
+                    className="w-52 rounded-lex border border-stone-300 dark:border-white/10 px-2.5 py-1.5 text-meta2 outline-none focus:border-ink bg-white dark:bg-[#0a1a12]" />
+                  <button onClick={() => setToolPlan(toolPlan.filter((_, j) => j !== i))}
+                    className="text-stone-400 hover:text-[#a02c2c] shrink-0" title="Remove step">
+                    <X size={15} />
+                  </button>
+                </div>
+              ))}
+            </div>
+            <div className="flex items-center gap-2 mt-3">
+              <button onClick={() => setToolPlan([...toolPlan, { action: 'search_vault', query: '', reason: '' }])}
+                className="flex items-center gap-1.5 rounded-lex border border-stone-300 dark:border-white/10 px-3 py-1.5 text-meta2 font-medium hover:border-stone-400">
+                <Plus size={13} /> Add step
+              </button>
+              <span className="flex-1" />
+              <button onClick={() => setToolPlan(null)}
+                className="rounded-lex px-3 py-1.5 text-meta2 text-stone-500 dark:text-stone-400 hover:text-stone-700">
+                Discard
+              </button>
+              <button onClick={() => toolPlan.some((s) => s.query.trim()) && startTool.mutate()}
+                disabled={startTool.isPending || !toolPlan.some((s) => s.query.trim())}
+                className="btn-brand flex items-center gap-2 rounded-lex text-ivory px-4 py-2 text-meta2 font-medium disabled:opacity-40">
+                <Play size={14} /> {startTool.isPending ? 'Working…' : 'Approve & run'}
+              </button>
+            </div>
+          </div>
+        )}
+        {toolError && (
+          <div className="mt-4 rounded-lex border border-brand-red/30 bg-[#feeaea] px-4 py-3 text-meta2 text-[#a02c2c]">{toolError}</div>
+        )}
+        {startTool.isPending && <Spinner label="The tool agent is working — calling tools and reading results…" />}
+        {toolRun && !startTool.isPending && (
+          <div className="mt-5 fade-up">
+            <div className="mb-4">
+              <ToolTraceList trace={toolRun.trace} />
+              <p className="text-meta text-stone-400 dark:text-stone-500 mt-2">
+                Stopped: {toolRun.stopped === 'finished' ? 'goal complete' : toolRun.stopped} · estimated spend ~{toolRun.tokens_estimate.toLocaleString()} tokens
+              </p>
+            </div>
+            <div className="rounded-lex-lg border border-stone-200 dark:border-white/10 bg-ivory dark:bg-[#14120f] p-5">
+              <div className="prose-lex">
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  components={citeMarkdownComponents(toolRun.citations, setModalCitation)}
+                >
+                  {linkifyCitations(toolRun.final_report, toolRun.citations)}
+                </ReactMarkdown>
+              </div>
+            </div>
+            {toolRun.citations.length > 0 && (
+              <div className="grid gap-2 mt-4">
+                {toolRun.citations.map((c) => <CitationCard key={c.chunk_id} citation={c} go={go} />)}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
       {error && (
         <div className="mt-5 rounded-lex border border-brand-red/30 bg-[#feeaea] px-4 py-3 text-meta2 text-[#a02c2c]">{error}</div>
       )}
@@ -388,7 +566,7 @@ export default function AgentsPage({ go }: { go?: (view: string) => void } = {})
               <button key={r.id} onClick={() => openHistoryRun.mutate(r.id)}
                 className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-stone-50 dark:hover:bg-white/5">
                 <span className="shrink-0 text-meta font-medium px-2 py-0.5 rounded-full border border-stone-200 dark:border-white/10 text-stone-600 dark:text-stone-300">
-                  {r.kind === 'workflow' ? 'Workflow' : r.kind === 'autonomous_orchestrated' ? 'Autonomous · team' : 'Autonomous'}
+                  {r.kind === 'workflow' ? 'Workflow' : r.kind === 'autonomous_orchestrated' ? 'Autonomous · team' : r.kind === 'autonomous_tools' ? 'Tool agent' : r.kind === 'document_edit' ? 'Document edit' : 'Autonomous'}
                 </span>
                 <span className="flex-1 min-w-0">
                   <span className="block text-meta2 font-medium text-stone-800 dark:text-stone-100 truncate">{r.name}</span>
@@ -417,6 +595,12 @@ export default function AgentsPage({ go }: { go?: (view: string) => void } = {})
             </div>
             {openRun.error && (
               <p className="mt-3 rounded-lex border border-brand-red/30 bg-[#feeaea] px-4 py-2.5 text-meta2 text-[#a02c2c]">{openRun.error}</p>
+            )}
+            {(openRun.trace?.length ?? 0) > 0 && (
+              <div className="mt-4">
+                <p className="text-meta2 font-medium text-stone-700 dark:text-stone-200 mb-2">Tool trace</p>
+                <ToolTraceList trace={openRun.trace!} />
+              </div>
             )}
             {openRun.report && (
               <div className="prose-lex mt-3">
