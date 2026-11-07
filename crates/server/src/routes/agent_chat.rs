@@ -86,6 +86,118 @@ impl legal_rag_rag::EditProposer for ChatEditProposer {
 }
 
 // ---------------------------------------------------------------------------
+// The draft seam (Piece 87): the Draft route's core behind the
+// loop's DraftGenerator trait — the same extraction pattern as the
+// edit seam above. Grounding is confined to the turn's Workspace
+// (the core resolves its document scope), and the generation runs
+// inside the chat turn's usage scope, so drafts bill with the run.
+// ---------------------------------------------------------------------------
+
+struct ChatDraftGenerator {
+    state: AppState,
+    user: legal_rag_auth::User,
+    matter_id: Option<String>,
+    terms: Vec<String>,
+}
+
+#[async_trait]
+impl legal_rag_rag::DraftGenerator for ChatDraftGenerator {
+    async fn generate_draft(
+        &self,
+        kind: &str,
+        instructions: &str,
+    ) -> Result<legal_rag_rag::DraftInfo, String> {
+        if instructions.trim().is_empty() {
+            return Err("the draft instructions are empty".to_string());
+        }
+        let (text, citations) = crate::routes::create::generate_draft(
+            &self.state,
+            &self.user,
+            kind,
+            instructions,
+            self.matter_id.as_deref(),
+            &self.terms,
+            legal_rag_rag::CitatorContext::default(),
+        )
+        .await
+        .map_err(|e| e.0.to_string())?;
+        Ok(legal_rag_rag::DraftInfo {
+            kind: kind.to_string(),
+            kind_label: crate::routes::create::draft_kind_label(kind),
+            text,
+            citations,
+        })
+    }
+}
+
+/// Piece 87 — the `analyze_documents` seam for chat runs: calls
+/// the Interact core (shared-vault source only) with the run's
+/// Workspace scope enforced server-side.
+struct ChatAnalyzer {
+    state: AppState,
+    user: legal_rag_auth::User,
+    terms: Vec<String>,
+}
+
+#[async_trait]
+impl legal_rag_rag::DocumentAnalyzer for ChatAnalyzer {
+    async fn analyze_documents(
+        &self,
+        action: &str,
+        question: Option<&str>,
+        document_ids: &[String],
+        scope_docs: &Option<Vec<String>>,
+    ) -> Result<legal_rag_rag::AnalysisInfo, String> {
+        let (text, citations) = crate::routes::create::run_interact_analysis(
+            &self.state,
+            &self.user,
+            action,
+            question,
+            document_ids,
+            scope_docs,
+            &self.terms,
+        )
+        .await
+        .map_err(|e| e.0.to_string())?;
+        Ok(legal_rag_rag::AnalysisInfo { text, citations })
+    }
+}
+
+/// Piece 87 — the `run_workflow` seam for chat runs: the fixed
+/// workflow engine behind AppState, with the turn's refine terms
+/// pooled into every step's retrieval like the Agents page does.
+struct ChatWorkflowRunner {
+    state: AppState,
+    terms: Vec<String>,
+}
+
+#[async_trait]
+impl legal_rag_rag::WorkflowRunner for ChatWorkflowRunner {
+    async fn run_workflow(
+        &self,
+        workflow: &str,
+        input: &str,
+    ) -> Result<legal_rag_rag::WorkflowInfo, String> {
+        if input.trim().is_empty() {
+            return Err("the workflow input is empty".to_string());
+        }
+        let run = self
+            .state
+            .workflows
+            .run_budgeted(workflow, input, &self.terms, None)
+            .await
+            .map_err(|e| e.to_string())?;
+        Ok(legal_rag_rag::WorkflowInfo {
+            name: run.workflow_name.clone(),
+            report: run.final_report.clone(),
+            citations: run.citations.clone(),
+            tokens_estimate: run.tokens_estimate,
+            stopped: run.stopped.clone(),
+        })
+    }
+}
+
+// ---------------------------------------------------------------------------
 // SSE events
 // ---------------------------------------------------------------------------
 
@@ -246,6 +358,12 @@ pub struct ChatRequest {
     /// the turn's scope and visibility, like any tool input.
     #[serde(default)]
     pub doc_ids: Vec<String>,
+    /// Refinement terms (Piece 13), threaded into the turn's tool
+    /// context (Piece 87): retrieval legs pool them exactly as the
+    /// old Ask/Research composers did, and the draft seam folds
+    /// them into its grounding query.
+    #[serde(default)]
+    pub refine_terms: Option<Vec<String>>,
     /// Tool-call budget, 1..=24 (default 12, the tool route's).
     pub max_steps: Option<usize>,
     /// Estimated-token budget (Piece 80 semantics).
@@ -262,6 +380,9 @@ pub struct ChatTurnResponse {
     pub stopped: String,
     pub citations: Vec<legal_rag_rag::Citation>,
     pub proposals: Vec<legal_rag_rag::EditProposalInfo>,
+    /// Drafts produced this turn (Piece 87); their texts are also
+    /// attached verbatim at the end of the message text.
+    pub drafts: Vec<legal_rag_rag::DraftInfo>,
 }
 
 /// Everything a turn needs, resolved synchronously before any
@@ -272,6 +393,10 @@ struct Prepared {
     user_message: String,
     goal: String,
     scope_docs: Option<Vec<String>>,
+    /// The turn's Workspace (request or thread), for the draft
+    /// seam's grounding scope.
+    matter_id: Option<String>,
+    terms: Vec<String>,
     budget: legal_rag_rag::RunBudget,
 }
 
@@ -377,6 +502,8 @@ fn prepare_turn(
         user_message: message,
         goal,
         scope_docs,
+        matter_id,
+        terms: crate::routes::knowledge::body_terms(&body.refine_terms),
         budget: legal_rag_rag::RunBudget {
             max_steps: Some(body.max_steps.unwrap_or(12).clamp(1, 24)),
             max_tokens: body.max_tokens,
@@ -400,10 +527,28 @@ async fn execute_turn(
             user: user.clone(),
         })),
         allow_edit: true,
+        draft_generator: Some(Arc::new(ChatDraftGenerator {
+            state: state.clone(),
+            user: user.clone(),
+            matter_id: prep.matter_id.clone(),
+            terms: prep.terms.clone(),
+        })),
+        allow_draft: true,
+        analyzer: Some(Arc::new(ChatAnalyzer {
+            state: state.clone(),
+            user: user.clone(),
+            terms: prep.terms.clone(),
+        })),
+        allow_analyze: true,
+        workflow_runner: Some(Arc::new(ChatWorkflowRunner {
+            state: state.clone(),
+            terms: prep.terms.clone(),
+        })),
+        allow_workflow: true,
     };
     let ctx = legal_rag_rag::ToolRunContext {
         scope_docs: prep.scope_docs.clone(),
-        terms: Vec::new(),
+        terms: prep.terms.clone(),
         citator: legal_rag_rag::CitatorContext::default(),
     };
     let scope = legal_rag_rag::usage::new_scope();
@@ -450,6 +595,7 @@ async fn execute_turn(
                 stopped: run.stopped.clone(),
                 citations: run.citations.clone(),
                 proposals: run.proposals.clone(),
+                drafts: run.drafts.clone(),
             };
             crate::routes::billing::settle_with_payload(
                 state,
@@ -669,6 +815,21 @@ mod tests {
         assert_eq!(v["edit_id"], "edit-9");
         assert_eq!(v["diff"]["added"][0], "within three months");
         assert_eq!(v["diff"]["removed"][0], "within fifteen days");
+    }
+
+    #[test]
+    fn chat_request_accepts_refine_terms_and_defaults_without_them() {
+        // Piece 87: the unified composer threads Piece 13 refine
+        // terms into the turn; older clients send none.
+        let body: ChatRequest =
+            serde_json::from_str(r#"{"message":"hi","refine_terms":["rent","deposit"]}"#).unwrap();
+        assert_eq!(
+            body.refine_terms,
+            Some(vec!["rent".to_string(), "deposit".to_string()])
+        );
+        let body: ChatRequest = serde_json::from_str(r#"{"message":"hi"}"#).unwrap();
+        assert!(body.refine_terms.is_none());
+        assert!(body.doc_ids.is_empty());
     }
 
     #[test]

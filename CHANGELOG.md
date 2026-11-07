@@ -15,6 +15,67 @@ live**, what is **built but unverified**, and what is **roadmap**.
 ## [Unreleased]
 
 ### Added
+- **The Agent can now do everything the tabs do — inside the
+  agent only (7 Nov 2026, Piece 87).** No existing tab or input was
+  removed: Ask (Knowledge), Draft, Interact (Intelligence),
+  Research, and every other sidebar section keep their own pages,
+  routes, and composers, exactly as before. What changed is the
+  Piece 86 Agent Chat: its tool set was extended so the one agent
+  box can also draft and deep-research — merging all capabilities
+  inside the agent only. Four new tools join the Piece 84 registry
+  (same schema validator, budgets, billing, and run traces; no
+  parallel engine): **`deep_research`** wraps the Research page's
+  pipeline (`QueryService::research` — frame → evidence →
+  adjudicate, verdict-first), refusing Workspace-scoped runs
+  outright because the pipeline retrieves unscoped, so the hard
+  Workspace boundary wins and the refusal is fed back to the model;
+  **`draft_document`** wraps the Draft route's generation core
+  (extracted into `generate_draft`, which the Draft handler now
+  also calls) through a `DraftGenerator` seam — drafts are attached
+  verbatim below the agent's answer (the model introduces, never
+  re-types), in the five existing kinds plus a new `custom` kind
+  shaped by free-form instructions such as a pasted template;
+  **`analyze_documents`** wraps the Interact core
+  (`run_interact_analysis` over `prepare_interact`, shared-vault
+  source only — the Confidential Vault is never read) for
+  summary / chronology / clauses / risks / chat over a named
+  document set, with the run's Workspace scope enforced
+  server-side; **`run_workflow`** wraps the fixed workflow engine
+  (contract_review, due_diligence, memo_draft, counter_argument)
+  through a `WorkflowRunner` seam. The three seam tools
+  (draft / analyze / workflow) are offered only to hooked
+  top-level chat runs — sub-agents can neither draft, analyse, nor
+  run workflows — and `edit_document`'s approval gate is unchanged.
+  Chat requests accept `refine_terms`, threaded into the run
+  context and the draft/analysis grounding. Tool-system routing
+  guidance keeps the set Cursor-tight: lightest tool that fits,
+  drafting never by hand, deep research only for research /
+  contested questions, named fixed jobs through run_workflow.
+  Honest limits: private-source Ask and private/both-source
+  Interact still have no agent equivalent (the Confidential Vault
+  stays out of the agent by design); tool *choice* remains the
+  model's — `deep_research` itself was not picked live (research
+  messages chose web_research / vault tools and still returned
+  sourced verdicts), and one workflow run's final summary line
+  was a test-model hallucination even though the workflow itself
+  completed and its citations flowed through. Verified: suite
+  332 passed / 0 failed (11 new tests across the registry, seams,
+  scope refusal, verbatim draft attachment, custom draft kind,
+  and chat refine terms); live on :3001 through the agent box —
+  document QA traced list_workspace → vault_search →
+  read_document and answered "two months" with citations
+  (run 4d91c9b2); a research message chose web_research and
+  returned a sourced verdict (8c6b3c9d); a draft request chose
+  draft_document first and carried the verbatim draft in-thread
+  (dba019ba); a chronology request chose analyze_documents and
+  produced the dated event table (4005dfeb); a named-job request
+  chose run_workflow, which completed with its citations absorbed
+  (6b24f52c); a plain chat message used no tools (510a8c79); an
+  edit instruction produced a pending approval with the exact
+  two-months → six-weeks diff and wrote nothing (d96f29c9, edit
+  fa58c799 left pending). Frontend untouched (verified: no
+  frontend file differs from Piece 86). Prod untouched by hand;
+  not pushed.
 - **One-box Agent Chat: one textbox, the model picks its tools
   (7 Nov 2026, Piece 86).** A first-class Agent Chat page with a
   single composer: the user types a message and the model itself

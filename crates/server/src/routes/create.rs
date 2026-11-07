@@ -690,6 +690,54 @@ pub async fn interact(
     Ok(Json(finish_interact(&state, &user, prep, output)))
 }
 
+/// Piece 87 — the Interact core as a callable for the agent's
+/// `analyze_documents` tool: same prepare + generation as the
+/// handler above, fixed to the shared-vault source (the agent
+/// never reads the Confidential Vault), with the caller's
+/// Workspace scope enforced on the selection before anything is
+/// loaded. No quota/settle here — the agent run settles its own
+/// usage; `prepare_interact`'s quota check still applies.
+pub(crate) async fn run_interact_analysis(
+    state: &AppState,
+    user: &legal_rag_auth::User,
+    action: &str,
+    question: Option<&str>,
+    document_ids: &[String],
+    scope_docs: &Option<Vec<String>>,
+    refine_terms: &[String],
+) -> Result<(String, Vec<Citation>), ApiError> {
+    if let Some(scope) = scope_docs {
+        let outside: Vec<&String> = document_ids.iter().filter(|id| !scope.contains(id)).collect();
+        if !outside.is_empty() {
+            return Err(legal_rag_common::Error::BadRequest(format!(
+                "documents outside this run's Workspace scope: {}",
+                outside.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", ")
+            ))
+            .into());
+        }
+    }
+    let body = InteractRequest {
+        document_id: None,
+        document_ids: Some(document_ids.to_vec()),
+        action: action.to_string(),
+        question: question.map(|q| q.to_string()),
+        refine_terms: if refine_terms.is_empty() { None } else { Some(refine_terms.to_vec()) },
+        source: Some("vault".to_string()),
+    };
+    let prep = prepare_interact(state, user, &body).await?;
+    let citations = prep.citations.clone();
+    let output = match &prep.refusal {
+        Some(text) => text.clone(),
+        None => {
+            scope_usage(prep.scope.clone(), async {
+                prep.gen_llm.complete(&prep.analyst_system, &prep.prompt).await
+            })
+            .await?
+        }
+    };
+    Ok((output, citations))
+}
+
 /// One event in a streaming Interact run (Piece 81): the citation
 /// set first (chat runs), then generated deltas, then the full
 /// structured response — the same wire shape as Ask's QueryEvent.
@@ -823,6 +871,10 @@ fn draft_template(kind: &str) -> Result<&'static str, ApiError> {
         "letter" => Ok("Draft a professional advocate's letter: firm placeholder header, \
             reference, subject, body making the client's position and request clearly, \
             and a formal closing."),
+        "custom" => Ok("Draft the document described in the instructions, following any \
+            format, structure, or template given there. Keep the document's own \
+            conventions: headings, numbered paragraphs where the format calls for \
+            them, and the closing block the format implies."),
         other => Err(legal_rag_common::Error::BadRequest(format!(
             "unknown draft kind: {other}"
         ))
@@ -853,6 +905,91 @@ pub struct DraftResponse {
     pub citations: Vec<Citation>,
 }
 
+/// The draft core (extracted in Piece 87 so the Agent Chat's
+/// `draft_document` tool runs the SAME machinery as this route —
+/// kind template, corpus grounding, drafter prompt — instead of a
+/// second drafter): template + optional grounding + one generation
+/// call. Runs in the CALLER's usage scope: no quota check and no
+/// settle here; the HTTP handler and the chat turn each bill their
+/// own way.
+pub(crate) async fn generate_draft(
+    state: &AppState,
+    user: &legal_rag_auth::User,
+    kind: &str,
+    instructions: &str,
+    matter_id: Option<&str>,
+    refine_terms: &[String],
+    ctx: legal_rag_rag::CitatorContext,
+) -> Result<(String, Vec<Citation>), ApiError> {
+    let template = draft_template(kind)?;
+    let mut grounding = String::new();
+    let mut citations: Vec<Citation> = Vec::new();
+    let scoped = match matter_id {
+        Some(mid) if !mid.trim().is_empty() => {
+            Some(crate::routes::matters::scope_docs(state, mid, user).map_err(|e| e.0)?)
+        }
+        _ => None,
+    };
+    let ground_opts = legal_rag_rag::AskOptions {
+        brief_vault: None,
+        refine_terms: refine_terms.to_vec(),
+    };
+    let answer = state
+        .query
+        .query_opts(
+            instructions,
+            QueryMode::Mix,
+            5,
+            scoped.clone(),
+            false,
+            &ground_opts,
+            ctx,
+        )
+        .await;
+    if let Ok(answer) = answer {
+        for (i, c) in answer.citations.iter().enumerate() {
+            grounding.push_str(&format!(
+                "[doc:{}] {} — {}\n",
+                i + 1,
+                c.doc_title.clone().unwrap_or_else(|| c.doc_id.clone()),
+                c.snippet
+            ));
+        }
+        citations = answer.citations;
+    }
+    let prompt = format!(
+        "{template}\n\nClient instructions:\n{}\n\n{}",
+        instructions.trim(),
+        if grounding.is_empty() {
+            String::new()
+        } else {
+            format!("Source material from the vault (cite as [doc:N] where relied on):\n{grounding}")
+        }
+    );
+    let drafter_system = state
+        .settings
+        .get()
+        .prompts
+        .draft
+        .unwrap_or_else(|| DRAFTER_SYSTEM.to_string());
+    let text = state.llm.complete(&drafter_system, &prompt).await?;
+    Ok((text, citations))
+}
+
+/// Human label for a draft kind — the heading the Agent Chat puts
+/// over an attached draft. Unknown kinds label themselves.
+pub(crate) fn draft_kind_label(kind: &str) -> String {
+    match kind {
+        "legal_notice" => "Legal notice".to_string(),
+        "agreement" => "Agreement".to_string(),
+        "memo" => "Legal memo (IRAC)".to_string(),
+        "petition" => "Petition outline".to_string(),
+        "letter" => "Advocate’s letter".to_string(),
+        "custom" => "Document".to_string(),
+        other => other.replace('_', " "),
+    }
+}
+
 pub async fn draft(
     State(state): State<AppState>,
     AuthUser(user): AuthUser,
@@ -862,65 +999,38 @@ pub async fn draft(
         return Err(legal_rag_common::Error::BadRequest("instructions are empty".into()).into());
     }
     crate::routes::billing::ensure_quota(&state, &user.id)?;
-    let template = draft_template(&body.kind)?;
     let scope = new_scope();
     let (draft_text, citations) = scope_usage(scope.clone(), async {
-        let mut grounding = String::new();
-        let mut citations: Vec<Citation> = Vec::new();
         if body.use_corpus.unwrap_or(true) {
-            let scoped = match body.matter_id.as_deref() {
-                Some(mid) if !mid.trim().is_empty() => Some(
-                    crate::routes::matters::scope_docs(&state, mid, &user)
-                        .map_err(|e| e.0)?,
-                ),
-                _ => None,
-            };
             let ctx = crate::routes::citator_context(body.state.as_deref(), body.applicant.as_deref());
-            let ground_opts = legal_rag_rag::AskOptions {
-                brief_vault: None,
-                refine_terms: crate::routes::knowledge::body_terms(&body.refine_terms),
-            };
-            let answer = state
-                .query
-                .query_opts(
-                    &body.instructions,
-                    QueryMode::Mix,
-                    5,
-                    scoped.clone(),
-                    false,
-                    &ground_opts,
-                    ctx,
-                )
-                .await;
-            if let Ok(answer) = answer {
-                for (i, c) in answer.citations.iter().enumerate() {
-                    grounding.push_str(&format!(
-                        "[doc:{}] {} — {}\n",
-                        i + 1,
-                        c.doc_title.clone().unwrap_or_else(|| c.doc_id.clone()),
-                        c.snippet
-                    ));
-                }
-                citations = answer.citations;
-            }
+            generate_draft(
+                &state,
+                &user,
+                &body.kind,
+                &body.instructions,
+                body.matter_id.as_deref(),
+                &crate::routes::knowledge::body_terms(&body.refine_terms),
+                ctx,
+            )
+            .await
+            .map_err(|e| e.0)
+        } else {
+            // Corpus off: the same template + drafter prompt, no
+            // grounding leg (the handler's historical behaviour).
+            let template = draft_template(&body.kind).map_err(|e| e.0)?;
+            let prompt = format!(
+                "{template}\n\nClient instructions:\n{}\n\n",
+                body.instructions.trim(),
+            );
+            let drafter_system = state
+                .settings
+                .get()
+                .prompts
+                .draft
+                .unwrap_or_else(|| DRAFTER_SYSTEM.to_string());
+            let text = state.llm.complete(&drafter_system, &prompt).await?;
+            Ok::<_, legal_rag_common::Error>((text, Vec::new()))
         }
-        let prompt = format!(
-            "{template}\n\nClient instructions:\n{}\n\n{}",
-            body.instructions.trim(),
-            if grounding.is_empty() {
-                String::new()
-            } else {
-                format!("Source material from the vault (cite as [doc:N] where relied on):\n{grounding}")
-            }
-        );
-        let drafter_system = state
-            .settings
-            .get()
-            .prompts
-            .draft
-            .unwrap_or_else(|| DRAFTER_SYSTEM.to_string());
-        let text = state.llm.complete(&drafter_system, &prompt).await?;
-        Ok::<_, legal_rag_common::Error>((text, citations))
     })
     .await?;
     crate::routes::billing::settle_matter_payload(
@@ -946,6 +1056,20 @@ pub async fn draft(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn draft_kinds_include_custom_and_reject_unknown() {
+        // Piece 87: "custom" carries template-shaped drafts (the
+        // template library's format-only skeletons) through the
+        // agent's draft_document tool; unknown kinds stay a clean
+        // error, never a silent default.
+        assert!(draft_template("custom").is_ok());
+        assert!(draft_template("legal_notice").is_ok());
+        assert!(draft_template("haiku").is_err());
+        assert_eq!(draft_kind_label("legal_notice"), "Legal notice");
+        assert_eq!(draft_kind_label("custom"), "Document");
+        assert_eq!(draft_kind_label("rent_agreement"), "rent agreement");
+    }
 
     fn req(document_id: Option<&str>, document_ids: Option<Vec<&str>>) -> InteractRequest {
         InteractRequest {

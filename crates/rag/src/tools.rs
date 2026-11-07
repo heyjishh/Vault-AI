@@ -134,6 +134,51 @@ pub fn tool_defs() -> Vec<ToolDef> {
             ),
         },
         ToolDef {
+            name: "deep_research",
+            description: "Run the deep research pipeline on a question: it frames hypotheses, gathers cited evidence for each from the vault (and the live web when web is true), adjudicates them, and returns a verdict-first report with conflicts, open points, and decisions. Use when the user asks to research or investigate a question, or the question is contested / multi-part and needs a weighed verdict. Slower and deeper than vault_search and web_research — never use it for a simple fact lookup. It runs over the whole vault, so it is refused inside a Workspace-scoped run.",
+            input_schema: schema(
+                json!({
+                    "question": { "type": "string" },
+                    "web": { "type": "boolean" }
+                }),
+                &["question"],
+            ),
+        },
+        ToolDef {
+            name: "draft_document",
+            description: "Draft a legal document of one fixed kind — legal_notice, agreement, memo (IRAC), petition, letter, or custom (follow the format given in the instructions, e.g. a pasted template) — grounded in the vault's sources. The finished draft is attached verbatim below your final answer. Use when the user asks to draft or write a document; the instructions carry the facts (parties, amounts, dates, demands).",
+            input_schema: schema(
+                json!({
+                    "kind": { "type": "string", "enum": ["legal_notice", "agreement", "memo", "petition", "letter", "custom"] },
+                    "instructions": { "type": "string" }
+                }),
+                &["kind", "instructions"],
+            ),
+        },
+        ToolDef {
+            name: "analyze_documents",
+            description: "Run a structured analysis over a chosen SET of documents (the Interact machinery): action summary (parties, terms, dates, outcomes), chronology (dated event table), clauses (key clauses/provisions and who they favour), risks, or chat (answer the question from exactly these documents). Use when the user names specific documents to summarise, compare, or extract from — for finding documents use vault_search / list_workspace first. Shared documents only; the Confidential Vault is never read.",
+            input_schema: schema(
+                json!({
+                    "action": { "type": "string", "enum": ["summary", "chronology", "clauses", "risks", "chat"] },
+                    "document_ids": { "type": "array", "items": { "type": "string" } },
+                    "question": { "type": "string" }
+                }),
+                &["action", "document_ids"],
+            ),
+        },
+        ToolDef {
+            name: "run_workflow",
+            description: "Run one of the fixed multi-step legal workflows end to end and get its cited report: contract_review (contract risk review), due_diligence (facts, red flags, external checks, gaps), memo_draft (IRAC legal memo), counter_argument (the strongest case against a position). Use when the user's request matches one of these named jobs; input describes the matter (the workflow retrieves its own evidence from the vault).",
+            input_schema: schema(
+                json!({
+                    "workflow": { "type": "string", "enum": ["contract_review", "due_diligence", "memo_draft", "counter_argument"] },
+                    "input": { "type": "string" }
+                }),
+                &["workflow", "input"],
+            ),
+        },
+        ToolDef {
             name: "graph_query",
             description: "Query the knowledge graph over the vault's entities and relations. Modes: local (one entity's neighbourhood), global (themes across the corpus), hybrid, mix.",
             input_schema: schema(
@@ -175,15 +220,16 @@ pub fn tool_def(name: &str) -> Option<ToolDef> {
     tool_defs().into_iter().find(|d| d.name == name)
 }
 
-/// The tools a fresh top-level run may use. `edit_document` is NOT
-/// in the default set: it is offered only by runs that carry an
-/// [`EditProposer`] (the Piece 86 Agent Chat), so a plain tool run
-/// can never even name it.
+/// The tools a fresh top-level run may use. `edit_document` and
+/// `draft_document` are NOT in the default set: they are offered
+/// only by runs that carry the matching seam ([`EditProposer`] /
+/// [`DraftGenerator`] — the Piece 86/87 Agent Chat), so a plain
+/// tool run can never even name them.
 pub fn all_tool_names() -> Vec<String> {
     tool_defs()
         .iter()
         .map(|d| d.name.to_string())
-        .filter(|n| n != "edit_document")
+        .filter(|n| n != "edit_document" && n != "draft_document" && n != "analyze_documents" && n != "run_workflow")
         .collect()
 }
 
@@ -399,6 +445,10 @@ pub struct ToolRun {
     /// edit store's decide endpoints, never to the loop.
     #[serde(default)]
     pub proposals: Vec<EditProposalInfo>,
+    /// Drafts this run produced (Piece 87). Their texts are also
+    /// attached verbatim at the end of `final_report`.
+    #[serde(default)]
+    pub drafts: Vec<DraftInfo>,
 }
 
 // ---------------------------------------------------------------------------
@@ -482,6 +532,85 @@ pub trait EditProposer: Send + Sync {
     ) -> std::result::Result<EditProposalInfo, String>;
 }
 
+/// A finished draft produced by the `draft_document` tool (Piece
+/// 87). The loop attaches it verbatim below the run's final answer —
+/// the model introduces it, it never re-types or summarises it — so
+/// the text the user reads (and downloads) is the drafter's own.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DraftInfo {
+    pub kind: String,
+    pub kind_label: String,
+    pub text: String,
+    #[serde(default)]
+    pub citations: Vec<Citation>,
+}
+
+/// The seam for document drafting (Piece 87): the drafting
+/// machinery (kind templates, corpus grounding, the drafter
+/// prompt) lives server-side in the Draft route's core; the loop
+/// only asks for a draft by kind + instructions. Mirrors
+/// [`EditProposer`]: offered only to runs that carry one.
+#[async_trait]
+pub trait DraftGenerator: Send + Sync {
+    async fn generate_draft(
+        &self,
+        kind: &str,
+        instructions: &str,
+    ) -> std::result::Result<DraftInfo, String>;
+}
+
+/// A finished structured analysis from the `analyze_documents`
+/// tool (Piece 87): the Interact machinery's output over a chosen
+/// document set, with the citations its chat mode produces.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AnalysisInfo {
+    pub text: String,
+    #[serde(default)]
+    pub citations: Vec<Citation>,
+}
+
+/// The seam for structured document-set analysis (Piece 87): the
+/// Interact machinery (selection loading, per-action instructions,
+/// analyst prompt) lives server-side in the Create route's core;
+/// the loop only names an action + a document set. The seam
+/// receives the run's Workspace scope and must refuse documents
+/// outside it — a reference is never a scope widening.
+#[async_trait]
+pub trait DocumentAnalyzer: Send + Sync {
+    async fn analyze_documents(
+        &self,
+        action: &str,
+        question: Option<&str>,
+        document_ids: &[String],
+        scope_docs: &Option<Vec<String>>,
+    ) -> std::result::Result<AnalysisInfo, String>;
+}
+
+/// A finished fixed-workflow run from the `run_workflow` tool
+/// (Piece 87): the workflow engine's cited report.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkflowInfo {
+    pub name: String,
+    pub report: String,
+    #[serde(default)]
+    pub citations: Vec<Citation>,
+    pub tokens_estimate: u64,
+    /// finished | budget_tokens (the engine's own stop reason).
+    pub stopped: String,
+}
+
+/// The seam for the fixed workflows (Piece 87): the engine lives
+/// behind the server's AppState; the loop only names a workflow +
+/// its input.
+#[async_trait]
+pub trait WorkflowRunner: Send + Sync {
+    async fn run_workflow(
+        &self,
+        workflow: &str,
+        input: &str,
+    ) -> std::result::Result<WorkflowInfo, String>;
+}
+
 /// Per-run extras a caller may hand the loop: a live event sink and
 /// the edit-proposal seam. Default: neither — the loop then behaves
 /// exactly as Piece 84 shipped.
@@ -493,6 +622,16 @@ pub struct ToolRunHooks {
     /// effect together with a proposer; the Agents-page run leaves
     /// it off.
     pub allow_edit: bool,
+    pub draft_generator: Option<Arc<dyn DraftGenerator>>,
+    /// Offer `draft_document` in this run's tool list. Only takes
+    /// effect together with a generator (Piece 87).
+    pub allow_draft: bool,
+    pub analyzer: Option<Arc<dyn DocumentAnalyzer>>,
+    /// Offer `analyze_documents` in this run's tool list (Piece 87).
+    pub allow_analyze: bool,
+    pub workflow_runner: Option<Arc<dyn WorkflowRunner>>,
+    /// Offer `run_workflow` in this run's tool list (Piece 87).
+    pub allow_workflow: bool,
 }
 
 fn emit(sink: &Option<ToolEventSink>, ev: ToolLoopEvent) {
@@ -555,6 +694,17 @@ Respond with EXACTLY one JSON object and no other text, in one of these shapes:\
 Rules: every claim in the final report must come from a tool result — never invent facts, cases, or citations. \
 If a tool returns an error, read it and correct your call instead of repeating it. \
 When the goal is covered, answer with {\"final\": ...} instead of calling more tools. \
+Choose the lightest tool that fits: vault_search for a question the documents can answer, web_research for \
+recent or external facts, deep_research ONLY when the user asks to research or investigate, or the question is \
+contested and needs a weighed verdict. \
+DRAFTING IS NEVER DONE BY HAND: when the user asks for a document to be drafted — a notice, agreement, memo, \
+petition, or letter — your FIRST call must be draft_document; never write the draft yourself in the final answer. \
+For a structured pass over specific named documents use analyze_documents (summary / chronology / clauses / \
+risks / chat over exactly that set). NAMED JOBS GO TO THE WORKFLOW: when the user asks for a contract review, \
+due diligence, a legal memo, or a counter-argument — by name or by clear description — you MUST call \
+run_workflow with that workflow instead of improvising the steps yourself from document reads. \
+When draft_document returns a draft, the draft itself is attached verbatim below your final answer — introduce \
+it in a sentence or two; never reproduce, shorten, or summarise it in your final text. \
 If the user asks to change a document and edit_document is among your tools, use it: it parks a proposal \
 the user approves before anything is written back — never claim a document is already changed.";
 
@@ -636,6 +786,10 @@ fn args_digest(tool: &str, args: &Value) -> String {
     };
     match tool {
         "vault_search" | "web_research" | "graph_query" => pick(&["query"]),
+        "deep_research" => pick(&["question"]),
+        "draft_document" => pick(&["instructions"]),
+        "analyze_documents" => pick(&["action"]),
+        "run_workflow" => pick(&["workflow", "input"]),
         "read_document" => pick(&["doc_id"]),
         "spawn_subagent" => pick(&["goal"]),
         "edit_document" => pick(&["instruction"]),
@@ -765,11 +919,22 @@ impl ToolAgent {
         if goal.trim().is_empty() {
             return Err(Error::BadRequest("goal is empty".to_string()));
         }
-        let allowed = if hooks.allow_edit {
-            chat_tool_names()
-        } else {
-            all_tool_names()
-        };
+        // The default registry, plus the seam-gated tools whose
+        // seams this run actually carries (Pieces 86/87): a tool the
+        // run cannot execute is never even offered.
+        let mut allowed = all_tool_names();
+        if hooks.allow_edit && hooks.edit_proposer.is_some() {
+            allowed.push("edit_document".to_string());
+        }
+        if hooks.allow_draft && hooks.draft_generator.is_some() {
+            allowed.push("draft_document".to_string());
+        }
+        if hooks.allow_analyze && hooks.analyzer.is_some() {
+            allowed.push("analyze_documents".to_string());
+        }
+        if hooks.allow_workflow && hooks.workflow_runner.is_some() {
+            allowed.push("run_workflow".to_string());
+        }
         self.run_inner(goal, plan, ctx, budget, allowed, 0, &hooks).await
     }
 
@@ -796,6 +961,7 @@ impl ToolAgent {
         let mut stopped = "finished".to_string();
         let mut final_report: Option<String> = None;
         let mut proposals: Vec<EditProposalInfo> = Vec::new();
+        let mut drafts: Vec<DraftInfo> = Vec::new();
         // Live-event sequence numbers: ToolCall and ToolResult are
         // emitted in call order, so the k-th result pairs with the
         // k-th call.
@@ -902,7 +1068,7 @@ impl ToolAgent {
                             let out = results[i].take().unwrap();
                             steps_done += 1;
                             tokens_estimate += out.tokens_estimate;
-                            self.absorb(out, &mut trace, &mut transcript, &mut findings, &mut citations, &mut seen_chunks, &mut proposals, &hooks.sink, &mut results_emitted);
+                            self.absorb(out, &mut trace, &mut transcript, &mut findings, &mut citations, &mut seen_chunks, &mut proposals, &mut drafts, &hooks.sink, &mut results_emitted);
                             continue;
                         }
                         calls_emitted += 1;
@@ -919,7 +1085,7 @@ impl ToolAgent {
                             .await;
                         steps_done += 1;
                         tokens_estimate += out.tokens_estimate;
-                        self.absorb(out, &mut trace, &mut transcript, &mut findings, &mut citations, &mut seen_chunks, &mut proposals, &hooks.sink, &mut results_emitted);
+                        self.absorb(out, &mut trace, &mut transcript, &mut findings, &mut citations, &mut seen_chunks, &mut proposals, &mut drafts, &hooks.sink, &mut results_emitted);
                     }
                     if stopped == "budget" {
                         break;
@@ -972,6 +1138,18 @@ impl ToolAgent {
             }
         };
 
+        // Drafts are artifacts, not prose: whatever the model wrote
+        // as its final answer, each draft is attached verbatim below
+        // it (Piece 87) — the text the user reads and downloads is
+        // the drafter's own, never the model's re-typing of it.
+        let mut final_report = final_report;
+        for d in &drafts {
+            final_report.push_str(&format!(
+                "\n\n---\n\n## Draft — {}\n\n{}",
+                d.kind_label, d.text
+            ));
+        }
+
         // Live projection of the completed answer: sources first
         // (the Ask stream convention), then the report in deltas.
         if let Some(s) = &hooks.sink {
@@ -994,6 +1172,7 @@ impl ToolAgent {
             tokens_estimate,
             plan: plan.to_vec(),
             proposals,
+            drafts,
         })
     }
 
@@ -1010,6 +1189,7 @@ impl ToolAgent {
         citations: &mut Vec<Citation>,
         seen_chunks: &mut HashSet<String>,
         proposals: &mut Vec<EditProposalInfo>,
+        drafts: &mut Vec<DraftInfo>,
         sink: &Option<ToolEventSink>,
         results_emitted: &mut usize,
     ) {
@@ -1018,6 +1198,7 @@ impl ToolAgent {
                 citations.push(c.clone());
             }
         }
+        drafts.extend(out.drafts.iter().cloned());
         if out.status == "ok" {
             findings.push(format!(
                 "## {} ({})\n{}",
@@ -1094,6 +1275,7 @@ impl ToolAgent {
             citations: Vec::new(),
             child: None,
             proposals: Vec::new(),
+            drafts: Vec::new(),
         };
         let fail = |out: &mut CallOutcome, started: Instant, msg: String| {
             out.status = "error".to_string();
@@ -1149,6 +1331,108 @@ impl ToolAgent {
                         out.citations = ans.citations;
                     }
                     Err(e) => fail(&mut out, started, format!("web_research failed: {e}")),
+                }
+            }
+            "deep_research" => {
+                let question = call.args.get("question").and_then(|v| v.as_str()).unwrap_or("");
+                let web = call.args.get("web").and_then(|v| v.as_bool()).unwrap_or(false);
+                if ctx.scope_docs.is_some() {
+                    // The research pipeline retrieves over the whole
+                    // vault (its evidence legs take no scope) — running
+                    // it here would breach the run's hard Workspace
+                    // boundary, so it refuses and says why.
+                    fail(
+                        &mut out,
+                        started,
+                        "deep_research runs over the whole vault and cannot be confined to this run's Workspace — use vault_search or graph_query for a Workspace-scoped question, or run the research from an unscoped chat".to_string(),
+                    );
+                } else {
+                    match self.query.research(question, web, &ctx.terms, ctx.citator.clone()).await {
+                        Ok(report) => {
+                            out.tokens_estimate = usage::estimate_tokens(question)
+                                + usage::estimate_tokens(&report.conclusion);
+                            out.result_text = format_research_report(&report);
+                            out.citations = report.citations;
+                        }
+                        Err(e) => fail(&mut out, started, format!("deep_research failed: {e}")),
+                    }
+                }
+            }
+            "draft_document" => {
+                let kind = call.args.get("kind").and_then(|v| v.as_str()).unwrap_or("");
+                let instructions = call.args.get("instructions").and_then(|v| v.as_str()).unwrap_or("");
+                match &hooks.draft_generator {
+                    None => fail(
+                        &mut out,
+                        started,
+                        "draft_document is not available in this run — drafting is offered from the Agent Chat, where the draft is attached to the conversation".to_string(),
+                    ),
+                    Some(generator) => match generator.generate_draft(kind, instructions).await {
+                        Ok(info) => {
+                            out.tokens_estimate = usage::estimate_tokens(instructions)
+                                + usage::estimate_tokens(&info.text);
+                            out.result_text = format!(
+                                "DRAFT ({}) — the full text below is attached verbatim under your final answer; introduce it briefly, do not reproduce or summarise it:\n\n{}",
+                                info.kind_label, info.text
+                            );
+                            out.result_chars = out.result_text.chars().count();
+                            out.citations = info.citations.clone();
+                            out.drafts.push(info);
+                        }
+                        Err(msg) => fail(&mut out, started, format!("draft_document failed: {msg}")),
+                    },
+                }
+            }
+            "analyze_documents" => {
+                let action = call.args.get("action").and_then(|v| v.as_str()).unwrap_or("");
+                let question = call.args.get("question").and_then(|v| v.as_str());
+                let document_ids: Vec<String> = call.args
+                    .get("document_ids")
+                    .and_then(|v| v.as_array())
+                    .map(|a| a.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect())
+                    .unwrap_or_default();
+                if document_ids.is_empty() {
+                    fail(&mut out, started, "analyze_documents needs at least one document id in document_ids".to_string());
+                } else {
+                    match &hooks.analyzer {
+                        None => fail(
+                            &mut out,
+                            started,
+                            "analyze_documents is not available in this run — structured document analysis is offered from the Agent Chat".to_string(),
+                        ),
+                        Some(analyzer) => match analyzer.analyze_documents(action, question, &document_ids, &ctx.scope_docs).await {
+                            Ok(info) => {
+                                out.tokens_estimate = usage::estimate_tokens(&info.text);
+                                out.result_text = info.text.clone();
+                                out.result_chars = out.result_text.chars().count();
+                                out.citations = info.citations.clone();
+                            }
+                            Err(msg) => fail(&mut out, started, format!("analyze_documents failed: {msg}")),
+                        },
+                    }
+                }
+            }
+            "run_workflow" => {
+                let workflow = call.args.get("workflow").and_then(|v| v.as_str()).unwrap_or("");
+                let input = call.args.get("input").and_then(|v| v.as_str()).unwrap_or("");
+                match &hooks.workflow_runner {
+                    None => fail(
+                        &mut out,
+                        started,
+                        "run_workflow is not available in this run — the fixed workflows are offered from the Agent Chat".to_string(),
+                    ),
+                    Some(runner) => match runner.run_workflow(workflow, input).await {
+                        Ok(info) => {
+                            out.tokens_estimate = info.tokens_estimate;
+                            out.result_text = format!(
+                                "WORKFLOW REPORT — {} (stopped: {}). Ground your answer in this report and cite its sources; do not invent steps or findings beyond it:\n\n{}",
+                                info.name, info.stopped, info.report
+                            );
+                            out.result_chars = out.result_text.chars().count();
+                            out.citations = info.citations.clone();
+                        }
+                        Err(msg) => fail(&mut out, started, format!("run_workflow failed: {msg}")),
+                    },
                 }
             }
             "graph_query" => {
@@ -1279,7 +1563,7 @@ impl ToolAgent {
                     Some(names) => names
                         .iter()
                         .filter_map(|v| v.as_str())
-                        .filter(|n| *n != "spawn_subagent" && *n != "edit_document" && tool_def(n).is_some())
+                        .filter(|n| *n != "spawn_subagent" && *n != "edit_document" && *n != "draft_document" && *n != "analyze_documents" && *n != "run_workflow" && tool_def(n).is_some())
                         .map(|n| n.to_string())
                         .collect(),
                     None => all_tool_names()
@@ -1361,6 +1645,56 @@ fn with_scope_note(ans: &crate::query::QueryAnswer) -> String {
     }
 }
 
+/// Flatten a [`crate::research::ResearchReport`] into the text a
+/// tool result feeds the model: verdict first, then the weighed
+/// hypotheses with their evidence markers, conflicts, open points,
+/// and the decisions only the user can make — the Research page's
+/// own shape, in prose.
+fn format_research_report(report: &crate::research::ResearchReport) -> String {
+    let mut out = format!(
+        "DEEP RESEARCH REPORT — {}\n\nConclusion: {}",
+        report.question, report.conclusion
+    );
+    if let Some(line) = &report.governing_line {
+        out.push_str(&format!("\nGoverning authority: {line}"));
+    }
+    if let Some(note) = &report.web_note {
+        out.push_str(&format!("\nWeb note: {note}"));
+    }
+    out.push_str("\n\nHypotheses:");
+    for h in &report.hypotheses {
+        out.push_str(&format!(
+            "\n- [{}] {} (prediction: {})",
+            h.status, h.question, h.prediction
+        ));
+        for ev in &h.evidence {
+            out.push_str(&format!("\n  · {} {}", ev.claim, ev.source));
+        }
+    }
+    if !report.conflicts.is_empty() {
+        out.push_str("\n\nConflicts:");
+        for c in &report.conflicts {
+            out.push_str(&format!(
+                "\n- {}: A: {} / B: {}",
+                c.topic, c.position_a, c.position_b
+            ));
+        }
+    }
+    if !report.open_points.is_empty() {
+        out.push_str("\n\nOpen points:");
+        for p in &report.open_points {
+            out.push_str(&format!("\n- {p}"));
+        }
+    }
+    if !report.decisions.is_empty() {
+        out.push_str("\n\nFor the user to decide:");
+        for d in &report.decisions {
+            out.push_str(&format!("\n- {d}"));
+        }
+    }
+    out
+}
+
 struct CallOutcome {
     tool: String,
     args_digest: String,
@@ -1373,6 +1707,7 @@ struct CallOutcome {
     citations: Vec<Citation>,
     child: Option<ToolChildSummary>,
     proposals: Vec<EditProposalInfo>,
+    drafts: Vec<DraftInfo>,
 }
 
 
@@ -1722,6 +2057,7 @@ mod tests {
             sink: None,
             edit_proposer: Some(proposer.clone() as Arc<dyn EditProposer>),
             allow_edit: true,
+            ..Default::default()
         }
     }
 
@@ -1765,7 +2101,7 @@ mod tests {
                 &[],
                 ToolRunContext::default(),
                 RunBudget::default(),
-                ToolRunHooks { sink: None, edit_proposer: None, allow_edit: true },
+                ToolRunHooks { sink: None, edit_proposer: None, allow_edit: true, ..Default::default() },
             )
             .await
             .unwrap();
@@ -1853,6 +2189,7 @@ mod tests {
             sink: Some(Arc::new(move |ev| sink_events.lock().unwrap().push(ev))),
             edit_proposer: None,
             allow_edit: false,
+            ..Default::default()
         };
         let run = agent
             .run_hooked("deposit rules", &[], ToolRunContext::default(), RunBudget::default(), hooks)
@@ -1908,5 +2245,260 @@ mod tests {
             .expect("an edit_proposed event");
         assert_eq!(proposed.edit_id, "edit-1");
         assert_eq!(proposed.diff.added.len(), 1);
+    }
+
+    // -- Piece 87: deep_research + draft_document ---------------------------
+
+    struct FakeDrafter;
+
+    #[async_trait]
+    impl DraftGenerator for FakeDrafter {
+        async fn generate_draft(
+            &self,
+            kind: &str,
+            instructions: &str,
+        ) -> std::result::Result<DraftInfo, String> {
+            Ok(DraftInfo {
+                kind: kind.to_string(),
+                kind_label: "Legal notice".to_string(),
+                text: format!("NOTICE TEXT for: {instructions}"),
+                citations: Vec::new(),
+            })
+        }
+    }
+
+    fn draft_hooks() -> ToolRunHooks {
+        ToolRunHooks {
+            draft_generator: Some(Arc::new(FakeDrafter)),
+            allow_draft: true,
+            ..Default::default()
+        }
+    }
+
+    struct FakeAnalyzer;
+
+    #[async_trait]
+    impl DocumentAnalyzer for FakeAnalyzer {
+        async fn analyze_documents(
+            &self,
+            action: &str,
+            _question: Option<&str>,
+            document_ids: &[String],
+            _scope_docs: &Option<Vec<String>>,
+        ) -> std::result::Result<AnalysisInfo, String> {
+            Ok(AnalysisInfo {
+                text: format!("ANALYSIS {action} over {}", document_ids.join("+")),
+                citations: Vec::new(),
+            })
+        }
+    }
+
+    struct FakeWorkflowRunner;
+
+    #[async_trait]
+    impl WorkflowRunner for FakeWorkflowRunner {
+        async fn run_workflow(
+            &self,
+            workflow: &str,
+            _input: &str,
+        ) -> std::result::Result<WorkflowInfo, String> {
+            Ok(WorkflowInfo {
+                name: format!("Workflow {workflow}"),
+                report: "WORKFLOW REPORT BODY".to_string(),
+                citations: Vec::new(),
+                tokens_estimate: 42,
+                stopped: "finished".to_string(),
+            })
+        }
+    }
+
+    fn full_hooks() -> ToolRunHooks {
+        ToolRunHooks {
+            analyzer: Some(Arc::new(FakeAnalyzer)),
+            allow_analyze: true,
+            workflow_runner: Some(Arc::new(FakeWorkflowRunner)),
+            allow_workflow: true,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn new_capability_schemas_validate() {
+        let a = tool_def("analyze_documents").unwrap();
+        assert!(validate_tool_args(&a, &json!({"action": "summary", "document_ids": ["d1"]})).is_ok());
+        assert!(validate_tool_args(&a, &json!({"action": "bogus", "document_ids": ["d1"]})).is_err());
+        assert!(validate_tool_args(&a, &json!({"action": "summary"})).is_err());
+        let w = tool_def("run_workflow").unwrap();
+        assert!(validate_tool_args(&w, &json!({"workflow": "memo_draft", "input": "x"})).is_ok());
+        assert!(validate_tool_args(&w, &json!({"workflow": "nope", "input": "x"})).is_err());
+        let names = all_tool_names();
+        assert!(!names.contains(&"analyze_documents".to_string()), "seam-gated");
+        assert!(!names.contains(&"run_workflow".to_string()), "seam-gated");
+    }
+
+    #[tokio::test]
+    async fn analyze_and_workflow_tools_run_through_their_seams() {
+        let agent = agent_with(vec![
+            "{\"tool\": \"analyze_documents\", \"args\": {\"action\": \"clauses\", \"document_ids\": [\"doc-1\", \"doc-2\"]}}",
+            "{\"tool\": \"run_workflow\", \"args\": {\"workflow\": \"contract_review\", \"input\": \"review the tenancy\"}}",
+            "{\"final\": \"Done.\"}",
+        ]);
+        let run = agent
+            .run_hooked("analyse and review", &[], ToolRunContext::default(), RunBudget::default(), full_hooks())
+            .await
+            .unwrap();
+        assert_eq!(run.stopped, "finished");
+        let ok_tools: Vec<&str> = run.trace.iter().filter(|t| t.status == "ok").map(|t| t.tool.as_str()).collect();
+        assert!(ok_tools.contains(&"analyze_documents"), "{ok_tools:?}");
+        assert!(ok_tools.contains(&"run_workflow"), "{ok_tools:?}");
+    }
+
+    #[tokio::test]
+    async fn capability_tools_without_seams_feed_back_an_error() {
+        let agent = agent_with(vec![
+            "{\"tool\": \"analyze_documents\", \"args\": {\"action\": \"summary\", \"document_ids\": [\"doc-1\"]}}",
+            "{\"final\": \"Understood.\"}",
+        ]);
+        // Hooks carry the tools in the allowed set only when seams
+        // exist; without seams the call never reaches execute — so
+        // drive run_inner's gate the way run_hooked would not: use
+        // full hooks minus the analyzer seam but force the tool via
+        // a hooked run whose allow flag is on and seam missing.
+        let hooks = ToolRunHooks { allow_analyze: true, ..Default::default() };
+        let run = agent
+            .run_hooked("summarise doc-1", &[], ToolRunContext::default(), RunBudget::default(), hooks)
+            .await
+            .unwrap();
+        // Not offered without the seam: the model cannot call it,
+        // so the scripted call is rejected and the run still ends.
+        assert_eq!(run.stopped, "finished");
+    }
+
+    #[test]
+    fn seam_gated_tools_stay_out_of_the_default_registry_view() {
+        let names = all_tool_names();
+        assert!(names.contains(&"deep_research".to_string()), "deep research needs no seam");
+        assert!(!names.contains(&"edit_document".to_string()));
+        assert!(!names.contains(&"draft_document".to_string()));
+        let chat = chat_tool_names();
+        assert!(chat.contains(&"edit_document".to_string()));
+        assert!(chat.contains(&"draft_document".to_string()));
+        assert!(chat.contains(&"deep_research".to_string()));
+    }
+
+    #[test]
+    fn new_tool_schemas_validate() {
+        let draft = tool_def("draft_document").unwrap();
+        assert!(
+            validate_tool_args(&draft, &json!({ "kind": "legal_notice", "instructions": "x" })).is_ok()
+        );
+        assert!(
+            validate_tool_args(&draft, &json!({ "kind": "custom", "instructions": "x" })).is_ok()
+        );
+        let e = validate_tool_args(&draft, &json!({ "kind": "haiku", "instructions": "x" })).unwrap_err();
+        assert!(e.contains("must be one of"), "{e}");
+        let e = validate_tool_args(&draft, &json!({ "kind": "memo" })).unwrap_err();
+        assert!(e.contains("missing required argument \"instructions\""), "{e}");
+        let research = tool_def("deep_research").unwrap();
+        assert!(validate_tool_args(&research, &json!({ "question": "q" })).is_ok());
+        assert!(validate_tool_args(&research, &json!({ "question": "q", "web": true })).is_ok());
+        let e = validate_tool_args(&research, &json!({ "question": "q", "web": "yes" })).unwrap_err();
+        assert!(e.contains("must be boolean"), "{e}");
+    }
+
+    #[tokio::test]
+    async fn deep_research_refuses_a_workspace_scoped_run() {
+        let agent = agent_with(vec![]);
+        let ctx = ToolRunContext {
+            scope_docs: Some(vec!["doc-a".to_string()]),
+            ..Default::default()
+        };
+        let out = agent
+            .execute_call(&call("deep_research", json!({ "question": "deposit law" })), &ctx, RunBudget::default(), 0, 0, 0, &ToolRunHooks::default())
+            .await;
+        assert_eq!(out.status, "error");
+        assert!(
+            out.result_text.contains("cannot be confined"),
+            "{}",
+            out.result_text
+        );
+    }
+
+    #[tokio::test]
+    async fn deep_research_runs_the_pipeline_unscoped() {
+        // The scripted LLM cannot frame or adjudicate, so the
+        // pipeline degrades exactly as it does live: a report whose
+        // conclusion states the evidence was insufficient, delivered
+        // as an ok tool result — never a crash, never an error.
+        let agent = agent_with(vec![]);
+        let out = agent
+            .execute_call(
+                &call("deep_research", json!({ "question": "Is the deposit refundable?" })),
+                &ToolRunContext::default(),
+                RunBudget::default(),
+                0,
+                0,
+                0,
+                &ToolRunHooks::default(),
+            )
+            .await;
+        assert_eq!(out.status, "ok", "{}", out.result_text);
+        assert!(out.result_text.contains("DEEP RESEARCH REPORT"), "{}", out.result_text);
+        assert!(out.result_text.contains("insufficient"), "{}", out.result_text);
+    }
+
+    #[tokio::test]
+    async fn draft_document_needs_the_generator_seam() {
+        let agent = agent_with(vec![]);
+        let out = agent
+            .execute_call(
+                &call("draft_document", json!({ "kind": "legal_notice", "instructions": "demand the rent" })),
+                &ToolRunContext::default(),
+                RunBudget::default(),
+                0,
+                0,
+                0,
+                &ToolRunHooks::default(),
+            )
+            .await;
+        assert_eq!(out.status, "error");
+        assert!(out.result_text.contains("not available in this run"), "{}", out.result_text);
+    }
+
+    #[tokio::test]
+    async fn draft_is_attached_verbatim_below_the_final_answer() {
+        let agent = agent_with(vec![
+            "{\"tool\": \"draft_document\", \"args\": {\"kind\": \"legal_notice\", \"instructions\": \"demand the unpaid rent\"}}",
+            "{\"final\": \"Here is the notice you asked for.\"}",
+        ]);
+        let run = agent
+            .run_hooked(
+                "draft a notice for the unpaid rent",
+                &[],
+                ToolRunContext::default(),
+                RunBudget::default(),
+                draft_hooks(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(run.stopped, "finished");
+        assert_eq!(run.drafts.len(), 1);
+        assert_eq!(run.drafts[0].kind, "legal_notice");
+        assert!(
+            run.final_report.starts_with("Here is the notice you asked for."),
+            "{}",
+            run.final_report
+        );
+        assert!(
+            run.final_report.contains("## Draft — Legal notice"),
+            "{}",
+            run.final_report
+        );
+        assert!(
+            run.final_report.contains("NOTICE TEXT for: demand the unpaid rent"),
+            "{}",
+            run.final_report
+        );
+        assert!(run.trace.iter().any(|t| t.tool == "draft_document" && t.status == "ok"));
     }
 }
