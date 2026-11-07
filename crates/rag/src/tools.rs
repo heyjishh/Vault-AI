@@ -45,6 +45,15 @@
 //!   arguments digest, result size, estimated tokens, duration,
 //!   status) and persisted with the run by the server's run store, so
 //!   the Agents UI can show exactly what the agent did.
+//!
+//! Piece 88 puts the harness layer (see [`crate::harness`], a port
+//! of the DeepSeek Harness architecture) under this loop: the
+//! registry below registers as plugin manifests, a run's tool set
+//! is computed by the harness registry's admission rules, every
+//! call executes through the harness hook pipeline (schema →
+//! budget → scope pre-hooks; trace + citation post-hooks), and the
+//! system prompt is assembled from named sections. The engines,
+//! guardrails, and seams are unchanged — only their wiring moved.
 
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -179,6 +188,16 @@ pub fn tool_defs() -> Vec<ToolDef> {
             ),
         },
         ToolDef {
+            name: "team_research",
+            description: "Hand a broad research goal to the autonomous research team: a lead agent splits it into independent branches, specialist researchers work them, a drafter writes the report, and an independent checker reconciles it — one cited report comes back. Use when the user asks for the research team or autonomous research, or the goal is broad and splits into independent parts. Slower and heavier than a single search or sub-agent — never use it for a simple fact lookup or a question one document answers.",
+            input_schema: schema(
+                json!({
+                    "goal": { "type": "string" }
+                }),
+                &["goal"],
+            ),
+        },
+        ToolDef {
             name: "graph_query",
             description: "Query the knowledge graph over the vault's entities and relations. Modes: local (one entity's neighbourhood), global (themes across the corpus), hybrid, mix.",
             input_schema: schema(
@@ -229,7 +248,7 @@ pub fn all_tool_names() -> Vec<String> {
     tool_defs()
         .iter()
         .map(|d| d.name.to_string())
-        .filter(|n| n != "edit_document" && n != "draft_document" && n != "analyze_documents" && n != "run_workflow")
+        .filter(|n| n != "edit_document" && n != "draft_document" && n != "analyze_documents" && n != "run_workflow" && n != "team_research")
         .collect()
 }
 
@@ -611,6 +630,38 @@ pub trait WorkflowRunner: Send + Sync {
     ) -> std::result::Result<WorkflowInfo, String>;
 }
 
+/// A finished research-team run from the `team_research` tool
+/// (Piece 88): the orchestrated team's reconciled report.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TeamRunInfo {
+    pub report: String,
+    #[serde(default)]
+    pub citations: Vec<Citation>,
+    pub tokens_estimate: u64,
+    /// finished | partial | budget | drafter_error (the team's own
+    /// stop reasons).
+    pub stopped: String,
+    /// One line per team member (role · name · status), in run
+    /// order — shown to the model so it can describe who did what.
+    #[serde(default)]
+    pub members: Vec<String>,
+}
+
+/// The seam for the autonomous research team (Piece 88): the
+/// orchestrated pipeline (lead → specialist researchers →
+/// drafter → checker, the server's `state.orchestrator`) lives
+/// behind the server's AppState; the loop only names a goal. The
+/// seam receives the run's Workspace scope and passes it to the
+/// team unchanged — a team run can never widen it.
+#[async_trait]
+pub trait TeamResearcher: Send + Sync {
+    async fn run_team(
+        &self,
+        goal: &str,
+        scope_docs: &Option<Vec<String>>,
+    ) -> std::result::Result<TeamRunInfo, String>;
+}
+
 /// Per-run extras a caller may hand the loop: a live event sink and
 /// the edit-proposal seam. Default: neither — the loop then behaves
 /// exactly as Piece 84 shipped.
@@ -632,6 +683,9 @@ pub struct ToolRunHooks {
     pub workflow_runner: Option<Arc<dyn WorkflowRunner>>,
     /// Offer `run_workflow` in this run's tool list (Piece 87).
     pub allow_workflow: bool,
+    pub team_researcher: Option<Arc<dyn TeamResearcher>>,
+    /// Offer `team_research` in this run's tool list (Piece 88).
+    pub allow_team_research: bool,
 }
 
 fn emit(sink: &Option<ToolEventSink>, ev: ToolLoopEvent) {
@@ -703,6 +757,9 @@ For a structured pass over specific named documents use analyze_documents (summa
 risks / chat over exactly that set). NAMED JOBS GO TO THE WORKFLOW: when the user asks for a contract review, \
 due diligence, a legal memo, or a counter-argument — by name or by clear description — you MUST call \
 run_workflow with that workflow instead of improvising the steps yourself from document reads. \
+TEAM RESEARCH: when the user asks for the research team or autonomous research, or the goal is broad and \
+splits into independent branches, call team_research once with the full goal and ground your answer in its \
+reconciled report — do not re-run its branches yourself. \
 When draft_document returns a draft, the draft itself is attached verbatim below your final answer — introduce \
 it in a sentence or two; never reproduce, shorten, or summarise it in your final text. \
 If the user asks to change a document and edit_document is among your tools, use it: it parks a proposal \
@@ -790,6 +847,7 @@ fn args_digest(tool: &str, args: &Value) -> String {
         "draft_document" => pick(&["instructions"]),
         "analyze_documents" => pick(&["action"]),
         "run_workflow" => pick(&["workflow", "input"]),
+        "team_research" => pick(&["goal"]),
         "read_document" => pick(&["doc_id"]),
         "spawn_subagent" => pick(&["goal"]),
         "edit_document" => pick(&["instruction"]),
@@ -810,6 +868,9 @@ pub struct ToolAgent {
     query: Arc<QueryService>,
     catalog: Arc<dyn DocCatalog>,
     instruction: std::sync::RwLock<Option<String>>,
+    /// The harness hook pipeline every call executes through
+    /// (Piece 88). Defaults to [`crate::harness::default_pipeline`].
+    pipeline: std::sync::RwLock<Arc<crate::harness::HookPipeline>>,
 }
 
 impl ToolAgent {
@@ -818,7 +879,17 @@ impl ToolAgent {
             query,
             catalog,
             instruction: std::sync::RwLock::new(None),
+            pipeline: std::sync::RwLock::new(Arc::new(crate::harness::default_pipeline())),
         }
+    }
+
+    /// Replace the hook pipeline (tests, and future admin wiring).
+    pub fn set_hook_pipeline(&self, pipeline: crate::harness::HookPipeline) {
+        *self.pipeline.write().unwrap() = Arc::new(pipeline);
+    }
+
+    fn pipeline(&self) -> Arc<crate::harness::HookPipeline> {
+        self.pipeline.read().unwrap().clone()
     }
 
     /// Admin-set standing instructions, mirroring the other engines.
@@ -848,19 +919,22 @@ impl ToolAgent {
         out.map(|text| (text, tokens))
     }
 
-    /// Render the registry (restricted to `allowed`) into the system
-    /// prompt — the model sees exactly the canonical definitions.
+    /// Assemble the system prompt from named sections (Piece 88):
+    /// base instructions, the ADMITTED plugins' schemas (rendered
+    /// from their harness manifests — a plugin that is not
+    /// admitted contributes nothing), the scope note, an approved
+    /// plan, and standing instructions.
     fn system_prompt(&self, allowed: &[String], ctx: &ToolRunContext, plan: &[PlannedStep]) -> String {
         let mut tools = String::new();
-        for def in tool_defs() {
-            if !allowed.iter().any(|a| a == def.name) {
+        for plugin in crate::harness::registry().plugins() {
+            if !allowed.iter().any(|a| a == plugin.id) {
                 continue;
             }
             tools.push_str(&format!(
                 "\n- {}: {}\n  args schema: {}",
-                def.name,
-                def.description,
-                def.input_schema
+                plugin.id,
+                plugin.description,
+                plugin.input_schema
             ));
         }
         let scope_note = match &ctx.scope_docs {
@@ -887,7 +961,34 @@ impl ToolAgent {
             ),
             None => String::new(),
         };
-        format!("{TOOL_SYSTEM}\n\nTOOLS:{tools}{scope_note}{plan_note}{standing}")
+        let mut assembler = crate::harness::PromptAssembler::new();
+        assembler
+            .add(crate::harness::PromptSection {
+                name: "base",
+                order: 0,
+                body: TOOL_SYSTEM.to_string(),
+            })
+            .add(crate::harness::PromptSection {
+                name: "tools",
+                order: 10,
+                body: format!("\n\nTOOLS:{tools}"),
+            })
+            .add(crate::harness::PromptSection {
+                name: "scope",
+                order: 20,
+                body: scope_note,
+            })
+            .add(crate::harness::PromptSection {
+                name: "plan",
+                order: 30,
+                body: plan_note,
+            })
+            .add(crate::harness::PromptSection {
+                name: "standing",
+                order: 40,
+                body: standing,
+            });
+        assembler.assemble()
     }
 
     /// Run the tool loop for a goal. `plan` is a user-approved plan
@@ -919,22 +1020,28 @@ impl ToolAgent {
         if goal.trim().is_empty() {
             return Err(Error::BadRequest("goal is empty".to_string()));
         }
-        // The default registry, plus the seam-gated tools whose
-        // seams this run actually carries (Pieces 86/87): a tool the
-        // run cannot execute is never even offered.
-        let mut allowed = all_tool_names();
+        // The run's tool set is computed by the harness registry
+        // (Piece 88): the default set, plus the seam plugins whose
+        // seams this run actually carries (Pieces 86/87/88) — a
+        // tool the run cannot execute is never even offered.
+        let mut seams: Vec<&str> = Vec::new();
         if hooks.allow_edit && hooks.edit_proposer.is_some() {
-            allowed.push("edit_document".to_string());
+            seams.push(crate::harness::Seam::Edit.key());
         }
         if hooks.allow_draft && hooks.draft_generator.is_some() {
-            allowed.push("draft_document".to_string());
+            seams.push(crate::harness::Seam::Draft.key());
         }
         if hooks.allow_analyze && hooks.analyzer.is_some() {
-            allowed.push("analyze_documents".to_string());
+            seams.push(crate::harness::Seam::Analyze.key());
         }
         if hooks.allow_workflow && hooks.workflow_runner.is_some() {
-            allowed.push("run_workflow".to_string());
+            seams.push(crate::harness::Seam::Workflow.key());
         }
+        if hooks.allow_team_research && hooks.team_researcher.is_some() {
+            seams.push(crate::harness::Seam::Team.key());
+        }
+        let allowed = crate::harness::registry()
+            .admitted_names(crate::harness::RunAudience::TopLevel, &seams);
         self.run_inner(goal, plan, ctx, budget, allowed, 0, &hooks).await
     }
 
@@ -1246,12 +1353,52 @@ impl ToolAgent {
         });
     }
 
+    /// Execute one tool call through the harness hook pipeline
+    /// (Piece 88): pre-execute hooks run inside the inner executor
+    /// (a rejection becomes the call's error outcome), and every
+    /// completed call — ok or error — is observed by the
+    /// post-execute hooks here.
+    #[allow(clippy::too_many_arguments)]
+    async fn execute_call(
+        &self,
+        call: &ToolCallReq,
+        ctx: &ToolRunContext,
+        parent_budget: RunBudget,
+        parent_tokens_so_far: u64,
+        parent_steps_so_far: usize,
+        depth: usize,
+        hooks: &ToolRunHooks,
+    ) -> CallOutcome {
+        let out = self
+            .execute_call_inner(
+                call,
+                ctx,
+                parent_budget,
+                parent_tokens_so_far,
+                parent_steps_so_far,
+                depth,
+                hooks,
+            )
+            .await;
+        self.pipeline().post_execute(&crate::harness::ToolCallRecord {
+            tool: out.tool.clone(),
+            args_digest: out.args_digest.clone(),
+            status: out.status.clone(),
+            error: out.error.clone(),
+            result_chars: out.result_chars,
+            tokens_estimate: out.tokens_estimate,
+            duration_ms: out.duration_ms,
+            citations: out.citations.len(),
+        });
+        out
+    }
+
     /// Execute one validated-or-not tool call. Every failure mode —
     /// unknown tool, disallowed tool, bad arguments, scope refusal,
     /// upstream error — returns an `error` outcome whose text is fed
     /// back to the model; this function never returns Err.
     #[allow(clippy::too_many_arguments)]
-    async fn execute_call(
+    async fn execute_call_inner(
         &self,
         call: &ToolCallReq,
         ctx: &ToolRunContext,
@@ -1285,11 +1432,24 @@ impl ToolAgent {
             out.duration_ms = started.elapsed().as_millis() as u64;
         };
 
-        let Some(def) = tool_def(&call.tool) else {
+        if tool_def(&call.tool).is_none() {
             fail(&mut out, started, format!("unknown tool \"{}\" — use one of the listed tools", call.tool));
             return out;
+        }
+        // Harness pre-execute waterfall (Piece 88): schema
+        // validation, budget guard, Workspace-scope guard. A hook
+        // rejection is this call's error outcome — fed back to the
+        // model exactly like any other tool error, never a crash.
+        let call_ctx = crate::harness::ToolCallContext {
+            tool: call.tool.clone(),
+            args: call.args.clone(),
+            scope_docs: ctx.scope_docs.clone(),
+            steps_done: parent_steps_so_far,
+            tokens_so_far: parent_tokens_so_far,
+            max_steps: parent_budget.max_steps,
+            max_tokens: parent_budget.max_tokens,
         };
-        if let Err(msg) = validate_tool_args(&def, &call.args) {
+        if let Err(msg) = self.pipeline().pre_execute(&call_ctx) {
             fail(&mut out, started, msg);
             return out;
         }
@@ -1435,6 +1595,33 @@ impl ToolAgent {
                     },
                 }
             }
+            "team_research" => {
+                let team_goal = call.args.get("goal").and_then(|v| v.as_str()).unwrap_or("");
+                match &hooks.team_researcher {
+                    None => fail(
+                        &mut out,
+                        started,
+                        "team_research is not available in this run — the autonomous research team is offered from the agent chat, where its report lands in the conversation".to_string(),
+                    ),
+                    Some(team) => match team.run_team(team_goal, &ctx.scope_docs).await {
+                        Ok(info) => {
+                            out.tokens_estimate = info.tokens_estimate;
+                            let members = if info.members.is_empty() {
+                                String::new()
+                            } else {
+                                format!("\nTeam: {}", info.members.join("; "))
+                            };
+                            out.result_text = format!(
+                                "RESEARCH TEAM REPORT (stopped: {}).{} Ground your answer in this reconciled report and cite its sources; do not invent findings beyond it:\n\n{}",
+                                info.stopped, members, info.report
+                            );
+                            out.result_chars = out.result_text.chars().count();
+                            out.citations = info.citations.clone();
+                        }
+                        Err(msg) => fail(&mut out, started, format!("team_research failed: {msg}")),
+                    },
+                }
+            }
             "graph_query" => {
                 let query = call.args.get("query").and_then(|v| v.as_str()).unwrap_or("");
                 let mode = match call.args.get("mode").and_then(|v| v.as_str()) {
@@ -1557,19 +1744,20 @@ impl ToolAgent {
                     return out;
                 }
                 let goal = call.args.get("goal").and_then(|v| v.as_str()).unwrap_or("");
-                // Tool subset: the requested names, minus spawn itself,
-                // minus anything unknown. Default: all but spawn.
+                // Tool subset, computed by the harness registry
+                // (Piece 88): the requested names a sub-agent may
+                // use (never spawn itself, never a seam plugin,
+                // never an unknown name). Default: the registry's
+                // sub-agent set.
+                let reg = crate::harness::registry();
                 let mut child_tools: Vec<String> = match call.args.get("tools").and_then(|v| v.as_array()) {
                     Some(names) => names
                         .iter()
                         .filter_map(|v| v.as_str())
-                        .filter(|n| *n != "spawn_subagent" && *n != "edit_document" && *n != "draft_document" && *n != "analyze_documents" && *n != "run_workflow" && tool_def(n).is_some())
+                        .filter(|n| reg.subagent_may_use(n))
                         .map(|n| n.to_string())
                         .collect(),
-                    None => all_tool_names()
-                        .into_iter()
-                        .filter(|n| n != "spawn_subagent")
-                        .collect(),
+                    None => reg.admitted_names(crate::harness::RunAudience::SubAgent, &[]),
                 };
                 if child_tools.is_empty() {
                     child_tools = vec!["vault_search".to_string()];
@@ -2500,5 +2688,162 @@ mod tests {
             run.final_report
         );
         assert!(run.trace.iter().any(|t| t.tool == "draft_document" && t.status == "ok"));
+    }
+
+    // -- Piece 88: harness wiring ------------------------------------
+
+    struct FakeTeam {
+        calls: Mutex<Vec<(String, Option<Vec<String>>)>>,
+    }
+
+    #[async_trait]
+    impl TeamResearcher for FakeTeam {
+        async fn run_team(
+            &self,
+            goal: &str,
+            scope_docs: &Option<Vec<String>>,
+        ) -> std::result::Result<TeamRunInfo, String> {
+            self.calls
+                .lock()
+                .unwrap()
+                .push((goal.to_string(), scope_docs.clone()));
+            Ok(TeamRunInfo {
+                report: "TEAM REPORT BODY".to_string(),
+                citations: Vec::new(),
+                tokens_estimate: 77,
+                stopped: "finished".to_string(),
+                members: vec!["lead · Lead · ok".to_string()],
+            })
+        }
+    }
+
+    fn team_hooks(team: &Arc<FakeTeam>) -> ToolRunHooks {
+        ToolRunHooks {
+            team_researcher: Some(team.clone() as Arc<dyn TeamResearcher>),
+            allow_team_research: true,
+            ..Default::default()
+        }
+    }
+
+    #[tokio::test]
+    async fn team_research_runs_through_its_seam_with_the_run_scope() {
+        let agent = agent_with(vec![
+            "{\"tool\": \"team_research\", \"args\": {\"goal\": \"research delayed possession compensation\"}}",
+            "{\"final\": \"Team findings summarised.\"}",
+        ]);
+        let team = Arc::new(FakeTeam { calls: Mutex::new(Vec::new()) });
+        let ctx = ToolRunContext {
+            scope_docs: Some(vec!["doc-a".to_string()]),
+            ..Default::default()
+        };
+        let run = agent
+            .run_hooked("send the team", &[], ctx, RunBudget::default(), team_hooks(&team))
+            .await
+            .unwrap();
+        assert_eq!(run.stopped, "finished");
+        let entry = run.trace.iter().find(|t| t.tool == "team_research").unwrap();
+        assert_eq!(entry.status, "ok");
+        assert_eq!(entry.tokens_estimate, 77);
+        let calls = team.calls.lock().unwrap();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].0, "research delayed possession compensation");
+        assert_eq!(
+            calls[0].1,
+            Some(vec!["doc-a".to_string()]),
+            "the run's Workspace scope must reach the team unchanged"
+        );
+    }
+
+    #[tokio::test]
+    async fn team_research_without_the_seam_is_clean_feedback() {
+        let agent = agent_with(vec![]);
+        let out = agent
+            .execute_call(
+                &call("team_research", json!({ "goal": "anything" })),
+                &ToolRunContext::default(),
+                RunBudget::default(),
+                0,
+                0,
+                0,
+                &ToolRunHooks::default(),
+            )
+            .await;
+        assert_eq!(out.status, "error");
+        assert!(out.result_text.contains("not available in this run"), "{}", out.result_text);
+        // And it is seam-gated in the registry views.
+        assert!(!all_tool_names().contains(&"team_research".to_string()));
+        assert!(chat_tool_names().contains(&"team_research".to_string()));
+    }
+
+    struct RejectVaultHook;
+
+    impl crate::harness::PreExecuteHook for RejectVaultHook {
+        fn name(&self) -> &'static str {
+            "reject_vault"
+        }
+        fn check(&self, ctx: &crate::harness::ToolCallContext) -> std::result::Result<(), String> {
+            if ctx.tool == "vault_search" {
+                Err("vault_search is disabled by policy for this run".to_string())
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn a_rejecting_hook_feeds_back_and_the_loop_survives() {
+        let agent = agent_with(vec![
+            "{\"tool\": \"vault_search\", \"args\": {\"query\": \"tenancy deposit\"}}",
+            "{\"final\": \"Recovered after the hook rejection.\"}",
+        ]);
+        let trace_hook = Arc::new(crate::harness::TraceRecordHook::new());
+        let records = trace_hook.records.clone();
+        agent.set_hook_pipeline(crate::harness::HookPipeline::new(
+            vec![
+                Arc::new(crate::harness::SchemaValidationHook),
+                Arc::new(RejectVaultHook),
+            ],
+            vec![trace_hook],
+        ));
+        let run = agent
+            .run("deposit rules", &[], ToolRunContext::default(), RunBudget::default())
+            .await
+            .unwrap();
+        assert_eq!(run.stopped, "finished");
+        assert_eq!(run.final_report, "Recovered after the hook rejection.");
+        let entry = run.trace.iter().find(|t| t.tool == "vault_search").unwrap();
+        assert_eq!(entry.status, "error");
+        assert!(
+            entry.error.as_deref().unwrap().contains("disabled by policy"),
+            "{:?}",
+            entry.error
+        );
+        // The post-execute hook observed the completed (rejected)
+        // call as an error record.
+        let seen = records.lock().unwrap();
+        assert_eq!(seen.len(), 1);
+        assert_eq!(seen[0].tool, "vault_search");
+        assert_eq!(seen[0].status, "error");
+    }
+
+    #[test]
+    fn prompt_assembly_includes_only_admitted_plugin_schemas() {
+        let agent = agent_with(vec![]);
+        let ctx = ToolRunContext::default();
+        let prompt = agent.system_prompt(&["vault_search".to_string()], &ctx, &[]);
+        assert!(prompt.contains("autonomous legal-research agent with tools"));
+        assert!(prompt.contains("- vault_search:"));
+        // A plugin that is not admitted contributes no schema.
+        assert!(!prompt.contains("- deep_research:"));
+        assert!(!prompt.contains("- team_research:"));
+        assert!(!prompt.contains("- edit_document:"));
+        let full = agent.system_prompt(&chat_tool_names(), &ctx, &[]);
+        assert!(full.contains("- team_research:"));
+        assert!(full.contains("- edit_document:"));
+        // Section order: base, tools, scope.
+        let base_at = full.find("autonomous legal-research agent").unwrap();
+        let tools_at = full.find("TOOLS:").unwrap();
+        let scope_at = full.find("This run may use the whole vault.").unwrap();
+        assert!(base_at < tools_at && tools_at < scope_at);
     }
 }

@@ -15,6 +15,47 @@ live**, what is **built but unverified**, and what is **roadmap**.
 ## [Unreleased]
 
 ### Added
+- **A Rust agent harness under the tool loop (7 Nov 2026,
+  Piece 88).** The DeepSeek Harness architecture (plugin context,
+  guarded tool pipeline, append-only session log — patterns
+  ported to Rust, no TypeScript code; the similarly named
+  harness/harness repo is a Go CI/CD platform and was not used)
+  now sits under the Piece 84 loop in `crates/rag/src/harness.rs`,
+  re-expressing what existed rather than rebuilding it: every
+  tool registers as a **plugin manifest** (id, description,
+  schema, admission class, scope behaviour) in a `HarnessRegistry`
+  that is the single place a run's tool set is computed — the
+  Piece 84 default set, the Piece 86/87 seam gates, and the
+  sub-agent subset are now registry data, proven identical to the
+  historic sets by unit tests. Every call executes through a
+  **hook pipeline**: pre-execute hooks for schema validation (the
+  existing validator, wired in), budget guard, and the
+  Workspace-scope guard (the confinement rules, with their exact
+  messages, lifted into one gate — the execution arms keep their
+  own checks as a second line), and post-execute hooks recording
+  the trace and capturing citations; a hook rejection is fed back
+  to the model as a tool error, never a crash (unit-proven with a
+  rejecting hook the loop recovers from). Chat threads gain an
+  append-only **session event log** (`SessionEvent`: turn/step,
+  messages, tool calls/results, approval required/decided) stored
+  in `agent_chats.json` beside the messages — pre-88 threads load
+  with an empty log (backfilled from their messages on the next
+  turn), and the follow-up model context is now **projected from
+  the log** via `derive_context`, which emits decided edits as
+  `[Update: …]` facts in the exact Piece 86 wording, so the
+  stale-pending-turn failure mode cannot return. The system
+  prompt is assembled from named, ordered sections (base /
+  admitted plugin schemas / scope / plan / standing) — a
+  non-admitted plugin contributes no schema. New plugin:
+  **`team_research`** wraps the orchestrated research team
+  (lead → specialist researchers → drafter → checker, the
+  autonomous route's own engine) behind a `TeamResearcher` seam,
+  offered only to hooked top-level chat runs, with the run's
+  Workspace scope passed through unchanged; the Confidential
+  Vault stays unexposed. Suite: **344 passed / 0 failed** (rag
+  254, server 75, auth 4, ingest 11; baseline 332 + 12 new).
+  Verified live on the test instance together with Piece 89 (see
+  its entry).
 - **The Agent can now do everything the tabs do — inside the
   agent only (7 Nov 2026, Piece 87).** No existing tab or input was
   removed: Ask (Knowledge), Draft, Interact (Intelligence),

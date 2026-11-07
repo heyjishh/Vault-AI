@@ -103,6 +103,13 @@ pub struct ChatThread {
     pub matter_id: Option<String>,
     pub title: String,
     pub messages: Vec<ChatMessage>,
+    /// Append-only session event log (Piece 88, the harness's
+    /// session layer): the source the follow-up model context is
+    /// projected from via `derive_context`. Absent in pre-88
+    /// threads — those load with an empty log and fall back to the
+    /// message-based context until new turns log events.
+    #[serde(default)]
+    pub events: Vec<legal_rag_rag::SessionEvent>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -189,6 +196,7 @@ impl ChatStore {
             matter_id,
             title: title_of(first_message),
             messages: Vec::new(),
+            events: Vec::new(),
             created_at: now,
             updated_at: now,
         };
@@ -217,6 +225,31 @@ impl ChatStore {
             let excess = t.messages.len() - MESSAGES_CAP;
             t.messages.drain(0..excess);
         }
+        t.updated_at = Utc::now();
+        let out = t.clone();
+        drop(data);
+        self.save();
+        Some(out)
+    }
+
+    /// Append session events to a thread's log (Piece 88);
+    /// returns the updated thread, or None when the thread is not
+    /// the owner's.
+    pub fn append_events(
+        &self,
+        owner_email: &str,
+        thread_id: &str,
+        events: Vec<legal_rag_rag::SessionEvent>,
+    ) -> Option<ChatThread> {
+        if events.is_empty() {
+            return self.get(owner_email, thread_id);
+        }
+        let mut data = self.data.write().unwrap();
+        let t = data
+            .threads
+            .iter_mut()
+            .find(|t| t.id == thread_id && t.owner_email == owner_email)?;
+        t.events.extend(events);
         t.updated_at = Utc::now();
         let out = t.clone();
         drop(data);
@@ -298,5 +331,46 @@ mod tests {
         // The thread survives a reload from disk.
         let s2 = ChatStore::load(s.path.clone());
         assert_eq!(s2.get("a@x.test", &t.id).unwrap().messages.len(), 2);
+    }
+
+    #[test]
+    fn legacy_threads_without_events_load_and_gain_a_log() {
+        // A pre-Piece-88 agent_chats.json thread has no `events`
+        // field at all; it must still load, with an empty log.
+        let path = PathBuf::from(format!(
+            "/tmp/legal-rag-agent-chat-legacy-{}-{}.json",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let legacy = r#"{"threads":[{"id":"t-old","owner_email":"a@x.test","matter_id":null,"title":"Old thread","messages":[],"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"}]}"#;
+        std::fs::write(&path, legacy).unwrap();
+        let s = ChatStore::load(path.clone());
+        let t = s.get("a@x.test", "t-old").expect("legacy thread loads");
+        assert!(t.events.is_empty());
+        // New turns append events; the log persists across reload.
+        let t = s
+            .append_events(
+                "a@x.test",
+                "t-old",
+                vec![
+                    legal_rag_rag::SessionEvent::UserMessage { text: "hi".to_string() },
+                    legal_rag_rag::SessionEvent::TurnEnd { stopped: "finished".to_string() },
+                ],
+            )
+            .unwrap();
+        assert_eq!(t.events.len(), 2);
+        let s2 = ChatStore::load(path);
+        assert_eq!(s2.get("a@x.test", "t-old").unwrap().events.len(), 2);
+        // Another owner cannot append events.
+        assert!(s2
+            .append_events(
+                "b@x.test",
+                "t-old",
+                vec![legal_rag_rag::SessionEvent::UserMessage { text: "intrude".to_string() }]
+            )
+            .is_none());
     }
 }

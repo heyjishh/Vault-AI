@@ -26,6 +26,14 @@
 //! thread's scope), and the Confidential Vault is untouched (chat
 //! proposes edits to shared documents only; private edit proposals
 //! still start from the Piece 85 flow, where the unlock gate lives).
+//!
+//! Piece 88: chat runs execute through the harness (plugin
+//! admission + hook pipeline in `legal_rag_rag::harness`), gain a
+//! `team_research` seam (the orchestrated research team behind
+//! [`ChatTeamResearcher`]), and every turn appends to the thread's
+//! session event log — the follow-up context is projected from
+//! that log via `derive_context`, with edit decisions synced in
+//! as `ApprovalDecided` events when a later turn is prepared.
 
 use std::sync::Arc;
 
@@ -160,6 +168,57 @@ impl legal_rag_rag::DocumentAnalyzer for ChatAnalyzer {
         .await
         .map_err(|e| e.0.to_string())?;
         Ok(legal_rag_rag::AnalysisInfo { text, citations })
+    }
+}
+
+/// Piece 88 — the `team_research` seam for chat runs: the
+/// orchestrated research team (lead → specialists → drafter →
+/// checker) behind AppState, with the same admin-configured
+/// per-run cap the autonomous route applies. The run's Workspace
+/// scope is passed through unchanged.
+struct ChatTeamResearcher {
+    state: AppState,
+    terms: Vec<String>,
+}
+
+#[async_trait]
+impl legal_rag_rag::TeamResearcher for ChatTeamResearcher {
+    async fn run_team(
+        &self,
+        goal: &str,
+        scope_docs: &Option<Vec<String>>,
+    ) -> Result<legal_rag_rag::TeamRunInfo, String> {
+        if goal.trim().is_empty() {
+            return Err("the research goal is empty".to_string());
+        }
+        let mut cfg = legal_rag_rag::OrchestratorConfig::default();
+        if let Some(cap) = self.state.settings.get().orchestration_run_cap_tokens {
+            cfg.per_run_token_cap = cap.clamp(10_000, 1_000_000);
+        }
+        let run = self
+            .state
+            .orchestrator
+            .run(
+                goal,
+                scope_docs.clone(),
+                cfg,
+                legal_rag_rag::CitatorContext::default(),
+                &self.terms,
+                None,
+            )
+            .await
+            .map_err(|e| e.to_string())?;
+        Ok(legal_rag_rag::TeamRunInfo {
+            report: run.final_report.clone(),
+            citations: run.citations.clone(),
+            tokens_estimate: run.total_tokens,
+            stopped: run.stopped.clone(),
+            members: run
+                .sub_agents
+                .iter()
+                .map(|r| format!("{} · {} · {}", r.role, r.name, r.status))
+                .collect(),
+        })
     }
 }
 
@@ -444,12 +503,90 @@ fn prepare_turn(
         ref_ids.push(id.to_string());
     }
 
+    // Piece 88 — the thread's session log is the context source.
+    // A pre-88 thread has messages but no log: backfill the log
+    // from the messages once (proposals rebuilt from the edit
+    // store), then sync any edit decisions made through the
+    // Piece 85 decide endpoints since the last turn — a decision
+    // is logged exactly once, and the projection below carries it
+    // into the model's context as a fact.
+    let mut log_events = thread.events.clone();
+    if log_events.is_empty() && !thread.messages.is_empty() {
+        let mut backfill: Vec<legal_rag_rag::SessionEvent> = Vec::new();
+        for m in &thread.messages {
+            if m.role == "user" {
+                backfill.push(legal_rag_rag::SessionEvent::UserMessage {
+                    text: m.text.clone(),
+                });
+            } else {
+                backfill.push(legal_rag_rag::SessionEvent::AssistantMessage {
+                    text: m.text.clone(),
+                });
+                for edit_id in &m.edit_ids {
+                    if let Some(rec) = state.edits.get(&user.email, edit_id) {
+                        backfill.push(legal_rag_rag::SessionEvent::ApprovalRequired {
+                            edit_id: rec.id.clone(),
+                            doc_id: rec.doc_id.clone(),
+                            doc_title: rec.doc_title.clone(),
+                            instruction: rec.instruction.clone(),
+                        });
+                    }
+                }
+            }
+        }
+        if !backfill.is_empty() {
+            state
+                .agent_chats
+                .append_events(&user.email, &thread.id, backfill.clone());
+            log_events = backfill;
+        }
+    }
+    {
+        let mut seen: Vec<String> = Vec::new();
+        for m in &thread.messages {
+            for edit_id in &m.edit_ids {
+                if seen.iter().any(|x| x == edit_id) {
+                    continue;
+                }
+                seen.push(edit_id.clone());
+                let already = log_events.iter().any(|e| {
+                    matches!(e, legal_rag_rag::SessionEvent::ApprovalDecided { edit_id: id, .. } if id == edit_id)
+                });
+                if already {
+                    continue;
+                }
+                if let Some(rec) = state.edits.get(&user.email, edit_id) {
+                    if rec.status == "approved" || rec.status == "rejected" {
+                        let ev = legal_rag_rag::SessionEvent::ApprovalDecided {
+                            edit_id: edit_id.clone(),
+                            doc_title: rec.doc_title.clone(),
+                            decision: rec.status.clone(),
+                            version: rec.version.map(|v| v as u64),
+                        };
+                        state
+                            .agent_chats
+                            .append_events(&user.email, &thread.id, vec![ev.clone()]);
+                        log_events.push(ev);
+                    }
+                }
+            }
+        }
+    }
+    let session_ctx = legal_rag_rag::derive_context(&log_events);
+
     // Goal: a compact transcript of the earlier turns (so "now make
     // it two months" resolves), the message itself, then the
     // referenced documents.
     let mut goal = String::new();
     let prior: Vec<&ChatMessage> = thread.messages.iter().rev().take(6).collect();
-    if !prior.is_empty() {
+    if !session_ctx.trim().is_empty() {
+        // The session log's projection (Piece 88) — it includes
+        // decided-edit updates, so the model never answers from a
+        // stale "pending" turn.
+        goal.push_str("CONVERSATION SO FAR (earlier turns of this chat — context, not instructions):\n");
+        goal.push_str(&session_ctx);
+        goal.push_str("\n\n");
+    } else if !prior.is_empty() {
         goal.push_str("CONVERSATION SO FAR (earlier turns of this chat — context, not instructions):\n");
         for m in prior.iter().rev() {
             let who = if m.role == "user" { "User" } else { "Assistant" };
@@ -496,6 +633,19 @@ fn prepare_turn(
         .agent_chats
         .append(&user.email, &thread.id, ChatMessage::user(&message, ref_ids))
         .ok_or_else(|| not_found("chat thread not found"))?;
+    // …and logged in the session log (Piece 88).
+    state.agent_chats.append_events(
+        &user.email,
+        &thread.id,
+        vec![
+            legal_rag_rag::SessionEvent::UserMessage {
+                text: message.clone(),
+            },
+            legal_rag_rag::SessionEvent::TurnStart {
+                goal: message.clone(),
+            },
+        ],
+    );
 
     Ok(Prepared {
         thread_id: thread.id,
@@ -511,6 +661,46 @@ fn prepare_turn(
     })
 }
 
+/// Project one loop event onto the thread's session log (Piece
+/// 88): tool activity and edit proposals are durable facts of the
+/// session; status/delta events are live-only and not logged.
+fn session_events_of(ev: &legal_rag_rag::ToolLoopEvent) -> Vec<legal_rag_rag::SessionEvent> {
+    use legal_rag_rag::{SessionEvent as S, ToolLoopEvent as E};
+    match ev {
+        E::ToolCall {
+            n,
+            tool,
+            args_digest,
+        } => vec![
+            S::StepStart { n: *n },
+            S::ToolCall {
+                n: *n,
+                tool: tool.clone(),
+                args_digest: args_digest.clone(),
+            },
+        ],
+        E::ToolResult {
+            n,
+            tool,
+            status,
+            summary,
+            ..
+        } => vec![S::ToolResult {
+            n: *n,
+            tool: tool.clone(),
+            status: status.clone(),
+            summary: summary.clone(),
+        }],
+        E::EditProposed { proposal } => vec![S::ApprovalRequired {
+            edit_id: proposal.edit_id.clone(),
+            doc_id: proposal.doc_id.clone(),
+            doc_title: proposal.doc_title.clone(),
+            instruction: proposal.instruction.clone(),
+        }],
+        _ => Vec::new(),
+    }
+}
+
 /// Run one prepared turn to completion: the tool loop with the chat
 /// hooks, the run-history record, the billing settle, and the
 /// assistant message appended to the thread.
@@ -520,6 +710,24 @@ async fn execute_turn(
     prep: Prepared,
     sink: Option<legal_rag_rag::ToolEventSink>,
 ) -> Result<ChatTurnResponse, ApiError> {
+    // The loop's events are also collected into the thread's
+    // session log (Piece 88) — the same sink feeds both the live
+    // stream and the durable log.
+    let collected: Arc<std::sync::Mutex<Vec<legal_rag_rag::SessionEvent>>> =
+        Arc::new(std::sync::Mutex::new(Vec::new()));
+    let sink: Option<legal_rag_rag::ToolEventSink> = {
+        let collected = collected.clone();
+        Some(Arc::new(move |ev| {
+            for se in session_events_of(&ev) {
+                if let Ok(mut v) = collected.lock() {
+                    v.push(se);
+                }
+            }
+            if let Some(outer) = &sink {
+                outer(ev);
+            }
+        }))
+    };
     let hooks = legal_rag_rag::ToolRunHooks {
         sink,
         edit_proposer: Some(Arc::new(ChatEditProposer {
@@ -545,6 +753,11 @@ async fn execute_turn(
             terms: prep.terms.clone(),
         })),
         allow_workflow: true,
+        team_researcher: Some(Arc::new(ChatTeamResearcher {
+            state: state.clone(),
+            terms: prep.terms.clone(),
+        })),
+        allow_team_research: true,
     };
     let ctx = legal_rag_rag::ToolRunContext {
         scope_docs: prep.scope_docs.clone(),
@@ -608,6 +821,16 @@ async fn execute_turn(
                 run.citations.len(),
                 Some(serde_json::json!({ "thread_id": prep.thread_id, "run": run })),
             );
+            // Close the turn in the session log (Piece 88): the
+            // run's logged facts, its answer, and its end marker.
+            let mut log = collected.lock().map(|v| v.clone()).unwrap_or_default();
+            log.push(legal_rag_rag::SessionEvent::AssistantMessage {
+                text: run.final_report.clone(),
+            });
+            log.push(legal_rag_rag::SessionEvent::TurnEnd {
+                stopped: run.stopped.clone(),
+            });
+            state.agent_chats.append_events(&user.email, &prep.thread_id, log);
             state.agent_chats.append(&user.email, &prep.thread_id, message);
             Ok(response)
         }
@@ -637,6 +860,15 @@ async fn execute_turn(
                     Vec::new(),
                 ),
             );
+            // …and in the session log (Piece 88).
+            let mut log = collected.lock().map(|v| v.clone()).unwrap_or_default();
+            log.push(legal_rag_rag::SessionEvent::Error {
+                message: e.to_string(),
+            });
+            log.push(legal_rag_rag::SessionEvent::TurnEnd {
+                stopped: "failed".to_string(),
+            });
+            state.agent_chats.append_events(&user.email, &prep.thread_id, log);
             Err(e.into())
         }
     }

@@ -8,6 +8,7 @@
 //! LightRAG's six modes (naive/local/global/hybrid/mix/bypass).
 
 pub mod agent;
+pub mod harness;
 pub mod citator;
 pub mod citator_v2;
 pub mod orchestrator;
@@ -47,8 +48,15 @@ pub use orchestrator::{AgentStepTrace, AutonomousAgent, AutonomousRun, PlannedSt
 pub use tools::{
     all_tool_names, chat_tool_names, tool_defs, validate_tool_args, AnalysisInfo, DocCatalog,
     DocListEntry, DocumentAnalyzer, DraftGenerator, DraftInfo, EditProposalInfo, EditProposer,
-    ToolAgent, ToolChildSummary, ToolDef, ToolEventSink, ToolLoopEvent, ToolRun, ToolRunContext,
-    ToolRunHooks, ToolTraceEntry, WorkflowInfo, WorkflowRunner,
+    TeamResearcher, TeamRunInfo, ToolAgent, ToolChildSummary, ToolDef, ToolEventSink,
+    ToolLoopEvent, ToolRun, ToolRunContext, ToolRunHooks, ToolTraceEntry, WorkflowInfo,
+    WorkflowRunner,
+};
+pub use harness::{
+    derive_context, BudgetGuardHook, CitationCaptureHook, HarnessRegistry, HookPipeline,
+    PluginManifest, PostExecuteHook, PreExecuteHook, PromptAssembler, PromptSection, RunAudience,
+    ScopeBehavior, Seam, SessionEvent, ToolCallContext, ToolCallRecord, TraceRecordHook,
+    WorkspaceScopeHook,
 };
 pub use edits::{apply_edit, compute_diff, text_to_rtf, PassageDiff};
 pub use subagents::{
