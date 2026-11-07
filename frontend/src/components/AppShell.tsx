@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
-  MessageSquare, MessagesSquare, FlaskConical, Bot, FolderOpen, Network, LogOut, LayoutDashboard,
+  MessageSquare, FlaskConical, Bot, FolderOpen, Network, LogOut, LayoutDashboard,
   PenSquare, Trash2, CreditCard, FileSearch, PenLine, Briefcase, Lock, ExternalLink, PanelTop, Search, X, BookOpen, LayoutTemplate, Plug,
 } from 'lucide-react'
 import { useAuth } from '../stores/auth'
@@ -13,7 +13,6 @@ import { BrandMark, ConfirmDialog, DualToneBackdrop, ThemeToggle } from './ui'
 import AssistantPage from './AssistantPage'
 import ResearchPage from './ResearchPage'
 import AgentsPage from './AgentsPage'
-import AgentChatPage from './AgentChatPage'
 import VaultPage from './VaultPage'
 import GraphPage from './GraphPage'
 import PlansPage from './PlansPage'
@@ -42,7 +41,6 @@ const NAV: { id: View; label: string; icon: React.ElementType }[] = [
   { id: 'draft', label: 'Draft', icon: PenLine },
   { id: 'research', label: 'Research', icon: FlaskConical },
   { id: 'agents', label: 'Agents', icon: Bot },
-  { id: 'agentchat', label: 'Agent Chat', icon: MessagesSquare },
   { id: 'prompts', label: 'Prompts', icon: BookOpen },
   { id: 'templates', label: 'Templates', icon: LayoutTemplate },
   { id: 'vault', label: 'Vault', icon: FolderOpen },
@@ -369,7 +367,8 @@ export default function AppShell() {
               {view === 'draft' && <DraftPage go={(v) => { setActiveTabId(null); setView(v as View) }} />}
               {view === 'research' && <ResearchPage go={(v) => { setActiveTabId(null); setView(v as View) }} />}
               {view === 'agents' && <AgentsPage go={(v) => { setActiveTabId(null); setView(v as View) }} />}
-              {view === 'agentchat' && <AgentChatPage go={(v) => { setActiveTabId(null); setView(v as View) }} />}
+              {/* Piece 89: the old standalone chat route aliases to the one-box Agents page (merged, not removed). */}
+              {view === 'agentchat' && <AgentsPage go={(v) => { setActiveTabId(null); setView(v as View) }} />}
               {view === 'prompts' && <PromptsPage go={(v) => { setActiveTabId(null); setView(v as View) }} />}
               {view === 'templates' && <TemplatesPage go={(v) => { setActiveTabId(null); setView(v as View) }} />}
               {view === 'connectors' && <ConnectorsPage />}

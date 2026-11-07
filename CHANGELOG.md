@@ -14,6 +14,42 @@ live**, what is **built but unverified**, and what is **roadmap**.
 
 ## [Unreleased]
 
+### Changed
+- **The Agents page is now THE one agent box (7 Nov 2026,
+  Piece 89).** The page JISHAN screenshotted carried three
+  separate inputs (a workflow form, an autonomous-research form,
+  a tool-agent form) plus a fourth in the sidebar (Agent Chat).
+  It is now a single chat: `AgentsPage` renders the Piece 86
+  one-box chat panel (extracted as `AgentChatPanel` — no third
+  chat implementation; the shared trace/diff renderers moved to
+  `AgentShared.tsx`) with one composer, thread list, Workspace
+  selector, document-reference panel, live tool/sub-agent cards,
+  and inline Piece 85 diff-approval cards. The three forms are
+  **deleted as inputs**; their engines were already tools inside
+  the one loop (`run_workflow`, `team_research`, the tool set),
+  and the workflow cards became **suggestion chips** (Contract
+  risk review, Due diligence, Legal memo, Counter-argument
+  brief, Deep research, Draft a document, Research team) that
+  put a pre-steered prompt into the one composer. The separate
+  Document-edits form went with them — edits are proposed in the
+  chat and approved on its cards. **Run history stays** below
+  the chat as a read-only section (status, kind, tokens, trace,
+  full report; dashboard workflow restores reopen there as
+  read-only reports). The sidebar's separate chat entry is
+  removed — Agents opens this page, and the old chat route
+  renders the same page as an alias so nothing breaks. **No
+  other tab was touched**: Dashboard, Workspaces, Knowledge,
+  Intelligence, Draft, Research, Prompts, Templates, Vault,
+  Connectors, Search documents, and Private Vault are
+  byte-for-byte as they were (frontend diff: AgentsPage,
+  AgentChatPage, AgentShared, AppShell only). Bundle-verified:
+  exactly one composer textarea across the agent surfaces, the
+  old form ids and form headings (`agents-workflow-input`,
+  `agents-goal-input`, `agents-tool-goal-input`, “Run autonomous
+  agent”, “Run tool agent”) occur **0 times** in the shipped
+  bundle. Verified live on the test instance together with
+  Piece 88 (see its entry).
+
 ### Added
 - **A Rust agent harness under the tool loop (7 Nov 2026,
   Piece 88).** The DeepSeek Harness architecture (plugin context,

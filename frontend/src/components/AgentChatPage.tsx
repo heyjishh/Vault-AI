@@ -7,7 +7,15 @@ import { agentChatStream, mattersApi, ragApi, vaultApi } from '../api/client'
 import type { AgentApproval, AgentChatMessage, AgentChatThread, Citation, EditRecord } from '../api/types'
 import { CitationCard } from './ui'
 import { SourceModal, citeMarkdownComponents, linkifyCitations } from './SourceModal'
-import { DiffView, ToolTraceList } from './AgentsPage'
+import { DiffView, ToolTraceList } from './AgentShared'
+
+/** A suggestion chip (Piece 89): a prompt, not a form — clicking it
+ *  puts the prompt into the ONE composer for the user to complete
+ *  and send. */
+export interface AgentSuggestion {
+  label: string
+  prompt: string
+}
 
 /** One live stream event in the in-flight turn's activity feed. */
 type LiveEvent =
@@ -107,7 +115,17 @@ function LiveEventList({ events }: { events: LiveEvent[] }) {
   )
 }
 
-export default function AgentChatPage({ go }: { go?: (view: string) => void } = {}) {
+/** The one-box agent chat panel (Piece 86), reused as the whole
+ *  Agents page in Piece 89: the Agents page renders this panel
+ *  with its heading and suggestion chips, plus run history below.
+ *  There is exactly one composer — this one. */
+export function AgentChatPanel({ go, heading = 'Agent Chat', subheading, suggestions, onTurnDone }: {
+  go?: (view: string) => void
+  heading?: string
+  subheading?: string
+  suggestions?: AgentSuggestion[]
+  onTurnDone?: () => void
+} = {}) {
   const matters = useQuery({ queryKey: ['matters'], queryFn: mattersApi.list })
   const vaultDocs = useQuery({ queryKey: ['vault-docs-for-chat'], queryFn: vaultApi.list })
   const [editTick, setEditTick] = useState(0)
@@ -223,6 +241,7 @@ export default function AgentChatPage({ go }: { go?: (view: string) => void } = 
         const t = await ragApi.agentChatThread(reloadId).catch(() => null)
         if (t) setThread(t)
       }
+      onTurnDone?.()
     }
   }
 
@@ -286,10 +305,10 @@ export default function AgentChatPage({ go }: { go?: (view: string) => void } = 
   return (
     <div className="w-full px-6 py-10">
       <h1 className="font-display text-[2rem] tracking-tight flex items-center gap-3">
-        <Bot className="text-stone-500 dark:text-stone-400" /> Agent Chat
+        <Bot className="text-stone-500 dark:text-stone-400" /> {heading}
       </h1>
       <p className="text-stone-500 dark:text-stone-400 mt-1.5 text-[15px]">
-        One box: ask a question, commission research, or tell it to change a document — the agent picks its own tools. Document edits are always proposed first and written back only on your approval.
+        {subheading ?? 'One box: ask a question, commission research, or tell it to change a document — the agent picks its own tools. Document edits are always proposed first and written back only on your approval.'}
       </p>
 
       <div className="flex flex-col lg:flex-row gap-6 mt-6 items-start">
@@ -364,6 +383,28 @@ export default function AgentChatPage({ go }: { go?: (view: string) => void } = 
 
           {sendError && (
             <div className="mt-4 rounded-lex border border-brand-red/30 bg-[#feeaea] px-4 py-3 text-meta2 text-[#a02c2c]">{sendError}</div>
+          )}
+
+          {/* Suggestion chips (Piece 89): prompts for the one
+              composer — the fixed workflows, deep research, a
+              draft, and the research team are all reached by
+              steering the agent, never by separate forms. */}
+          {!!suggestions?.length && (
+            <div className="flex flex-wrap gap-2 mt-5">
+              {suggestions.map((s) => (
+                <button
+                  key={s.label}
+                  onClick={() => {
+                    setInput(s.prompt)
+                    document.getElementById('agent-chat-input')?.focus()
+                  }}
+                  disabled={!!live}
+                  className="rounded-full border border-stone-300 dark:border-white/15 px-3.5 py-1.5 text-meta2 font-medium text-stone-600 dark:text-stone-300 hover:border-stone-400 disabled:opacity-40"
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
           )}
 
           {/* Composer */}
@@ -457,3 +498,5 @@ export default function AgentChatPage({ go }: { go?: (view: string) => void } = 
     </div>
   )
 }
+
+export default AgentChatPanel
